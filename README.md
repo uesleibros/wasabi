@@ -243,6 +243,16 @@ The VBA community is smaller than it deserves to be, and anyone who chooses to
 spend time on an open project in this ecosystem is doing something genuinely
 valuable. Wasabi exists on top of that work, and that will never be a small thing.
 
+## Contributing
+
+Bug reports, feature requests, and pull requests are welcome. Please read
+[CONTRIBUTING.md](CONTRIBUTING.md) before contributing.
+
+## Security
+
+Please do **not** report security vulnerabilities through public issues. See
+[SECURITY.md](SECURITY.md) and use GitHub Private Vulnerability Reporting.
+
 ## License
 
 **MIT**, free for personal and commercial use. See [LICENSE](LICENSE) for details.
