@@ -361,6 +361,11 @@ polling frequency.
 - **No infinite loop required.** One-shot use cases (connect, send, receive,
 disconnect) work fine with a simple wait loop.
 
+## API
+
+For the complete reference with examples, parameters, return values, and usage
+notes, see [API Reference](docs/API_REFERENCE.md).
+
 ## Acknowledgements
 
 Wasabi did not emerge from nothing. It was built on years of attempts, workarounds
