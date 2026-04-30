@@ -52,6 +52,15 @@ Working with networking in VBA often becomes a project of its own. Some typical 
 - Most handcrafted solutions grow long and fragile.
 - The networking layer becomes the largest part of the project, making simple things hard to maintain.
 
+## Where it is useful
+
+- **Bots** (Discord, Slack, Telegram), connect to gateways and handle real-time events and messages directly from Excel or Word
+- **Trading and finance**, stream live prices from exchanges like Binance, Coinbase or B3 into spreadsheet cells with millisecond-level latency
+- **Dashboards**, update live data on a spreadsheet without manual refresh or polling HTTP endpoints
+- **IoT and industrial**, receive sensor data from ESP32, Raspberry Pi or SCADA systems via WebSocket directly into Office
+- **Games and interactive tools**, build client/server communication for VBA-based games or collaborative tools
+- **Corporate automation**, connect Office to internal WebSocket APIs behind proxies and firewalls without installing anything
+
 ## Compatibility
 
 Wasabi was designed to run without any external dependencies, using exclusively
@@ -143,11 +152,28 @@ logic, with wraparound handling for systems with long uptimes.
 
 ### What does "zero external dependencies" mean in practice
 
-In corporate and enterprise environments, IT departments frequently restrict what
-can be installed or registered on workstations. ActiveX controls require
-administrator rights to register. COM DLLs require `regsvr32`. Python runtimes
-require installation. Chilkat and similar commercial libraries require license
-files and setup executables.
+In practical terms, Wasabi does not require anything beyond Windows and the VBA
+runtime you already have.
+
+There is no installer, no registered COM component, no ActiveX control, no
+third-party DLL, no Python runtime, no .NET package, no `regsvr32`, and no
+extra setup step outside importing the `.bas` file into your project.
+
+This matters a lot in corporate environments, where IT policies often prevent
+users from installing software, registering components, or adding external
+libraries to Office solutions. Many networking alternatives for VBA depend on
+COM objects, commercial SDKs, or extra binaries that require administrator
+rights, licensing, or machine-specific configuration.
+
+Wasabi avoids all of that by relying only on native Windows libraries that are
+already present on the machine, such as `ws2_32.dll`, `secur32.dll`, and
+`kernel32.dll`. If Windows is running, the underlying networking and TLS stack
+required by Wasabi is already there.
+
+The result is simple: you can distribute a workbook or VBA project containing
+Wasabi without asking the user to install anything first. No setup wizard, no
+dependency hell, no missing runtime, no registration step, and no surprise
+failure because a component was not deployed correctly.
 
 ## Execution Model: Single-Thread and Polling
 
@@ -189,16 +215,25 @@ proof that serious network communication inside the Office ecosystem was possibl
 Each of them, in their own way, pushed the boundary of what was considered viable
 in VBA.
 
-- **[WinHttpWebSocket](https://github.com/EagleAglow/vba-websocket) by EagleAglow**, one of the first serious attempts at WebSocket in VBA using native Windows APIs,
+- [**WinHttpWebSocket**](https://github.com/EagleAglow/vba-websocket), one of the first serious attempts at WebSocket in VBA using native Windows APIs,
   and the most widely referenced starting point in the community.
 
-- **[VbAsyncSocket](https://github.com/wqweto/VbAsyncSocket) by wqweto**, the most technically sophisticated VB6/VBA networking library available,
+- [**VbAsyncSocket**](https://github.com/wqweto/VbAsyncSocket), the most technically sophisticated VB6/VBA networking library available,
   with native Schannel support and a level of engineering depth that set the bar
   for what was possible in the ecosystem.
 
-- **[VBA-Web](https://github.com/VBA-tools/VBA-Web) by VBA-tools**, the de facto standard for HTTP and REST communication in VBA, and a reference
+- [**VBA-Web**](https://github.com/VBA-tools/VBA-Web), standard for HTTP and REST communication in VBA, and a reference
   for how a well-documented, well-maintained VBA library should be structured.
 
+- [**TlsSocketWSS**](https://github.com/Maatooh/TlsSocketWSS-vb6), simple TlsSocket server implemented to work with websocket, allowing connection from WSS with a self-signed certificate or a valid one.
+
+- [**VB6-WebSocket-Server-SSL**](https://github.com/JoshyFrancis/vb6-websocket-server-ssl), secure WebSocket in Pure VB6 no external Libraries or ActiveX.
+
+- [**VBA_WinSockAPI**](https://github.com/papanda925/VBA_WinsockAPI_TCP_Sample), a clean, educational TCP client/server sample using raw Winsock API calls
+  directly from VBA, demonstrating the fundamentals of socket creation, binding,
+  listening, accepting and sending/receiving data that many VBA networking
+  projects build upon.
+  
 Studying what these projects did well, and especially what they could not solve,
 shaped every architectural decision in Wasabi: the non-blocking I/O model, the
 manual Schannel implementation, the Ring Buffers, the Auto-Reconnect. None of it
@@ -207,3 +242,7 @@ would have taken form without the foundation these developers built first.
 The VBA community is smaller than it deserves to be, and anyone who chooses to
 spend time on an open project in this ecosystem is doing something genuinely
 valuable. Wasabi exists on top of that work, and that will never be a small thing.
+
+## License
+
+**MIT**, free for personal and commercial use. See [LICENSE](LICENSE) for details.
