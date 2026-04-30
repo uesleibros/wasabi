@@ -88,7 +88,3 @@ any memory allocation or copying beyond the initial buffer setup.
 This single file is the entire distribution. No other files are required. No
 references need to be enabled. No DLLs need to be registered. No installer
 needs to be run.
-
-The file can be embedded directly into a workbook by importing it and then
-saving the workbook as `.xlsm` or `.xlsb`, making Wasabi fully self-contained
-within the Office document itself.
