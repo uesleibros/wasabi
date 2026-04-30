@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://img.notionusercontent.com/s3/prod-files-secure%2Fc52c418e-63e9-4c74-b4b2-99c705773e95%2F37985614-2488-4dcb-84d0-77e62ea3f1eb%2F1000120988.png/size/w=250?exp=1777608761&sig=jdyTrq0uO1ct1UL32F4p3-KUyAFnK_InoC6J6ZONdbA&id=3510637a-7782-80a4-99d4-ce061204ac05&table=block&mtd=so" width="150" />
+  <img src="logo.png" width="150" />
 </div>
 
 <h1 align="center">Wasabi</h1>
