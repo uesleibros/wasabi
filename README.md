@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="https://img.notionusercontent.com/s3/prod-files-secure%2Fc52c418e-63e9-4c74-b4b2-99c705773e95%2F37985614-2488-4dcb-84d0-77e62ea3f1eb%2F1000120988.png/size/w=250?exp=1777608761&sig=jdyTrq0uO1ct1UL32F4p3-KUyAFnK_InoC6J6ZONdbA&id=3510637a-7782-80a4-99d4-ce061204ac05&table=block&mtd=so" width="150" />
+</div>
+
 <h1 align="center">Wasabi</h1>
 
 <p align="center">
@@ -5,11 +9,15 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/license-MIT-blue.svg" />
-  <img src="https://img.shields.io/badge/platform-Windows-lightgrey.svg" />
-  <img src="https://img.shields.io/badge/VBA-32%20%26%2064--bit-green.svg" />
-  <img src="https://img.shields.io/badge/TLS-1.2%20%2F%201.3-brightgreen.svg" />
-  <img src="https://img.shields.io/badge/dependencies-none-success.svg" />
+  <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" />
+  <img src="https://img.shields.io/badge/platform-Windows-0078D6.svg" alt="Platform" />
+  <img src="https://img.shields.io/badge/language-VBA-867DB1.svg" alt="Language" />
+  <img src="https://img.shields.io/badge/architecture-32%20%26%2064--bit-green.svg" alt="Architecture" />
+  <img src="https://img.shields.io/badge/TLS-1.2%20%2F%201.3-brightgreen.svg" alt="TLS" />
+  <img src="https://img.shields.io/badge/dependencies-none-success.svg" alt="Dependencies" />
+  <img src="https://img.shields.io/badge/WebSocket-RFC%206455-orange.svg" alt="WebSocket" />
+  <img src="https://img.shields.io/github/stars/uesleibros/wasabi?style=flat&color=gold" alt="Stars" />
+  <img src="https://img.shields.io/github/last-commit/uesleibros/wasabi?style=flat" alt="Last Commit" />
 </p>
 
 ## What is Wasabi
@@ -101,6 +109,8 @@ environments. This means the same unmodified `.bas` file works correctly whether
 the user is running Office 2007 on a 32-bit machine or Office 365 64-bit on
 Windows 11.
 
+> 32-bit and 64-bit compatibility is guaranteed through conditional compilation (`#If VBA7`) across all API declarations. `LongPtr` and `PtrSafe` are applied automatically at compile time.
+
 ### Native DLLs
 
 | Library | Role in Wasabi |
@@ -179,7 +189,7 @@ proof that serious network communication inside the Office ecosystem was possibl
 Each of them, in their own way, pushed the boundary of what was considered viable
 in VBA.
 
-- **[WinHttpWebSocket](https://github.com/EagleAglow/ShrinkBasic) by EagleAglow**, one of the first serious attempts at WebSocket in VBA using native Windows APIs,
+- **[WinHttpWebSocket](https://github.com/EagleAglow/vba-websocket) by EagleAglow**, one of the first serious attempts at WebSocket in VBA using native Windows APIs,
   and the most widely referenced starting point in the community.
 
 - **[VbAsyncSocket](https://github.com/wqweto/VbAsyncSocket) by wqweto**, the most technically sophisticated VB6/VBA networking library available,
