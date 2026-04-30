@@ -26,17 +26,17 @@ Wasabi is a VBA module designed to make WebSocket communication simple, predicta
 
 ## Roadmap
 
-- [ ] IPv6 and SNI support
-- [ ] Mutual TLS (mTLS) for client certificate authentication
-- [ ] SOCKS5 proxy support
+- [x] IPv6 and SNI support
+- [x] Mutual TLS (mTLS) for client certificate authentication
+- [x] SOCKS5 proxy support
 - [ ] permessage-deflate compression (RFC 7692)
-- [ ] I/O Completion Ports (IOCP) for kernel-driven socket monitoring
-- [ ] Zero-copy receive buffers
-- [ ] MTU-aware frame sizing
-- [ ] Send batching
-- [ ] Close frame payload parsing
-- [ ] Happy Eyeballs (RFC 6555)
-- [ ] CRL/OCSP certificate revocation checking
+- [x] I/O Completion Ports (IOCP) for kernel-driven socket monitoring
+- [x] Zero-copy receive buffers
+- [x] MTU-aware frame sizing
+- [x] Send batching
+- [x] Close frame payload parsing
+- [x] Happy Eyeballs (RFC 6555)
+- [x] CRL/OCSP certificate revocation checking
 
 ## Why Wasabi exists
 
@@ -80,143 +80,15 @@ Working with networking in VBA often becomes a project of its own. Some typical 
 > [!NOTE]
 > Before using Wasabi, it is highly recommended that you review the [documentation](docs).
 
-### 1. Import
+### Import
 
 [Download the latest version of Wasabi](../../releases) and import it into your VBA project via
 **File → Import File** in the VBA editor.
 
 No references need to be enabled in **Tools → References**.
 
-### 2. Connect and send
-
-```vb
-Sub Example()
-    Dim handle As Long
-
-    WebSocketConnect "wss://echo.websocket.org", handle
-
-    WebSocketSend "Hello from VBA!", handle
-
-    Dim msg As String
-    Do
-        msg = WebSocketReceive(handle)
-        DoEvents
-    Loop Until msg <> ""
-
-    Debug.Print msg
-
-    WebSocketDisconnect handle
-End Sub
-```
-
-### 3. Continuous Listening
-
-```vb
-Sub Listen()
-    Dim handle As Long
-    WebSocketConnect "wss://echo.websocket.org", handle
-
-    Do While WebSocketIsConnected(handle)
-        Dim msg As String
-        msg = WebSocketReceive(handle)
-
-        If msg <> "" Then
-            Debug.Print msg
-        End If
-
-        DoEvents
-    Loop
-End Sub
-```
-
-### 4. Multiple Connections
-
-```vb
-Sub MultipleConnections()
-    Dim h1 As Long
-    Dim h2 As Long
-
-    WebSocketConnect "wss://echo.websocket.org", h1
-    WebSocketConnect "wss://echo.websocket.org", h2
-
-    WebSocketSend "Hello from connection 1", h1
-    WebSocketSend "Hello from connection 2", h2
-
-    Debug.Print WebSocketReceive(h1)
-    Debug.Print WebSocketReceive(h2)
-
-    WebSocketDisconnect h1
-    WebSocketDisconnect h2
-End Sub
-```
-
-### 5. With Proxy
-
-```vb
-Sub WithProxy()
-    Dim handle As Long
-
-    WebSocketSetProxy "proxy.company.com", 8080, "user", "password"
-    WebSocketConnect "wss://api.example.com/ws", handle
-
-    WebSocketSend "Hello!", handle
-    Debug.Print WebSocketReceive(handle)
-
-    WebSocketDisconnect handle
-End Sub
-```
-
-### 6. With Auto-Reconnect
-
-```vb
-Sub WithAutoReconnect()
-    Dim handle As Long
-
-    WebSocketConnect "wss://echo.websocket.org", handle
-    WebSocketSetAutoReconnect True, 5, 1000, handle
-
-    Do While WebSocketIsConnected(handle)
-        Dim msg As String
-        msg = WebSocketReceive(handle)
-
-        If msg <> "" Then
-            Debug.Print msg
-        End If
-
-        DoEvents
-    Loop
-End Sub
-```
-
-### 7. Binary Messages
-
-```vb
-Sub BinaryExample()
-    Dim handle As Long
-    WebSocketConnect "wss://echo.websocket.org", handle
-
-    Dim data(3) As Byte
-    data(0) = &HDE
-    data(1) = &HAD
-    data(2) = &HBE
-    data(3) = &HEF
-
-    WebSocketSendBinary data, handle
-
-    Dim received() As Byte
-    Do
-        received = WebSocketReceiveBinary(handle)
-        DoEvents
-    Loop Until UBound(received) >= 0
-
-    Dim i As Long
-    For i = 0 To UBound(received)
-        Debug.Print Hex(received(i))
-    Next i
-
-    WebSocketDisconnect handle
-End Sub
-```
+> For the complete reference with examples, parameters, return values, and usage
+notes, see [API Reference](docs/API_REFERENCE.md).
 
 ## Compatibility
 
@@ -360,11 +232,6 @@ calls.
 polling frequency.
 - **No infinite loop required.** One-shot use cases (connect, send, receive,
 disconnect) work fine with a simple wait loop.
-
-## API
-
-For the complete reference with examples, parameters, return values, and usage
-notes, see [API Reference](docs/API_REFERENCE.md).
 
 ## Acknowledgements
 
