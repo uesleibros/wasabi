@@ -77,6 +77,9 @@ Working with networking in VBA often becomes a project of its own. Some typical 
 
 ## Quick Start
 
+> [!NOTE]
+> Before you start using Wasabi, it is strongly recommended that you [take a look at the documentation.](docs)
+
 ### 1. Import
 
 [Download the latest version of Wasabi](../../releases) and import it into your VBA project via
