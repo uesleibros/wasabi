@@ -43,13 +43,21 @@ WebSocket session.
 The pool is an array of `WasabiConnection` user-defined types, initialized
 on the first call to any Wasabi function via `InitConnectionPool`.
 
-```
-Pool Index:   0    1    2    3   ...  63
-            ┌────┬────┬────┬────┬───┬────┐
-State:      │ ●  │ ○  │ ●  │ ○  │   │ ○  │
-            └────┴────┴────┴────┴───┴────┘
-              ●  = Active connection
-              ○  = Available slot
+```mermaid
+graph LR
+    subgraph Pool["Connection Pool (64 slots)"]
+        direction LR
+        A0[0]:::active --- A1[1]:::inactive --- A2[2]:::active --- A3[3]:::inactive --- DOTS[...] --- A62[62]:::inactive --- A63[63]:::active
+    end
+    subgraph Legend
+        L1[● Active]:::active --- L2[○ Available]:::inactive
+    end
+    classDef active fill:#2ecc71,stroke:#27ae60,color:#fff
+    classDef inactive fill:#bdc3c7,stroke:#95a5a6,color:#333
+    classDef dots fill:none,stroke:none,color:#333
+    class DOTS dots
+    style Pool fill:none,stroke:#3498db,stroke-width:2px
+    style Legend fill:none,stroke:none
 ```
 
 ### Allocation
@@ -109,41 +117,30 @@ The full connection sequence is handled by the internal `ConnectHandle`
 function. Every connection, including reconnections, passes through this
 same path.
 
-```
-WebSocketConnect
-       │
-       ▼
-  ParseURL
-  (extract host, port, path, scheme)
-       │
-       ▼
-  ResolveAndConnect
-  (getaddrinfo → Happy Eyeballs → TCP connect)
-       │
-       ▼
-  ApplySocketOptions
-  (TCP_NODELAY, SO_KEEPALIVE, buffer sizes)
-       │
-       ▼
-  ┌─ ProxyEnabled? ─────────────────┐
-  │  YES: DoProxyHTTP or DoProxySOCKS5│
-  └─────────────────────────────────┘
-       │
-       ▼
-  ┌─ TLS (wss://)? ───────────────────┐
-  │  YES: AcquireCredentialsHandle    │
-  │       DoTLSHandshake              │
-  │       QueryContextAttributes      │
-  │       ValidateServerCert (opt)    │
-  └──────────────────────────────────┘
-       │
-       ▼
-  DoWebSocketHandshake
-  (HTTP upgrade + Sec-WebSocket-Accept validation)
-       │
-       ▼
-  Connected = True
-  Stats reset
+```mermaid
+graph TD
+    A[WebSocketConnect]
+    B["ParseURL<br/>extract host, port, path, scheme"]
+    C["ResolveAndConnect<br/>getaddrinfo → Happy Eyeballs → TCP connect"]
+    D["ApplySocketOptions<br/>TCP_NODELAY, SO_KEEPALIVE, buffer sizes"]
+    E{ProxyEnabled?}
+    F["DoProxyHTTP or DoProxySOCKS5"]
+    G{TLS wss://?}
+    H["AcquireCredentialsHandle<br/>DoTLSHandshake<br/>QueryContextAttributes<br/>ValidateServerCert (opt)"]
+    I["DoWebSocketHandshake<br/>HTTP upgrade + Sec-WebSocket-Accept validation"]
+    J["Connected = True<br/>Stats reset"]
+
+    A --> B --> C --> D --> E
+    E -- YES --> F --> G
+    E -- NO --> G
+    G -- YES --> H --> I
+    G -- NO --> I
+    I --> J
+
+    style A fill:#e1f5fe,stroke:#0277bd
+    style J fill:#c8e6c9,stroke:#2e7d32
+    style E fill:#fff9c4,stroke:#f9a825
+    style G fill:#fff9c4,stroke:#f9a825
 ```
 
 ### Happy Eyeballs (RFC 6555)
@@ -236,22 +233,33 @@ These values are used by `TLSSend` to correctly frame outgoing data.
 
 When `TLSSend` is called with plaintext data:
 
-```
-┌──────────┬─────────────────────┬───────────┐
-│  Header  │    Plaintext Data    │  Trailer  │
-│ (cbHeader)│                     │(cbTrailer)│
-└──────────┴─────────────────────┴───────────┘
-                    │
-                    ▼
-            EncryptMessage
-                    │
-                    ▼
-┌──────────┬─────────────────────┬───────────┐
-│  Header  │   Encrypted Data    │  Trailer  │
-└──────────┴─────────────────────┴───────────┘
-                    │
-                    ▼
-              sock_send
+```mermaid
+graph TD
+    subgraph Plaintext["Plaintext Record"]
+        P1["Header<br/>[cbHeader]"]:::header ---
+        P2["Plaintext Data"]:::data ---
+        P3["Trailer<br/>[cbTrailer]"]:::trailer
+    end
+
+    Plaintext --> EM["EncryptMessage"]:::process
+
+    subgraph Encrypted["Encrypted Record"]
+        E1["Header"]:::header ---
+        E2["Encrypted Data"]:::data ---
+        E3["Trailer"]:::trailer
+    end
+
+    EM --> Encrypted
+
+    Encrypted --> SS["sock_send"]:::send
+
+    classDef header fill:#fff9c4,stroke:#f9a825,color:#333
+    classDef data fill:#e1f5fe,stroke:#0277bd,color:#333
+    classDef trailer fill:#f3e5f5,stroke:#7b1fa2,color:#333
+    classDef process fill:#c8e6c9,stroke:#2e7d32,color:#333
+    classDef send fill:#ffcc80,stroke:#e65100,color:#333
+    style Plaintext fill:none,stroke:#333,stroke-width:1px
+    style Encrypted fill:none,stroke:#333,stroke-width:1px
 ```
 
 `TLSSend` automatically splits data larger than `cbMaximumMessage` into multiple TLS records, each encrypted separately and sent sequentially.
@@ -260,21 +268,27 @@ When `TLSSend` is called with plaintext data:
 
 When `TLSDecrypt` processes buffered data:
 
-```
-  RecvBuffer (raw bytes from socket)
-         │
-         ▼
-   DecryptMessage
-         │
-    ┌────┴────────────────┐
-    │                     │
-    ▼                     ▼
- SECBUFFER_DATA     SECBUFFER_EXTRA
- (decrypted)        (next record)
-    │                     │
-    ▼                     ▼
- Append to           Move to start
- DecryptBuffer       of RecvBuffer
+```mermaid
+graph TD
+    A["RecvBuffer<br/>(raw bytes from socket)"]
+    B["DecryptMessage"]
+    C["SECBUFFER_DATA<br/>(decrypted)"]
+    D["SECBUFFER_EXTRA<br/>(next record)"]
+    E["Append to<br/>DecryptBuffer"]
+    F["Move to start<br/>of RecvBuffer"]
+
+    A --> B
+    B --> C
+    B --> D
+    C --> E
+    D --> F
+
+    style A fill:#e1f5fe,stroke:#0277bd
+    style B fill:#fff9c4,stroke:#f9a825
+    style C fill:#c8e6c9,stroke:#2e7d32
+    style D fill:#f3e5f5,stroke:#7b1fa2
+    style E fill:#c8e6c9,stroke:#2e7d32
+    style F fill:#f3e5f5,stroke:#7b1fa2
 ```
 
 The `SECBUFFER_EXTRA` handling is critical. When the OS socket delivers
@@ -350,25 +364,34 @@ WebSocket communication happens through frames as defined by
 
 ### Frame Format
 
-```
- 0                   1                   2                   3
- 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-+-+-+-+-+-------+-+-------------+-------------------------------+
-|F|R|R|R| opcode|M| Payload len |    Extended payload length    |
-|I|S|S|S|  (4)  |A|     (7)     |            (16/64)            |
-|N|V|V|V|       |S|             |   (if payload len==126/127)   |
-| |1|2|3|       |K|             |                               |
-+-+-+-+-+-------+-+-------------+ - - - - - - - - - - - - - - - +
-|     Extended payload length continued, if payload len == 127  |
-+ - - - - - - - - - - - - - - - +-------------------------------+
-|                               | Masking-key, if MASK set to 1 |
-+-------------------------------+-------------------------------+
-| Masking-key (continued)       |          Payload Data         |
-+-------------------------------+ - - - - - - - - - - - - - - - +
-:                     Payload Data continued ...                :
-+ - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - +
-|                     Payload Data (continued)                  |
-+---------------------------------------------------------------+
+```mermaid
+graph LR
+    subgraph Frame["WebSocket Frame (RFC 6455)"]
+        direction LR
+        B0["FIN (1) RSV (3) Opcode (4)"]
+        B1["MASK (1) Payload len (7)"]
+        Ext16["Extended len (16)"]
+        Ext64["Extended len (64)"]
+        Mask["Masking Key (32)"]
+        Payload["Payload Data"]
+    end
+
+    B0 --> B1
+    B1 -->|len=126| Ext16
+    B1 -->|len=127| Ext64
+    B1 -->|len<126| Payload
+    Ext16 --> Payload
+    Ext64 --> Payload
+    B1 -->|MASK=1| Mask
+    Mask --> Payload
+
+    style Frame fill:none,stroke:#333,stroke-width:2px
+    style B0 fill:#e1f5fe,stroke:#0277bd
+    style B1 fill:#e1f5fe,stroke:#0277bd
+    style Ext16 fill:#fff9c4,stroke:#f9a825
+    style Ext64 fill:#fff9c4,stroke:#f9a825
+    style Mask fill:#f3e5f5,stroke:#7b1fa2
+    style Payload fill:#c8e6c9,stroke:#2e7d32
 ```
 
 ### Outgoing Frames (Sending)
@@ -388,30 +411,47 @@ When `WebSocketSend` or `WebSocketSendBinary` is called:
 The internal function `ProcessFrames` parses frames from the
 `DecryptBuffer`:
 
-```
-DecryptBuffer
-     │
-     ▼
-  Read byte 0: FIN bit + opcode
-  Read byte 1: MASK bit + payload length
-     │
-     ├─ length < 126:  use as-is
-     ├─ length = 126:  read 2 more bytes (16-bit)
-     └─ length = 127:  read 8 more bytes (64-bit)
-     │
-     ▼
-  If MASK bit set: read 4-byte mask key
-     │
-     ▼
-  Extract payload using CopyMemory
-     │
-     ▼
-  Route by opcode:
-     ├─ 0x00 (Continuation) → append to fragment buffer
-     ├─ 0x01 (Text)         → UTF-8 decode, enqueue
-     ├─ 0x02 (Binary)       → enqueue raw bytes
-     ├─ 0x08 (Close)        → send close response, disconnect
-     └─ 0x09 (Ping)         → send pong with same payload
+```mermaid
+graph TD
+    A[DecryptBuffer]
+    B["Read byte 0<br/>FIN bit + opcode"]
+    C["Read byte 1<br/>MASK bit + payload length"]
+    D{"Payload length?"}
+    E["Use as-is<br/>length &lt; 126"]
+    F["Read 2 more bytes<br/>length = 126"]
+    G["Read 8 more bytes<br/>length = 127"]
+    H{"MASK bit set?"}
+    I["Read 4-byte mask key"]
+    J["Extract payload<br/>using CopyMemory"]
+    K{"Opcode?"}
+    L["0x00 Continuation<br/>append to fragment buffer"]
+    M["0x01 Text<br/>UTF-8 decode, enqueue"]
+    N["0x02 Binary<br/>enqueue raw bytes"]
+    O["0x08 Close<br/>send close response, disconnect"]
+    P["0x09 Ping<br/>send pong with same payload"]
+
+    A --> B --> C --> D
+    D -- "&lt;126" --> E --> H
+    D -- "126" --> F --> H
+    D -- "127" --> G --> H
+    H -- YES --> I --> J
+    H -- NO --> J
+    J --> K
+    K -- "0x00" --> L
+    K -- "0x01" --> M
+    K -- "0x02" --> N
+    K -- "0x08" --> O
+    K -- "0x09" --> P
+
+    style A fill:#e1f5fe,stroke:#0277bd
+    style D fill:#fff9c4,stroke:#f9a825
+    style H fill:#fff9c4,stroke:#f9a825
+    style K fill:#fff9c4,stroke:#f9a825
+    style L fill:#f3e5f5,stroke:#7b1fa2
+    style M fill:#c8e6c9,stroke:#2e7d32
+    style N fill:#c8e6c9,stroke:#2e7d32
+    style O fill:#ffcdd2,stroke:#c62828
+    style P fill:#ffe0b2,stroke:#e65100
 ```
 
 ### Fragmentation
@@ -445,18 +485,23 @@ one for text messages and one for binary messages.
 
 ### Structure
 
-```
-Queue capacity: 512 entries
+```mermaid
+graph LR
+    subgraph Queue["Ring Buffer (512 entries)"]
+        direction LR
+        S0[0]:::empty --- S1[1]:::empty --- S2["M1"]:::filled --- S3["M2"]:::filled --- S4["M3"]:::filled --- S5["M4"]:::filled --- S6[6]:::empty --- S7[7]:::empty
+    end
 
-         Head                    Tail
-          │                       │
-          ▼                       ▼
-┌────┬────┬────┬────┬────┬────┬────┬────┐
-│    │    │ M1 │ M2 │ M3 │ M4 │    │    │
-└────┴────┴────┴────┴────┴────┴────┴────┘
-  0    1    2    3    4    5    6    7
+    H["Head"]:::pointer --> S2
+    T["Tail"]:::pointer --> S6
 
-MsgCount = 4
+    Info["MsgCount = 4"]
+
+    classDef empty fill:#bdc3c7,stroke:#95a5a6,color:#333
+    classDef filled fill:#c8e6c9,stroke:#2e7d32,color:#333
+    classDef pointer fill:#fff9c4,stroke:#f9a825,color:#333
+    style Queue fill:none,stroke:#3498db,stroke-width:2px
+    style Info fill:none,stroke:none,color:#333
 ```
 
 ### Operations
@@ -486,32 +531,50 @@ initial array setup.
 
 The complete data flow from network to your code.
 
-```
-Network
-   │
-   ▼
-sock_recv → tempBuf
-   │
-   ├─ TLS connection:
-   │     tempBuf → RecvBuffer → DecryptMessage → DecryptBuffer
-   │
-   └─ Plain connection:
-         tempBuf → DecryptBuffer (directly)
-   │
-   ▼
-ProcessFrames
-   │
-   ├─ Text frame    → Utf8ToString → MsgQueue enqueue
-   ├─ Binary frame  → BinaryQueue enqueue
-   ├─ Ping          → SendPongFrame (automatic response)
-   ├─ Close         → WebSocketSendClose + disconnect
-   └─ Continuation  → FragmentBuffer accumulation
-   │
-   ▼
-WebSocketReceive
-   │
-   ▼
-Your VBA code
+```mermaid
+graph TD
+    A[Network]
+    B["sock_recv"]
+    C["tempBuf"]
+    D{"Connection type?"}
+    E["RecvBuffer<br/>↓↓<br/>DecryptMessage<br/>↓↓<br/>DecryptBuffer"]
+    F["DecryptBuffer<br/>(directly)"]
+    G["ProcessFrames"]
+    H{"Frame opcode?"}
+    I["Text frame<br/>Utf8ToString<br/>MsgQueue enqueue"]
+    J["Binary frame<br/>BinaryQueue enqueue"]
+    K["Ping<br/>SendPongFrame<br/>(automatic response)"]
+    L["Close<br/>WebSocketSendClose<br/>+ disconnect"]
+    M["Continuation<br/>FragmentBuffer<br/>accumulation"]
+    N["WebSocketReceive"]
+    O["Your VBA code"]
+
+    A --> B --> C --> D
+    D -- "TLS" --> E --> G
+    D -- "Plain" --> F --> G
+    G --> H
+    H -- "Text" --> I
+    H -- "Binary" --> J
+    H -- "Ping" --> K
+    H -- "Close" --> L
+    H -- "Cont." --> M
+    I --> N
+    J --> N
+    K --> N
+    L --> N
+    M --> N
+    N --> O
+
+    style A fill:#e1f5fe,stroke:#0277bd
+    style D fill:#fff9c4,stroke:#f9a825
+    style H fill:#fff9c4,stroke:#f9a825
+    style I fill:#c8e6c9,stroke:#2e7d32
+    style J fill:#c8e6c9,stroke:#2e7d32
+    style K fill:#ffe0b2,stroke:#e65100
+    style L fill:#ffcdd2,stroke:#c62828
+    style M fill:#f3e5f5,stroke:#7b1fa2
+    style N fill:#e1f5fe,stroke:#0277bd
+    style O fill:#e1f5fe,stroke:#0277bd
 ```
 
 ### Buffer Sizes
@@ -529,39 +592,33 @@ Your VBA code
 When a connection loss is detected during polling and auto-reconnect is
 enabled, Wasabi executes the following sequence.
 
-```
-Connection lost detected
-        │
-        ▼
-   Save all settings
-   (URL, proxy, headers, subprotocol,
-    timeouts, callbacks, NoDelay)
-        │
-        ▼
-   CleanupHandle
-   (close socket, release TLS, clear buffers)
-        │
-        ▼
-   Calculate delay
-   delay = baseDelay * 2^(attempt-1)
-   cap at MAX_RECONNECT_DELAY_MS (30s)
-        │
-        ▼
-   Wait (DoEvents loop)
-        │
-        ▼
-   Reallocate buffers
-        │
-        ▼
-   Restore all saved settings
-        │
-        ▼
-   ConnectHandle(handle, savedUrl)
-        │
-        ├─ Success → ReconnectAttempts = 0
-        │
-        └─ Failure → increment attempt counter
-                     try again if under max
+```mermaid
+graph TD
+    A["Connection lost detected"]
+    B["Save all settings<br/>(URL, proxy, headers, subprotocol,<br/>timeouts, callbacks, NoDelay)"]
+    C["CleanupHandle<br/>(close socket, release TLS, clear buffers)"]
+    D["Calculate delay<br/>delay = baseDelay * 2^(attempt-1)<br/>cap at MAX_RECONNECT_DELAY_MS (30s)"]
+    E["Wait<br/>(DoEvents loop)"]
+    F["Reallocate buffers"]
+    G["Restore all saved settings"]
+    H["ConnectHandle(handle, savedUrl)"]
+    I["Success → ReconnectAttempts = 0"]
+    J["Failure → increment attempt counter<br/>try again if under max"]
+
+    A --> B --> C --> D --> E --> F --> G --> H
+    H --> I
+    H --> J
+
+    style A fill:#ffcdd2,stroke:#c62828
+    style B fill:#e1f5fe,stroke:#0277bd
+    style C fill:#e1f5fe,stroke:#0277bd
+    style D fill:#fff9c4,stroke:#f9a825
+    style E fill:#fff9c4,stroke:#f9a825
+    style F fill:#e1f5fe,stroke:#0277bd
+    style G fill:#e1f5fe,stroke:#0277bd
+    style H fill:#fff9c4,stroke:#f9a825
+    style I fill:#c8e6c9,stroke:#2e7d32
+    style J fill:#ffcdd2,stroke:#c62828
 ```
 
 ### Backoff Pattern
@@ -633,24 +690,19 @@ h4 = 0xC3D2E1F0
 When proxy is enabled, Wasabi establishes an HTTP CONNECT tunnel (or a
 SOCKS5 tunnel) before performing TLS or WebSocket handshaking.
 
-```
-Client                     Proxy                     Server
-  │                          │                          │
-  │  CONNECT host:port       │                          │
-  │  HTTP/1.1                │                          │
-  │  Host: host:port         │                          │
-  │  [Proxy-Authorization]   │                          │
-  │─────────────────────────>│                          │
-  │                          │    TCP connect            │
-  │                          │─────────────────────────>│
-  │                          │                          │
-  │  HTTP/1.1 200            │                          │
-  │  Connection Established  │                          │
-  │<─────────────────────────│                          │
-  │                          │                          │
-  │  ═══════ TLS Handshake through tunnel ═══════════  │
-  │  ═══════ WebSocket Handshake through tunnel ═════  │
-  │  ═══════ WebSocket Frames through tunnel ════════  │
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant P as Proxy
+    participant S as Server
+
+    C->>+P: CONNECT host:port HTTP/1.1<br/>Host: host:port<br/>[Proxy-Authorization]
+    P->>+S: TCP connect
+    P-->>-C: HTTP/1.1 200 Connection Established
+
+    Note over C,S: TLS Handshake through tunnel
+    Note over C,S: WebSocket Handshake through tunnel
+    Note over C,S: WebSocket Frames through tunnel
 ```
 
 > [!NOTE]
@@ -704,20 +756,24 @@ Per connection memory footprint (default settings):
 
 Errors in Wasabi propagate through two parallel paths.
 
-```
-Internal error occurs
-        │
-        ├──────────────────────────────┐
-        │                              │
-        ▼                              ▼
- Per-connection state           Global state
- m_Connections(h).LastError     m_LastError
- m_Connections(h).LastErrorCode m_LastErrorCode
- m_Connections(h).TechnicalDetails  m_TechnicalDetails
-        │                              │
-        ▼                              ▼
- WebSocketGetLastError(h)       WebSocketGetLastError()
- (handle-specific)              (global fallback)
+```mermaid
+graph TD
+    A[Internal error occurs]
+    B["Per-connection state<br/>m_Connections(h).LastError<br/>m_Connections(h).LastErrorCode<br/>m_Connections(h).TechnicalDetails"]
+    C["Global state<br/>m_LastError<br/>m_LastErrorCode<br/>m_TechnicalDetails"]
+    D["WebSocketGetLastError(h)<br/>(handle-specific)"]
+    E["WebSocketGetLastError()<br/>(global fallback)"]
+
+    A --> B
+    A --> C
+    B --> D
+    C --> E
+
+    style A fill:#ffcdd2,stroke:#c62828
+    style B fill:#e1f5fe,stroke:#0277bd
+    style C fill:#e1f5fe,stroke:#0277bd
+    style D fill:#c8e6c9,stroke:#2e7d32
+    style E fill:#fff9c4,stroke:#f9a825
 ```
 
 When a function is called with a valid handle, the per-connection error
