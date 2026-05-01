@@ -5,7 +5,7 @@
 <h1 align="center">Wasabi</h1>
 
 <p align="center">
-  Production-ready WebSocket and WSS for VBA with native TLS, auto reconnect, proxy support, and zero external dependencies
+  Production-ready WebSocket and WSS for VBA with native TLS, auto reconnect, proxy support, MQTT, and zero external dependencies
 </p>
 
 <p align="center">
@@ -21,6 +21,8 @@
   <img src="https://img.shields.io/badge/MQTT-3.1.1%20over%20WS-purple" alt="MQTT" />
   <img src="https://img.shields.io/badge/Proxy%20Auth-NTLM%2FKerberos-red" alt="NTLM" />
   <img src="https://img.shields.io/badge/revocation-CRL%2FOCSP-lightgrey" alt="Revocation" />
+  <img src="https://img.shields.io/badge/HTTP%2F2-ALPN%20negotiation-blue" alt="HTTP/2" />
+  <img src="https://img.shields.io/badge/RTT-latency%20measurement-orange" alt="RTT" />
   <img src="https://img.shields.io/github/stars/uesleibros/wasabi?style=flat&color=gold" alt="Stars" />
   <img src="https://img.shields.io/github/last-commit/uesleibros/wasabi?style=flat" alt="Last Commit" />
 </p>
@@ -29,23 +31,28 @@
 
 Wasabi is a VBA module designed to make WebSocket communication simple, predictable, and practical bringing an experience similar to [socket.io](https://socket.io) in Node.js, but entirely within the Office ecosystem. It is a single, self-contained `.bas` file that compiles seamlessly on 32-bit and 64-bit Office hosts, from Windows XP to Windows 11.
 
+Beyond basic WebSocket messaging, Wasabi bundles an MQTT 3.1.1 client, NTLM/Kerberos proxy authentication, RTT latency measurement, and fine-grained TLS certificate control — all without installing anything.
+
 ## Roadmap
 
 - [x] IPv6 and SNI support
 - [x] Mutual TLS (mTLS) for client certificate authentication
 - [x] SOCKS5 proxy support
-- [x] WebSocket over HTTP/2
-- [x] NTLM/Kerberos for proxies
-- [x] MQTT over WebSocket
-- [x] RTT measurement (GetLatency)
+- [x] HTTP/2 upgrade via ALPN (opt-in)
+- [x] NTLM/Kerberos authentication for HTTP proxies
+- [x] MQTT 3.1.1 client over WebSocket (publish, subscribe, receive)
+- [x] RTT latency measurement (GetLatency)
 - [ ] permessage-deflate compression (RFC 7692)
 - [ ] I/O Completion Ports (IOCP) for kernel-driven socket monitoring
 - [x] Zero-copy receive buffers
 - [x] MTU-aware frame sizing
-- [x] Send batching
+- [x] Send batching (text and binary)
 - [x] Close frame payload parsing
 - [x] Happy Eyeballs (RFC 6555)
-- [x] CRL/OCSP certificate revocation checking
+- [x] Configurable CRL/OCSP certificate revocation checking
+- [ ] `WSAAsyncSelect` event-driven socket notifications
+- [ ] `WebSocketStartListening` helper for one-line polling loops
+- [ ] Excel RTD server integration (real-time data without VBA polling)
 
 ## Why Wasabi exists
 
@@ -76,6 +83,10 @@ Working with networking in VBA often becomes a project of its own. Some typical 
 - VBA was not designed for modern concurrency.
 - Without a good abstraction, it is easy to freeze the UI or create inconsistent state.
 
+**No built-in MQTT, NTLM, or latency measurement**
+- IoT integration, corporate proxy authentication, and network diagnostics are common requirements that have no standard VBA solution.
+- Wasabi provides all three out of the box: `MqttConnect`, `WebSocketSetProxyNtlm`, and `WebSocketGetLatency`.
+
 **Maintenance and readability**
 - Most handcrafted solutions grow long and fragile.
 - The networking layer becomes the largest part of the project, making simple things hard to maintain.
@@ -85,7 +96,7 @@ Working with networking in VBA often becomes a project of its own. Some typical 
 - **Bots** (Discord, Slack, Telegram), connect to gateways and handle real-time events and messages directly from Excel or Word
 - **Trading and finance**, stream live prices from exchanges like Binance, Coinbase or B3 into spreadsheet cells with millisecond-level latency
 - **Dashboards**, update live data on a spreadsheet without manual refresh or polling HTTP endpoints
-- **IoT and industrial**, receive sensor data from ESP32, Raspberry Pi or SCADA systems via WebSocket directly into Office
+- **IoT and industrial**, receive sensor data from ESP32, Raspberry Pi or SCADA systems via WebSocket or MQTT directly into Office
 - **Games and interactive tools**, build client/server communication for VBA-based games or collaborative tools
 - **Corporate automation**, connect Office to internal WebSocket APIs behind proxies and firewalls without installing anything
 
@@ -124,9 +135,9 @@ project is all it takes.
 | Windows 11 | ✅ |
 
 Wasabi relies exclusively on `ws2_32.dll` (Winsock 2), `secur32.dll` (Schannel
-SSPI), `kernel32.dll` and `advapi32.dll`. These libraries have been present and
-stable in every version of Windows since XP, which is why Wasabi can run on
-machines that are over 20 years old without any modifications.
+SSPI), `kernel32.dll`, `advapi32.dll`, and `crypt32.dll`. These libraries have
+been present and stable in every version of Windows since XP, which is why
+Wasabi can run on machines that are over 20 years old without any modifications.
 
 This is a deliberate architectural choice. Many competing modules depend on the
 `WinHttpWebSocket*` family of functions (`WinHttpWebSocketSend`,
@@ -168,9 +179,10 @@ Windows 11.
 | Library | Role in Wasabi |
 |---|---|
 | `ws2_32.dll` | TCP socket creation, DNS resolution, connection, send, recv, I/O control |
-| `secur32.dll` | TLS 1.2 and TLS 1.3 via Schannel SSPI (handshake, encryption, decryption) |
+| `secur32.dll` | TLS 1.2/1.3 via Schannel SSPI (handshake, encryption, decryption) |
 | `kernel32.dll` | Memory operations, UTF-8 string conversion, tick count for timeouts |
 | `advapi32.dll` | Cryptographic random number generation (`CryptGenRandom`) for secure WebSocket frame masking |
+| `crypt32.dll` | Certificate store access, PFX import, certificate chain building and validation |
 
 **ws2_32.dll (Windows Sockets 2)**
 This is the core networking library of Windows. Wasabi uses it directly to
@@ -203,6 +215,12 @@ proxies or inject data into the connection. If `CryptGenRandom` is unavailable
 (which should never happen on a normal Windows installation), Wasabi falls back
 to VBA's `Rnd` function with a suitable warning.
 
+**crypt32.dll**
+Used for all certificate-related operations: importing PFX files, searching the
+Windows certificate store, building certificate chains, and validating server
+certificates. This is the same library that Internet Explorer and Edge use,
+ensuring consistent behavior with the rest of the system.
+
 ### What does "zero external dependencies" mean in practice
 
 In practical terms, Wasabi does not require anything beyond Windows and the VBA
@@ -219,9 +237,8 @@ COM objects, commercial SDKs, or extra binaries that require administrator
 rights, licensing, or machine-specific configuration.
 
 Wasabi avoids all of that by relying only on native Windows libraries that are
-already present on the machine, such as `ws2_32.dll`, `secur32.dll`, and
-`kernel32.dll`. If Windows is running, the underlying networking and TLS stack
-required by Wasabi is already there.
+already present on the machine. If Windows is running, the underlying networking
+and TLS stack required by Wasabi is already there.
 
 The result is simple: you can distribute a workbook or VBA project containing
 Wasabi without asking the user to install anything first. No setup wizard, no
