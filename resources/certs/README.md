@@ -12,6 +12,16 @@ development of Wasabi.
 
 ## Contents
 
+| File | Purpose |
+|:---|:---|
+| `ca.pem` | Self-signed root CA certificate (X.509 PEM) |
+| `ca.key` | Private key of the test root CA |
+| `server.pem` | Server certificate signed by the test CA |
+| `server.key` | Private key of the server certificate |
+| `client.pem` | Client certificate for mTLS handshake testing |
+| `client.key` | Private key of the client certificate |
+| `client.pfx` | PKCS#12 archive containing the client certificate, its private key, and the CA certificate |
+
 > [!NOTE]
 > The PKCS#12 file (`client.pfx`) is protected with the password `wasabi`.
 > This password is hard-coded in the test suite and is not meant to be secret.
