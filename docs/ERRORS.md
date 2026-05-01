@@ -33,7 +33,9 @@ the function name and the numeric code. This is the most useful field for
 debugging.
 
 > [!TIP]
-> Always log all three values when diagnosing connection issues.
+> Always log all three values when diagnosing connection issues. The
+> `WebSocketGetErrorDescription` function combines them into a single
+> diagnostic string.
 
 ## Error Pattern
 
@@ -162,7 +164,8 @@ address.
 
 **What happened:** The TCP connection could not be established. Either
 `connect()` failed immediately or `select()` timed out waiting for the
-connection to complete.
+connection to complete. This includes failures from the Happy Eyeballs
+dual‑stack connection process.
 
 **Common causes:**
 - Server is down or not listening on the specified port
@@ -180,7 +183,7 @@ connection to complete.
 ' Example error output
 ' Error: 4
 ' System code: 10060
-' Details: connect() timeout or refused connecting to api.example.com:443
+' Details: Connect failed: WSAETIMEDOUT - Connection timed out
 ```
 
 > [!NOTE]
@@ -205,7 +208,7 @@ Schannel security provider.
 ' Example error output
 ' Error: 5
 ' System code: -2146893043
-' Details: AcquireCredentialsHandle failed with SSPI error 0x8009030D
+' Details: AcquireCredentialsHandle failed: 0x8009030D
 ```
 
 ### ERR_TLS_HANDSHAKE_FAILED (6)
@@ -229,7 +232,7 @@ the TLS handshake.
 ' Example error output
 ' Error: 6
 ' System code: -2146893018
-' Details: InitializeSecurityContext failed with SSPI error 0x80090326
+' Details: TLS handshake failed: 0x80090326
 ```
 
 > [!WARNING]
@@ -255,7 +258,7 @@ time or iteration limit.
 ' Example error output
 ' Error: 7
 ' System code: 0
-' Details: TLS handshake timeout with api.example.com
+' Details: TLS handshake timed out with api.example.com
 ```
 
 ### ERR_WEBSOCKET_HANDSHAKE_FAILED (8)
@@ -277,7 +280,7 @@ that initiates the WebSocket connection.
 ' Example error output
 ' Error: 8
 ' System code: 10054
-' Details: recv() failed during WebSocket handshake with WSA error 10054
+' Details: recv() WS handshake failed: WSAECONNRESET - Connection reset by peer
 ```
 
 > [!NOTE]
@@ -302,7 +305,7 @@ within the timeout period.
 ' Example error output
 ' Error: 9
 ' System code: 0
-' Details: No response received for WebSocket handshake within 5 seconds
+' Details: No WS handshake response within 5s
 ```
 
 ### ERR_SEND_FAILED (10)
@@ -324,7 +327,7 @@ to write data to the socket.
 ' Example error output
 ' Error: 10
 ' System code: 10054
-' Details: send() failed with WSA error 10054
+' Details: send() failed: WSAECONNRESET - Connection reset by peer
 ```
 
 ### ERR_RECV_FAILED (11)
@@ -384,29 +387,17 @@ The outgoing data could not be encrypted.
 
 ### ERR_TLS_DECRYPT_FAILED (15)
 
-**What happened:** `DecryptMessage` returned a fatal error or the server
-requested TLS renegotiation (`SEC_I_RENEGOTIATE`).
+**What happened:** `DecryptMessage` returned a fatal error other than
+`SEC_I_RENEGOTIATE` (which is handled separately by `ERR_TLS_RENEGOTIATE`).
 
 **Common causes:**
-- Server initiated renegotiation (Wasabi closes the connection in this case)
 - Corrupted TLS record received
 - Network device modifying encrypted traffic
+- Internal SSPI failure
 
 **What to check:**
-- If the details mention `SEC_I_RENEGOTIATE`, the server requested a TLS
-  renegotiation which Wasabi does not support. This is handled by closing
-  the connection and triggering auto reconnect if enabled.
+- Disconnect and reconnect
 - Check for SSL inspection proxies
-
-```vb
-' Example error output
-' Error: 15
-' System code: 590129
-' Details: SEC_I_RENEGOTIATE received from server
-```
-
-> [!NOTE]
-> Wasabi intentionally does not support TLS renegotiation. The complexity of implementing a full renegotiation loop in VBA outweighs the benefit. Auto reconnect is the recommended recovery path.
 
 ### ERR_INVALID_URL (16)
 
@@ -615,6 +606,93 @@ WebSocketSetAutoReconnect True, 5, 2000, h
 > [!TIP]
 > Combining `WebSocketSetInactivityTimeout` with `WebSocketSetPingInterval` and `WebSocketSetAutoReconnect` creates the most resilient connection configuration available in Wasabi.
 
+### ERR_CERT_LOAD_FAILED (25)
+
+**What happened:** Wasabi failed to load a client certificate from a PFX file
+or the Windows certificate store. The certificate was configured via
+`WebSocketSetClientCert` or `WebSocketSetClientCertPfx` but could not be
+found, imported, or parsed.
+
+**Common causes:**
+- Path to the PFX file is incorrect or the file is missing
+- PFX file is empty or password-protected with the wrong password
+- The specified subject or thumbprint does not match any certificate in the store
+- The user account lacks permission to read the certificate store or file
+
+**What to check:**
+- Verify the file path and that the PFX file exists
+- Confirm the PFX password is correct
+- When using `WebSocketSetClientCert`, use a valid certificate subject or thumbprint
+- Check that the certificate is installed in the correct store (Current User\My)
+
+```vb
+' Example error output
+' Error: 25
+' System code: 0
+' Details: PFX file not found: C:\certs\client.pfx
+```
+
+> [!NOTE]
+> If client certificate loading fails, Wasabi will continue the connection without a client certificate and log a warning. The server may then reject the TLS handshake if mTLS is required.
+
+### ERR_CERT_VALIDATE_FAILED (26)
+
+**What happened:** Server certificate validation was enabled
+(`WebSocketSetCertValidation True`) and the chain verification failed.
+
+**Common causes:**
+- The server certificate is self-signed or issued by an untrusted CA
+- The certificate has expired or is not yet valid
+- The certificate's Common Name (CN) does not match the hostname
+- A required intermediate CA certificate is missing on the client machine
+
+**What to check:**
+- Verify that the server certificate is trusted by opening the URL in a browser
+- If using a self-signed certificate, disable validation or add the certificate to the Trusted Root store
+- Ensure the system clock is correct
+
+### ERR_FRAGMENT_OVERFLOW (27)
+
+**What happened:** A fragmented WebSocket message grew larger than the
+configured `FragmentBuffer` size.
+
+The received continuation frames accumulated a payload that exceeded the
+buffer capacity. The connection is closed to prevent memory corruption.
+
+**Common causes:**
+- Server is sending messages larger than the default 256 KB fragment buffer
+- A sender is sending continuous fragments without a final FIN frame
+- Buffer size is too small for the expected message size
+
+**What to check:**
+- Increase the fragment buffer size via `WebSocketSetBufferSizes` before connecting
+- If the sender is an API, verify the maximum message size it may send
+- Ensure the sender properly terminates fragmented messages
+
+```vb
+' Increasing the fragment buffer to 1 MB
+WebSocketSetBufferSizes 262144, 1048576, h
+```
+
+### ERR_TLS_RENEGOTIATE (28)
+
+**What happened:** The server requested a TLS renegotiation after the initial
+handshake was complete. Wasabi does not support renegotiation and closes the
+connection.
+
+**Common causes:**
+- The server is configured to require periodic re-authentication
+- A security policy triggers renegotiation after a certain amount of data is transferred
+- Some older servers may renegotiate by default
+
+**What to check:**
+- If possible, disable server-initiated TLS renegotiation
+- Enable auto reconnect so the connection is automatically re-established
+- Adjust server configuration to avoid renegotiation
+
+> [!NOTE]
+> Wasabi intentionally does not implement TLS renegotiation due to the complexity of handling it correctly in single-threaded VBA. Auto reconnect is the recommended recovery mechanism.
+
 ## Quick Diagnostic Checklist
 
 When a connection fails, run through this list in order.
@@ -664,4 +742,4 @@ These are the most frequently encountered Schannel/SSPI error codes.
 | 0x80090318 | SEC_E_INCOMPLETE_MESSAGE | Received TLS record is incomplete (internal, handled by Wasabi) |
 | 0x80090326 | SEC_E_ILLEGAL_MESSAGE | Received message is corrupted or unexpected |
 | 0x00090312 | SEC_I_CONTINUE_NEEDED | Handshake needs more data (internal, handled by Wasabi) |
-| 0x00090321 | SEC_I_RENEGOTIATE | Server requested TLS renegotiation |
+| 0x00090321 | SEC_I_RENEGOTIATE | Server requested TLS renegotiation (now handled as `ERR_TLS_RENEGOTIATE`) |
