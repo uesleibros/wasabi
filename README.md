@@ -42,7 +42,7 @@ Beyond basic WebSocket messaging, Wasabi bundles an MQTT 3.1.1 client, NTLM/Kerb
 - [x] NTLM/Kerberos authentication for HTTP proxies
 - [x] MQTT 3.1.1 client over WebSocket (publish, subscribe, receive)
 - [x] RTT latency measurement (GetLatency)
-- [ ] permessage-deflate compression (RFC 7692)
+- [x] permessage-deflate compression (RFC 7692)
 - [ ] I/O Completion Ports (IOCP) for kernel-driven socket monitoring
 - [x] Zero-copy receive buffers
 - [x] MTU-aware frame sizing
@@ -52,7 +52,6 @@ Beyond basic WebSocket messaging, Wasabi bundles an MQTT 3.1.1 client, NTLM/Kerb
 - [x] Configurable CRL/OCSP certificate revocation checking
 - [ ] `WSAAsyncSelect` event-driven socket notifications
 - [ ] `WebSocketStartListening` helper for one-line polling loops
-- [ ] Excel RTD server integration (real-time data without VBA polling)
 
 ## Why Wasabi exists
 
