@@ -5,7 +5,7 @@
 <h1 align="center">Wasabi</h1>
 
 <p align="center">
-  Production-ready WebSocket and WSS for VBA with native TLS, auto reconnect, proxy support, MQTT, and zero external dependencies
+  Production-ready WebSocket and WSS for VBA with native TLS, auto reconnect, proxy support, MQTT, permessage-deflate, and zero external dependencies
 </p>
 
 <p align="center">
@@ -23,15 +23,16 @@
   <img src="https://img.shields.io/badge/revocation-CRL%2FOCSP-lightgrey" alt="Revocation" />
   <img src="https://img.shields.io/badge/HTTP%2F2-ALPN%20negotiation-blue" alt="HTTP/2" />
   <img src="https://img.shields.io/badge/RTT-latency%20measurement-orange" alt="RTT" />
+  <img src="https://img.shields.io/badge/Deflate-permessage--deflate-success" alt="Deflate" />
   <img src="https://img.shields.io/github/stars/uesleibros/wasabi?style=flat&color=gold" alt="Stars" />
   <img src="https://img.shields.io/github/last-commit/uesleibros/wasabi?style=flat" alt="Last Commit" />
 </p>
 
 ## What is Wasabi
 
-Wasabi is a VBA module designed to make WebSocket communication simple, predictable, and practical bringing an experience similar to [socket.io](https://socket.io) in Node.js, but entirely within the Office ecosystem. It is a single, self-contained `.bas` file that compiles seamlessly on 32-bit and 64-bit Office hosts, from Windows XP to Windows 11.
+Wasabi is a VBA module designed to make WebSocket communication simple, predictable, and practical — bringing an experience similar to [socket.io](https://socket.io) in Node.js, but entirely within the Office ecosystem. It is a single, self-contained `.bas` file that compiles seamlessly on 32-bit and 64-bit Office hosts, from Windows XP to Windows 11.
 
-Beyond basic WebSocket messaging, Wasabi bundles an MQTT 3.1.1 client, NTLM/Kerberos proxy authentication, RTT latency measurement, and fine-grained TLS certificate control — all without installing anything.
+Beyond basic WebSocket messaging, Wasabi bundles an MQTT 3.1.1 client, NTLM/Kerberos proxy authentication, RTT latency measurement, fine-grained TLS certificate control, and `permessage-deflate` compression (RFC 7692) — all without mandatory external dependencies.
 
 ## Roadmap
 
@@ -133,10 +134,9 @@ project is all it takes.
 | Windows 10 | ✅ |
 | Windows 11 | ✅ |
 
-Wasabi relies exclusively on `ws2_32.dll` (Winsock 2), `secur32.dll` (Schannel
-SSPI), `kernel32.dll`, `advapi32.dll`, and `crypt32.dll`. These libraries have
-been present and stable in every version of Windows since XP, which is why
-Wasabi can run on machines that are over 20 years old without any modifications.
+Wasabi relies on `ws2_32.dll`, `secur32.dll`, `kernel32.dll`, `advapi32.dll`, and
+`crypt32.dll`. These libraries are present in every version of Windows since XP,
+which is why Wasabi runs on machines over 20 years old without modifications.
 
 This is a deliberate architectural choice. Many competing modules depend on the
 `WinHttpWebSocket*` family of functions (`WinHttpWebSocketSend`,
@@ -160,168 +160,143 @@ limitation.
 | Any VBA7 host (Office 2010+) | ✅ |
 | VBA6 (Office 2007 and earlier) | ✅ |
 
-The transition from 32-bit to 64-bit Office broke a large number of VBA modules
-that used native API declarations, because pointer sizes changed from 4 bytes to
-8 bytes. Wasabi handles this transparently through conditional compilation.
+The transition from 32-bit to 64-bit Office broke many VBA modules that used
+native API declarations. Wasabi handles this transparently through conditional
+compilation.
 
-Every single API declaration in the module uses the `#If VBA7` compiler
-directive to switch between two complete sets of declarations: one using `Long`
-for 32-bit environments and one using `LongPtr` and `PtrSafe` for 64-bit
-environments. This means the same unmodified `.bas` file works correctly whether
-the user is running Office 2007 on a 32-bit machine or Office 365 64-bit on
-Windows 11.
+Every API declaration uses `#If VBA7` to switch between `Long` (32-bit) and
+`LongPtr`/`PtrSafe` (64-bit). The same `.bas` file works correctly on Office
+2007 32-bit and Office 365 64-bit on Windows 11.
 
-> 32-bit and 64-bit compatibility is guaranteed through conditional compilation (`#If VBA7`) across all API declarations. `LongPtr` and `PtrSafe` are applied automatically at compile time.
+> 32-bit and 64-bit compatibility is guaranteed through conditional compilation (`#If VBA7`) across all API declarations.
 
 ### Native DLLs
 
-| Library | Role in Wasabi |
-|---|---|
-| `ws2_32.dll` | TCP socket creation, DNS resolution, connection, send, recv, I/O control |
-| `secur32.dll` | TLS 1.2/1.3 via Schannel SSPI (handshake, encryption, decryption) |
-| `kernel32.dll` | Memory operations, UTF-8 string conversion, tick count for timeouts |
-| `advapi32.dll` | Cryptographic random number generation (`CryptGenRandom`) for secure WebSocket frame masking |
-| `crypt32.dll` | Certificate store access, PFX import, certificate chain building and validation |
+| Library | Role in Wasabi | Optional |
+|---|---|---|
+| `ws2_32.dll` | TCP socket creation, DNS, send/recv | No |
+| `secur32.dll` | TLS 1.2/1.3 via Schannel SSPI | No |
+| `kernel32.dll` | Memory operations, UTF-8, tick count | No |
+| `advapi32.dll` | Cryptographic random numbers (`CryptGenRandom`) | No |
+| `crypt32.dll` | Certificate store, chain validation | No |
+| `zlib1.dll` | Compression for `permessage-deflate` | **Yes** |
 
 **ws2_32.dll (Windows Sockets 2)**
-This is the core networking library of Windows. Wasabi uses it directly to
-create TCP sockets, resolve hostnames via `gethostbyname`, establish connections,
-send and receive raw bytes, and control socket behavior through `ioctlsocket` and
-`setsockopt`. By going to this layer directly, Wasabi avoids the performance and
-flexibility limitations of higher-level abstractions like WinHTTP.
+Core networking. Creates TCP sockets, resolves hostnames, sends and receives raw
+bytes. Direct use avoids performance and flexibility limitations of WinHTTP.
 
 **secur32.dll (Security Support Provider Interface)**
-This is the Windows security library responsible for TLS. Wasabi uses it to
-perform the full TLS handshake manually via `AcquireCredentialsHandle` and
-`InitializeSecurityContext`, and to encrypt and decrypt data after the handshake
-via `EncryptMessage` and `DecryptMessage`. This gives Wasabi complete control
-over TLS flags, protocol versions, certificate validation behavior and cipher
-negotiation, something that is impossible when delegating to WinHTTP.
+Windows security library for TLS. Wasabi performs the full TLS handshake via
+`AcquireCredentialsHandle` and `InitializeSecurityContext`, then encrypts/decrypts
+via `EncryptMessage` and `DecryptMessage`. This gives complete control over TLS
+flags, protocol versions, and cipher negotiation.
 
 **kernel32.dll**
-Used for three specific purposes: `RtlMoveMemory` (exposed as `CopyMemory`) for
-direct buffer manipulation without VBA overhead, `MultiByteToWideChar` and
-`WideCharToMultiByte` for correct UTF-8 encoding and decoding of WebSocket text
-frames, and `GetTickCount` for measuring elapsed time in timeout and reconnect
-logic, with wraparound handling for systems with long uptimes.
+`RtlMoveMemory` for buffer manipulation, `MultiByteToWideChar`/`WideCharToMultiByte`
+for UTF-8, and `GetTickCount` for timeouts with wraparound handling.
 
 **advapi32.dll**
-Used exclusively for `CryptGenRandom`, which generates cryptographically secure
-random bytes. Wasabi uses this to create the 4-byte XOR masks required by the
-WebSocket protocol for every outgoing frame. This is a critical security measure:
-predictable masks can be exploited by malicious intermediaries to poison caching
-proxies or inject data into the connection. If `CryptGenRandom` is unavailable
-(which should never happen on a normal Windows installation), Wasabi falls back
-to VBA's `Rnd` function with a suitable warning.
+`CryptGenRandom` for cryptographically secure random bytes used in WebSocket frame
+masks. Falls back to `Rnd` only if the cryptographic API is unavailable.
 
 **crypt32.dll**
-Used for all certificate-related operations: importing PFX files, searching the
-Windows certificate store, building certificate chains, and validating server
-certificates. This is the same library that Internet Explorer and Edge use,
-ensuring consistent behavior with the rest of the system.
+PFX import, certificate store search, chain building, and server certificate
+validation. Same library used by Internet Explorer and Edge.
+
+**zlib1.dll (optional)**
+Required only when `permessage-deflate` compression is enabled via
+`WebSocketConnect(url, handle, True)`. Wasabi searches for `zlib1_x64.dll` or
+`zlib1_x86.dll` in the project folder and several subdirectories. If not found,
+compression is silently disabled and the connection proceeds normally. See
+[DEFLATE.md](docs/DEFLATE.md) for details.
 
 ### What does "zero external dependencies" mean in practice
 
-In practical terms, Wasabi does not require anything beyond Windows and the VBA
-runtime you already have.
+Wasabi requires nothing beyond Windows and the VBA runtime.
 
-There is no installer, no registered COM component, no ActiveX control, no
-third-party DLL, no Python runtime, no .NET package, no `regsvr32`, and no
-extra setup step outside importing the `.bas` file into your project.
+No installer, no COM registration, no ActiveX control, no third-party DLL, no
+Python runtime, no .NET package, no `regsvr32`. Just import the `.bas` file.
 
-This matters a lot in corporate environments, where IT policies often prevent
-users from installing software, registering components, or adding external
-libraries to Office solutions. Many networking alternatives for VBA depend on
-COM objects, commercial SDKs, or extra binaries that require administrator
-rights, licensing, or machine-specific configuration.
+The only optional component is `zlib1.dll`, needed only if you enable
+`permessage-deflate`. The module detects its presence automatically and works
+perfectly without it.
 
-Wasabi avoids all of that by relying only on native Windows libraries that are
-already present on the machine. If Windows is running, the underlying networking
-and TLS stack required by Wasabi is already there.
+This matters in corporate environments where IT policies prevent software
+installation. You can distribute a workbook containing Wasabi without asking
+the user to install anything first.
 
-The result is simple: you can distribute a workbook or VBA project containing
-Wasabi without asking the user to install anything first. No setup wizard, no
-dependency hell, no missing runtime, no registration step, and no surprise
-failure because a component was not deployed correctly.
+## Compression (permessage-deflate)
+
+Wasabi supports the WebSocket `permessage-deflate` extension (RFC 7692), which
+compresses message payloads to reduce bandwidth usage.
+
+- Compression is **opt-in** on a per‑connection basis
+- Requires `zlib1.dll` (see [Native DLLs](#native-dlls) and [DEFLATE.md](docs/DEFLATE.md))
+- Automatically negotiates with the server during handshake
+- Falls back gracefully if the server doesn't support compression or the DLL is missing
+
+```vb
+' Connect with compression enabled
+If WebSocketConnect("wss://example.com/ws", h, True, True) Then
+    Debug.Print "Compression active:", WebSocketGetDeflateEnabled(h)
+End If
+```
+
+> [!NOTE]
+> `permessage-deflate` reduces bandwidth, not latency. It's most beneficial for
+> large payloads or connections with limited bandwidth. For small messages, the
+> CPU overhead may slightly outweigh the bandwidth savings.
 
 ## Execution Model: Single-Thread and Polling
 
-VBA is a single-threaded language. There is exactly one execution thread, shared
-between your code and the Office interface. This means there is no native way to
-listen to a socket in the background while the user interacts.
+VBA is single-threaded. One execution thread is shared between your code and
+the Office interface, so there is no native background socket listening.
 
-Wasabi solves this with a polling model: instead of dispatching events
-automatically when a message arrives, it stores incoming messages in an internal
-Ring Buffer and waits for your code to retrieve them.
+Wasabi uses a polling model: incoming messages accumulate in internal buffers
+and are delivered when you call `WebSocketReceive`.
 
-Each time you call `WebSocketReceive`, Wasabi does three things:
+Each `WebSocketReceive` call:
+1. Runs maintenance (pings, inactivity timeout, MTU probes)
+2. Checks the OS socket buffer (`FIONREAD`)
+3. Reads available data
+4. Decrypts (if TLS) and parses WebSocket frames
+5. Returns the oldest queued message
 
-1. Checks whether data is available on the socket (`FIONREAD`)
-2. Reads and processes any frames received since the last call
-3. Returns the next message from the queue, or an empty string if there is nothing
+Between calls, the socket stays open and the kernel buffers incoming data.
+No messages are lost.
 
-Between calls, the socket remains fully open. The Windows kernel continues
-buffering incoming data at the driver level regardless of what your VBA code is
-doing. No messages are lost between calls.
-
-### What this does not mean
-
-- **Not slow.** The Ring Buffer holds up to 512 messages. Nothing is lost between
-calls.
-- **Connection does not drop.** The socket stays open and active regardless of
-polling frequency.
-- **No infinite loop required.** One-shot use cases (connect, send, receive,
-disconnect) work fine with a simple wait loop.
+- **Not slow.** The ring buffer holds up to 512 messages.
+- **Connection doesn't drop.** The socket stays active regardless of polling frequency.
+- **No infinite loop required.** Simple send/receive/disconnect workflows work fine.
 
 ## Acknowledgements
 
-Wasabi did not emerge from nothing. It was built on years of attempts, workarounds
-and creative solutions that the VBA community constructed over time to solve a
-problem the language never officially addressed.
+Wasabi was built on years of community efforts to bring real-time networking
+to the Office ecosystem.
 
-The following projects were essential, not only as technical references but as
-proof that serious network communication inside the Office ecosystem was possible.
-Each of them, in their own way, pushed the boundary of what was considered viable
-in VBA.
+- [**WinHttpWebSocket**](https://github.com/EagleAglow/vba-websocket) — first serious WebSocket attempt in VBA using native APIs
+- [**VbAsyncSocket**](https://github.com/wqweto/VbAsyncSocket) — the most sophisticated VB6/VBA networking library, with native Schannel
+- [**VBA-Web**](https://github.com/VBA-tools/VBA-Web) — standard for HTTP/REST communication in VBA
+- [**TlsSocketWSS**](https://github.com/Maatooh/TlsSocketWSS-vb6) — TLS WebSocket server for VB6
+- [**VB6-WebSocket-Server-SSL**](https://github.com/JoshyFrancis/vb6-websocket-server-ssl) — pure VB6 secure WebSocket server
+- [**VBA_WinSockAPI**](https://github.com/papanda925/VBA_WinsockAPI_TCP_Sample) — educational Winsock TCP client/server in VBA
 
-- [**WinHttpWebSocket**](https://github.com/EagleAglow/vba-websocket), one of the first serious attempts at WebSocket in VBA using native Windows APIs,
-  and the most widely referenced starting point in the community.
+These projects shaped every architectural decision in Wasabi: the non-blocking
+I/O model, manual Schannel, ring buffers, and auto-reconnect.
 
-- [**VbAsyncSocket**](https://github.com/wqweto/VbAsyncSocket), the most technically sophisticated VB6/VBA networking library available,
-  with native Schannel support and a level of engineering depth that set the bar
-  for what was possible in the ecosystem.
-
-- [**VBA-Web**](https://github.com/VBA-tools/VBA-Web), standard for HTTP and REST communication in VBA, and a reference
-  for how a well-documented, well-maintained VBA library should be structured.
-
-- [**TlsSocketWSS**](https://github.com/Maatooh/TlsSocketWSS-vb6), simple TlsSocket server implemented to work with websocket, allowing connection from WSS with a self-signed certificate or a valid one.
-
-- [**VB6-WebSocket-Server-SSL**](https://github.com/JoshyFrancis/vb6-websocket-server-ssl), secure WebSocket in Pure VB6 no external Libraries or ActiveX.
-
-- [**VBA_WinSockAPI**](https://github.com/papanda925/VBA_WinsockAPI_TCP_Sample), a clean, educational TCP client/server sample using raw Winsock API calls
-  directly from VBA, demonstrating the fundamentals of socket creation, binding,
-  listening, accepting and sending/receiving data that many VBA networking
-  projects build upon.
-  
-Studying what these projects did well, and especially what they could not solve,
-shaped every architectural decision in Wasabi: the non-blocking I/O model, the
-manual Schannel implementation, the Ring Buffers, the Auto-Reconnect. None of it
-would have taken form without the foundation these developers built first.
-
-The VBA community is smaller than it deserves to be, and anyone who chooses to
-spend time on an open project in this ecosystem is doing something genuinely
-valuable. Wasabi exists on top of that work, and that will never be a small thing.
+The VBA community is smaller than it deserves to be. Anyone building open source
+in this ecosystem is doing genuinely valuable work. Wasabi stands on their shoulders.
 
 ## Contributing
 
-Bug reports, feature requests, and pull requests are welcome. Please read
-[CONTRIBUTING.md](CONTRIBUTING.md) before contributing.
+Bug reports, feature requests, and pull requests are welcome. See
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Security
 
-Please do **not** report security vulnerabilities through public issues. See
+Do **not** report vulnerabilities through public issues. See
 [SECURITY.md](SECURITY.md) and use GitHub Private Vulnerability Reporting.
 
 ## License
 
-**MIT**, free for personal and commercial use. See [LICENSE](LICENSE) for details.
+**MIT**, free for personal and commercial use. See [LICENSE](LICENSE).
