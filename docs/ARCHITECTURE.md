@@ -18,8 +18,8 @@ graph TD
     A["Your VBA Code<br/>WebSocketConnect / Send / Receive"]
     B["Public API Layer<br/>Handle resolution, validation, routing"]
     C["WebSocket Protocol Layer<br/>Frame construction, parsing, masking,<br/>fragmentation, control frame handling"]
-    D["TLS Layer Schannel<br/>Handshake, EncryptMessage, DecryptMessage"]
-    E["Transport Layer Winsock<br/>socket, connect, send, recv, select"]
+    D["TLS Layer (Schannel)<br/>Handshake, EncryptMessage, DecryptMessage"]
+    E["Transport Layer (Winsock)<br/>socket, connect, send, recv, select"]
     F["Windows Kernel<br/>TCP/IP stack, network driver"]
 
     A --> B --> C --> D --> E --> F
