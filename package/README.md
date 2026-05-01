@@ -1,90 +1,57 @@
 # package
 
-This folder contains the distributable file for Wasabi.
+This folder contains **Wasabi.bas**, the single, self‑contained file that
+brings the entire WebSocket stack to any VBA project.
 
-## What this file is
+## What it is
 
-`Wasabi.bas` is a standard VBA module exported directly from the VBA IDE. It is
-a plain text file that the VBA runtime can import, parse and compile natively.
+* A **plain text** `.bas` module exported from the VBA IDE.
+* **Zero dependencies** — no DLLs, no COM registrations, no installers.
+* **Self‑contained** — all the logic lives inside this one file.
 
-There is no build step, no compilation, no binary, and no packaging involved.
-What you see in this file is exactly what runs inside the Office process.
+When you import `Wasabi.bas`, the VBA runtime compiles it on the spot.
+There is no build step, no binary, and no packaging. What you see is
+exactly what runs inside the Office process.
 
-## What this file contains
+## What’s inside
 
-Internally, `Wasabi.bas` is organized into several distinct layers that work
-together to provide a complete WebSocket stack:
+Internally, `Wasabi.bas` is organised in several distinct layers that
+work together to deliver a complete, production‑grade WebSocket client:
 
-**API declarations**
-All Windows API functions used by Wasabi are declared at the top of the module
-using `Declare PtrSafe` (VBA7/64-bit) or `Declare` (VBA6/32-bit), selected
-automatically via `#If VBA7` conditional compilation. This includes functions
-from `ws2_32.dll`, `secur32.dll` and `kernel32.dll`.
+| Layer | What it does |
+|:---|:---|
+| **Public API** | High‑level functions (`WebSocketConnect`, `Send`, `Receive`, etc.) designed for everyday use. |
+| **WebSocket Protocol** | Frame construction, masking, fragmentation, ping / pong, close handshake. |
+| **TLS Security** | Native Schannel SSPI implementation for `wss://` (TLS 1.2 & 1.3). |
+| **Transport** | Raw Winsock2 TCP sockets with Happy Eyeballs (IPv6 + IPv4) and proxy support (HTTP / SOCKS5). |
+| **Windows Declarations** | All used API functions (`ws2_32`, `secur32`, `kernel32`, `advapi32`, `crypt32`) are declared at the top of the module and guarded by `#If VBA7` for automatic 32‑bit / 64‑bit compatibility. |
 
-**Type definitions**
-All Win32 structures required by the API calls are defined as VBA `Type` blocks,
-including `WSADATA`, `SOCKADDR_IN`, `SecHandle`, `SecBuffer`, `SecBufferDesc`,
-`SCHANNEL_CRED`, `SecPkgContext_StreamSizes`, `FD_SET`, `TIMEVAL`, `HOSTENT32`
-and `HOSTENT64`. The HOSTENT structure is defined in two versions to handle
-pointer size differences between 32-bit and 64-bit environments.
+## Compatibility
 
-**Connection pool**
-Wasabi manages up to 64 simultaneous connections through a statically allocated
-array of `WasabiConnection` UDTs. Each entry holds the full state of one
-connection: socket handle, TLS context, receive and decrypt buffers, message
-queues, fragment buffer, reconnect configuration, proxy settings, statistics and
-more. Connections are identified by integer handles returned to the caller.
+* **Windows** — XP, Vista, 7, 8, 10, 11 (x86 and x64)
+* **Office** — 2007 to 365 (32‑bit and 64‑bit)
+* **Hosts** — Excel, Word, PowerPoint, Access, and any VBA‑enabled application
 
-**TLS stack**
-The TLS layer is implemented manually using the Windows SSPI Schannel provider.
-This includes the full handshake loop via `InitializeSecurityContext`, stream
-encryption via `EncryptMessage`, stream decryption via `DecryptMessage` with
-`SECBUFFER_EXTRA` handling for partial records, and `SEC_I_RENEGOTIATE`
-detection. The Schannel credential is configured to support TLS 1.2 and TLS 1.3
-via `SP_PROT_TLS1_2_CLIENT` and `SP_PROT_TLS1_3_CLIENT`.
+Every API declaration uses `#If VBA7` to switch between `LongPtr`/`PtrSafe`
+and classic `Long`/`Declare`, so the same file works everywhere without
+modification.
 
-**WebSocket framing**
-Frame parsing and frame construction are implemented at the bit level according
-to RFC 6455. This includes three-tier payload length decoding (7-bit, 16-bit and
-64-bit extended), XOR masking with a per-frame random key, opcode routing for
-text, binary, continuation, ping, pong and close frames, and reassembly of
-fragmented messages via a dedicated fragment buffer per connection.
+## How to use
 
-**SHA-1 implementation**
-The WebSocket handshake requires computing `SHA-1(key + GUID)` and encoding the
-result in Base64 to produce the `Sec-WebSocket-Accept` header value. Wasabi
-implements SHA-1 entirely in VBA without any external dependency, including the
-message schedule expansion, the round function selection, the compression
-function and the big-endian serialization of the digest. Unsigned 32-bit
-arithmetic is emulated using signed `Long` values with bitmask operations to
-avoid overflow.
+1. In the VBA editor, click **File → Import File…**
+2. Select `Wasabi.bas` from this folder.
+3. No additional steps are required — no references, no tools, no setup.
 
-**Base64 encoder**
-Used for encoding the `Sec-WebSocket-Key` and the SHA-1 digest. Also used
-internally for proxy Basic authentication credentials.
+After importing, you can call `WebSocketConnect` directly from any module.
 
-**DNS resolution**
-Hostname resolution is handled via `gethostbyname` with manual pointer
-arithmetic to extract the first IPv4 address from the returned `HOSTENT`
-structure. The pointer size difference between 32-bit and 64-bit is handled by
-using two separate `HOSTENT` type definitions and selecting the correct one at
-runtime via conditional compilation.
+```vb
+Dim h As Long
+If WebSocketConnect("wss://echo.websocket.org", h) Then
+    WebSocketSend "Hello from Wasabi", h
+    Debug.Print WebSocketReceive(h)
+    WebSocketDisconnect h
+End If
+```
 
-**Non-blocking I/O**
-All sockets are switched to non-blocking mode via `ioctlsocket` with `FIONBIO`
-immediately after creation. Connection establishment uses `select` with a
-10-second timeout on the writable set. Data availability is checked via
-`ioctlsocket` with `FIONREAD` before each `recv` call. This ensures that no
-call ever blocks the VBA thread.
-
-**Ring buffer queues**
-Received text messages and binary messages are stored in separate circular
-queues with a fixed capacity of 512 entries each. The queues use head and tail
-indices with modular arithmetic for O(1) enqueue and dequeue operations without
-any memory allocation or copying beyond the initial buffer setup.
-
-## Portability
-
-This single file is the entire distribution. No other files are required. No
-references need to be enabled. No DLLs need to be registered. No installer
-needs to be run.
+> [!TIP]
+> The complete API reference is available in [`docs/API_REFERENCE.md`](../docs/API_REFERENCE.md).
