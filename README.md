@@ -22,7 +22,7 @@
 
 ## What is Wasabi
 
-Wasabi is a VBA module designed to make WebSocket communication simple, predictable, and practical bringing an experience similar to [socket.io](https://socket.io) in Node.js, but entirely within the Office ecosystem.
+Wasabi is a VBA module designed to make WebSocket communication simple, predictable, and practical bringing an experience similar to [socket.io](https://socket.io) in Node.js, but entirely within the Office ecosystem. It is a single, self-contained `.bas` file that compiles seamlessly on 32-bit and 64-bit Office hosts, from Windows XP to Windows 11.
 
 ## Roadmap
 
@@ -53,6 +53,11 @@ Working with networking in VBA often becomes a project of its own. Some typical 
 **Winsock and Windows API calls**
 - Require declarations, structs, callbacks and low-level details unrelated to the actual goal.
 - Small adjustments can break compatibility or introduce hard-to-track bugs.
+
+**Security and randomness**
+- WebSocket connections require cryptographically secure XOR masks to protect against proxy cache poisoning attacks.
+- VBA's built-in `Rnd` function is deterministic and unsuitable for this purpose.
+- Wasabi uses `CryptGenRandom` from `advapi32.dll` for all WebSocket frame masks, falling back to `Rnd` only in the extraordinary case that the cryptographic API is unavailable.
 
 **HTTP is not WebSocket**
 - Even with WinHTTP or MSXML, you are in a request/response world.
@@ -110,9 +115,9 @@ project is all it takes.
 | Windows 11 | ✅ |
 
 Wasabi relies exclusively on `ws2_32.dll` (Winsock 2), `secur32.dll` (Schannel
-SSPI) and `kernel32.dll`. These three libraries have been present and stable in
-every version of Windows since XP, which is why Wasabi can run on machines that
-are over 20 years old without any modifications.
+SSPI), `kernel32.dll` and `advapi32.dll`. These libraries have been present and
+stable in every version of Windows since XP, which is why Wasabi can run on
+machines that are over 20 years old without any modifications.
 
 This is a deliberate architectural choice. Many competing modules depend on the
 `WinHttpWebSocket*` family of functions (`WinHttpWebSocketSend`,
@@ -156,6 +161,7 @@ Windows 11.
 | `ws2_32.dll` | TCP socket creation, DNS resolution, connection, send, recv, I/O control |
 | `secur32.dll` | TLS 1.2 and TLS 1.3 via Schannel SSPI (handshake, encryption, decryption) |
 | `kernel32.dll` | Memory operations, UTF-8 string conversion, tick count for timeouts |
+| `advapi32.dll` | Cryptographic random number generation (`CryptGenRandom`) for secure WebSocket frame masking |
 
 **ws2_32.dll (Windows Sockets 2)**
 This is the core networking library of Windows. Wasabi uses it directly to
@@ -178,6 +184,15 @@ direct buffer manipulation without VBA overhead, `MultiByteToWideChar` and
 `WideCharToMultiByte` for correct UTF-8 encoding and decoding of WebSocket text
 frames, and `GetTickCount` for measuring elapsed time in timeout and reconnect
 logic, with wraparound handling for systems with long uptimes.
+
+**advapi32.dll**
+Used exclusively for `CryptGenRandom`, which generates cryptographically secure
+random bytes. Wasabi uses this to create the 4-byte XOR masks required by the
+WebSocket protocol for every outgoing frame. This is a critical security measure:
+predictable masks can be exploited by malicious intermediaries to poison caching
+proxies or inject data into the connection. If `CryptGenRandom` is unavailable
+(which should never happen on a normal Windows installation), Wasabi falls back
+to VBA's `Rnd` function with a suitable warning.
 
 ### What does "zero external dependencies" mean in practice
 
