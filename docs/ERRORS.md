@@ -542,20 +542,23 @@ proxy response could not be read.
 ### ERR_PROXY_AUTH_FAILED (22)
 
 **What happened:** The proxy returned HTTP 407 (Proxy Authentication
-Required).
+Required) or the SOCKS5 authentication handshake failed.
 
 **Common causes:**
 - Wrong proxy username or password
-- Proxy requires a different authentication scheme (NTLM, Kerberos)
+- Proxy requires NTLM/Kerberos but only Basic was attempted
 - Proxy credentials expired
 
 **What to check:**
 - Verify credentials in `WebSocketSetProxy`
+- If the proxy is an HTTP corporate proxy that supports Windows Integrated
+  Authentication, enable NTLM via `WebSocketSetProxyNtlm True`
 - Check with your network administrator for correct credentials
-- Note that Wasabi only supports HTTP Basic proxy authentication
 
-> [!WARNING]
-> Wasabi uses HTTP Basic authentication for proxies, which sends credentials in Base64 encoding. If your proxy requires NTLM or Kerberos authentication, Wasabi cannot authenticate with it in the current version.
+> [!NOTE]
+> Wasabi supports HTTP Basic and NTLM/Kerberos (via `WebSocketSetProxyNtlm`)
+> for HTTP proxies. For SOCKS5, only username/password authentication is
+> available.
 
 ### ERR_PROXY_TUNNEL_FAILED (23)
 
@@ -645,11 +648,15 @@ found, imported, or parsed.
 - The certificate has expired or is not yet valid
 - The certificate's Common Name (CN) does not match the hostname
 - A required intermediate CA certificate is missing on the client machine
+- If `WebSocketSetRevocationCheck` is enabled, the certificate may have been
+  revoked or the CRL/OCSP responder is unreachable
 
 **What to check:**
 - Verify that the server certificate is trusted by opening the URL in a browser
 - If using a self-signed certificate, disable validation or add the certificate to the Trusted Root store
 - Ensure the system clock is correct
+- If you have enabled revocation checking (`WebSocketSetRevocationCheck True`),
+  consider disabling it temporarily to isolate the issue
 
 ### ERR_FRAGMENT_OVERFLOW (27)
 
