@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="logo.png" width="150" />
+  <img src="resources/logo.png" width="150" />
 </div>
 
 <h1 align="center">Wasabi</h1>
