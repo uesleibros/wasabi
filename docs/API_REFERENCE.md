@@ -94,7 +94,7 @@ Debug.Print "Remaining capacity:", capacity
 ### WebSocketConnect
 
 ```vb
-Public Function WebSocketConnect(ByVal url As String, Optional ByRef outHandle As Long = -1) As Boolean
+Public Function WebSocketConnect(ByVal url As String, Optional ByRef outHandle As Long = -1, Optional ByVal DeflateEnabled As Boolean = False, Optional ByVal DeflateContextTakeover As Boolean = True) As Boolean
 ```
 
 Opens a new WebSocket connection to the specified URL.
@@ -120,6 +120,8 @@ This function executes the complete connection sequence in order:
 
 * `url`: a WebSocket URL beginning with `ws://` or `wss://`. Custom ports may be specified inline, for example `wss://api.example.com:8443/ws`.
 * `outHandle`: receives the allocated integer handle. Set to `-1` on failure.
+* `DeflateEnabled`: set to `True` to request `permessage-deflate` compression during the WebSocket handshake.
+* `DeflateContextTakeover`: when `True`, the compression context is reused across messages for better compression ratios. Set to `False` to reset the context for each message.
 
 #### Returns
 
@@ -1616,6 +1618,71 @@ End If
 
 > [!NOTE]
 > The MQTT client supports QoS 0 (at most once) for publish. QoS 1 and 2 are not yet implemented.
+
+## Compression (permessage-deflate)
+
+Wasabi supports the WebSocket `permessage-deflate` extension (RFC 7692),
+which compresses message payloads to reduce bandwidth usage.
+
+Compression is **opt‑in** on a per‑connection basis and requires `zlib1.dll`
+to be present in the project folder or a known subdirectory. If the DLL is
+missing, compression is silently disabled and the connection proceeds
+normally. See [DEFLATE.md](DEFLATE.md) for details.
+
+### WebSocketSetDeflate
+
+```vb
+Public Sub WebSocketSetDeflate(ByVal enabled As Boolean, Optional ByVal contextTakeover As Boolean = True, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+```
+
+Enables or disables `permessage-deflate` compression for the specified connection.
+
+When called **before** connecting, the setting takes effect immediately on the
+next `WebSocketConnect`. When called **during an active connection**, the
+change applies on the next reconnect.
+
+#### Example
+
+```vb
+' Enable compression before connecting
+WebSocketSetDeflate True, True, h
+WebSocketConnect "wss://example.com/ws", h
+```
+
+```vb
+' Disable compression
+WebSocketSetDeflate False, , h
+```
+
+> [!NOTE]
+> `contextTakeover` controls whether the DEFLATE context is reused between
+> messages. Keeping the context (`True`) improves compression ratios for
+> similar messages (e.g., repeated JSON structures). Resetting it (`False`)
+> uses slightly more bandwidth but reduces memory footprint.
+
+### WebSocketGetDeflateEnabled
+
+```vb
+Public Function WebSocketGetDeflateEnabled(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
+```
+
+Returns `True` if `permessage-deflate` was successfully negotiated with the
+server during the last handshake. Returns `False` if compression was not
+requested, the server rejected it, or the zlib library was not found.
+
+#### Example
+
+```vb
+If WebSocketGetDeflateEnabled(h) Then
+    Debug.Print "Compression is active"
+End If
+```
+
+> [!NOTE]
+> `permessage-deflate` reduces bandwidth, not latency. It is most beneficial
+> for large payloads or connections with limited bandwidth. For small messages
+> (e.g., typical WebSocket JSON frames), the CPU overhead may slightly outweigh
+> the bandwidth savings.
 
 ## Error Reference
 
