@@ -101,14 +101,14 @@ Each `WasabiConnection` entry contains:
 
 | Category | Fields |
 |:---|:---|
-| Socket | `Socket`, `Connected`, `TLS`, `Host`, `Port`, `Path` |
+| Socket | `Connected`, `TLS`, `Host`, `Port`, `Path` |
 | TLS | `hCred`, `hContext`, `Sizes` |
-| Receive | `recvBuffer()`, `recvLen`, `DecryptBuffer()`, `DecryptLen` |
+| Receive | `RecvBuffer()`, `RecvLen`, `DecryptBuffer()`, `DecryptLen` |
 | Text Queue | `MsgQueue()`, `MsgHead`, `MsgTail`, `MsgCount` |
 | Binary Queue | `BinaryQueue()`, `BinaryHead`, `BinaryTail`, `BinaryCount` |
 | Fragmentation | `FragmentBuffer()`, `FragmentLen`, `FragmentOpcode`, `Fragmenting` |
 | Reconnect | `AutoReconnect`, `ReconnectMaxAttempts`, `ReconnectAttempts`, `ReconnectBaseDelayMs` |
-| Proxy | `proxyHost`, `proxyPort`, `proxyUser`, `proxyPass`, `ProxyEnabled` |
+| Proxy | `ProxyHost`, `ProxyPort`, `ProxyUser`, `ProxyPass`, `ProxyEnabled`, `ProxyType` |
 | Heartbeat | `PingIntervalMs`, `LastPingSentAt` |
 | Timeouts | `ReceiveTimeoutMs`, `InactivityTimeoutMs`, `LastActivityAt` |
 | Headers | `CustomHeaders()`, `CustomHeaderCount`, `SubProtocol` |
@@ -127,50 +127,32 @@ same path.
 WebSocketConnect
        │
        ▼
-  ParseURLInto
+  ParseURL
   (extract host, port, path, scheme)
        │
        ▼
-  sock_socket
-  (create TCP socket, AF_INET, SOCK_STREAM)
+  ResolveAndConnect
+  (getaddrinfo → Happy Eyeballs → TCP connect)
        │
        ▼
-  ResolveHostStr
-  (inet_addr or gethostbyname)
-       │
-       ▼
-  sock_ioctlsocket(FIONBIO = 1)
-  (switch to non-blocking mode)
-       │
-       ▼
-  sock_connect + sock_select
-  (non-blocking connect with 10s timeout)
-       │
-       ▼
-  sock_ioctlsocket(FIONBIO = 0)
-  (switch back to blocking for handshake)
-       │
-       ▼
-  ApplyTCPNoDelayFor
-  ApplyKeepAliveFor
-  ApplySocketBuffersFor
-  (apply socket options)
+  ApplySocketOptions
+  (TCP_NODELAY, SO_KEEPALIVE, buffer sizes)
        │
        ▼
   ┌─ ProxyEnabled? ─────────────────┐
-  │  YES: DoProxyConnectFor         │
-  │  (HTTP CONNECT tunnel)          │
+  │  YES: DoProxyHTTP or DoProxySOCKS5│
   └─────────────────────────────────┘
        │
        ▼
-  ┌─ TLS (wss://)? ────────────────┐
-  │  YES: AcquireCredentialsHandle │
-  │       DoTLSHandshakeFor        │
-  │       QueryContextAttributes   │
-  └────────────────────────────────┘
+  ┌─ TLS (wss://)? ───────────────────┐
+  │  YES: AcquireCredentialsHandle    │
+  │       DoTLSHandshake              │
+  │       QueryContextAttributes      │
+  │       ValidateServerCert (opt)    │
+  └──────────────────────────────────┘
        │
        ▼
-  DoWebSocketHandshakeFor
+  DoWebSocketHandshake
   (HTTP upgrade + Sec-WebSocket-Accept validation)
        │
        ▼
@@ -178,21 +160,19 @@ WebSocketConnect
   Stats reset
 ```
 
-### Non-Blocking Connect
+### Happy Eyeballs (RFC 6555)
 
-The TCP connection phase uses a non-blocking pattern to avoid freezing the
-VBA thread.
+The connection phase implements the Happy Eyeballs algorithm for dual-stack
+hosts. When both IPv6 and IPv4 addresses are resolved:
 
-1. The socket is set to non-blocking mode via `ioctlsocket(FIONBIO = 1)`
-2. `connect()` is called, which returns immediately with `WSAEWOULDBLOCK` (10035)
-3. `select()` is called with a 10-second timeout on the writable set
-4. If `select()` returns positive and the exception set is empty, the connection succeeded
-5. The socket is switched back to blocking mode for the handshake phase
+1. IPv6 socket is created, set non-blocking, and `connect()` called immediately.
+2. A 250ms race window starts. If IPv6 succeeds within this time, it wins.
+3. If the race window expires, the IPv4 socket is also created.
+4. Both sockets compete; the first to connect wins and the other is closed.
+5. Fallback: if only one address family is available, it is used directly.
 
-> [!NOTE]
-> The socket is returned to blocking mode after the TCP connect phase because
-> the TLS and WebSocket handshakes are sequential request-response exchanges
-> that benefit from blocking reads with timeouts.
+This guarantees the fastest possible connection while preferring IPv6 when
+both are equally fast.
 
 ## TLS Handshake
 
@@ -220,14 +200,12 @@ This credential is passed to `AcquireCredentialsHandle` with the package
 name `"Microsoft Unified Security Protocol Provider"`.
 
 > [!IMPORTANT]
-> Certificate validation is intentionally relaxed to maximize compatibility
-> with development servers, self-signed certificates, and restricted corporate
-> networks. See [SECURITY.md](../SECURITY.md) for details.
+> Certificate revocation checking is explicitly disabled (`IGNORE_NO_REVOCATION_CHECK` and `IGNORE_REVOCATION_OFFLINE`) to maximize compatibility with firewalled and offline corporate environments. This means that even if the certificate is issued by a trusted CA, the connection will proceed even if the CRL or OCSP responder is unreachable. Enabling strict revocation checking would require a registry change and is not recommended for client-side WebSocket connections in typical Office automation scenarios.
 
 ### Handshake Loop
 
 The handshake is a multi-round exchange between the client and server.
-The internal function `DoTLSHandshakeFor` implements this as a loop.
+The internal function `DoTLSHandshake` implements this as a loop.
 
 ```
 Round 1: InitializeSecurityContext (first call, no input)
@@ -264,13 +242,13 @@ using `QueryContextAttributes` with `SECPKG_ATTR_STREAM_SIZES`. This returns:
 | `cbTrailer` | Size of the TLS record trailer (appended to each encrypted block) |
 | `cbMaximumMessage` | Maximum plaintext size per TLS record |
 
-These values are used by `TLSSendFor` to correctly frame outgoing data.
+These values are used by `TLSSend` to correctly frame outgoing data.
 
 ## TLS Data Flow
 
 ### Encryption (Sending)
 
-When `TLSSendFor` is called with plaintext data:
+When `TLSSend` is called with plaintext data:
 
 ```
 ┌──────────┬─────────────────────┬───────────┐
@@ -290,12 +268,14 @@ When `TLSSendFor` is called with plaintext data:
               sock_send
 ```
 
+`TLSSend` automatically splits data larger than `cbMaximumMessage` into multiple TLS records, each encrypted separately and sent sequentially.
+
 ### Decryption (Receiving)
 
-When `TLSDecryptFor` processes buffered data:
+When `TLSDecrypt` processes buffered data:
 
 ```
-  recvBuffer (raw bytes from socket)
+  RecvBuffer (raw bytes from socket)
          │
          ▼
    DecryptMessage
@@ -308,18 +288,18 @@ When `TLSDecryptFor` processes buffered data:
     │                     │
     ▼                     ▼
  Append to           Move to start
- DecryptBuffer       of recvBuffer
+ DecryptBuffer       of RecvBuffer
 ```
 
 The `SECBUFFER_EXTRA` handling is critical. When the OS socket delivers
 multiple TLS records in a single `recv()` call, `DecryptMessage` only
 processes the first complete record and flags the remaining bytes as
 `SECBUFFER_EXTRA`. Wasabi moves these bytes to the beginning of
-`recvBuffer` and loops to decrypt again.
+`RecvBuffer` and loops to decrypt again.
 
 > [!NOTE]
 > If `DecryptMessage` returns `SEC_E_INCOMPLETE_MESSAGE`, the current
-> `recvBuffer` does not contain a complete TLS record. Wasabi exits the
+> `RecvBuffer` does not contain a complete TLS record. Wasabi exits the
 > decrypt loop and waits for more data to arrive on the next polling cycle.
 
 ## WebSocket Handshake
@@ -346,7 +326,10 @@ User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
 ```
 
 The `Sec-WebSocket-Key` is a Base64-encoded 16-byte random value generated
-by `GenerateWebSocketKey` using VBA's `Rnd` function seeded by `Randomize`.
+by `GenerateWSKey`. Wasabi uses `CryptGenRandom` (from `advapi32.dll`) to
+obtain cryptographically strong randomness for this key. If `CryptGenRandom`
+were to fail (which should never happen on a normal system), the code falls
+back to the VBA `Rnd` function.
 
 If custom headers, subprotocol, or proxy credentials are configured, they
 are appended before the final blank line.
@@ -407,16 +390,16 @@ WebSocket communication happens through frames as defined by
 When `WebSocketSend` or `WebSocketSendBinary` is called:
 
 1. The payload is measured in bytes (UTF-8 for text, raw for binary)
-2. A 4-byte random mask key is generated via `Rnd`
+2. A 4-byte cryptographically random mask key is generated via `CryptGenRandom` (`FillRandomBytes`)
 3. The frame header is constructed with the FIN bit set, the appropriate
    opcode (`0x01` for text, `0x02` for binary), and the MASK bit set
 4. The payload length is encoded in the appropriate tier
 5. Each payload byte is XORed with `mask(i Mod 4)`
-6. The complete frame is sent via `sock_send` (or `TLSSendFor` for TLS)
+6. The complete frame is sent via `RawSendFor` (or `TLSSend` for TLS)
 
 ### Incoming Frames (Receiving)
 
-The internal function `ProcessFramesFor` parses frames from the
+The internal function `ProcessFrames` parses frames from the
 `DecryptBuffer`:
 
 ```
@@ -524,17 +507,17 @@ Network
 sock_recv → tempBuf
    │
    ├─ TLS connection:
-   │     tempBuf → recvBuffer → DecryptMessage → DecryptBuffer
+   │     tempBuf → RecvBuffer → DecryptMessage → DecryptBuffer
    │
    └─ Plain connection:
          tempBuf → DecryptBuffer (directly)
    │
    ▼
-ProcessFramesFor
+ProcessFrames
    │
-   ├─ Text frame    → Utf8ToString → EnqueueFor (text queue)
-   ├─ Binary frame  → EnqueueBinaryFor (binary queue)
-   ├─ Ping          → SendPongFor (automatic response)
+   ├─ Text frame    → Utf8ToString → MsgQueue enqueue
+   ├─ Binary frame  → BinaryQueue enqueue
+   ├─ Ping          → SendPongFrame (automatic response)
    ├─ Close         → WebSocketSendClose + disconnect
    └─ Continuation  → FragmentBuffer accumulation
    │
@@ -549,7 +532,7 @@ Your VBA code
 
 | Buffer | Default Size | Configurable |
 |:---|:---|:---|
-| `recvBuffer` | 256KB | Yes, via `WebSocketSetBufferSizes` |
+| `RecvBuffer` | 256KB | Yes, via `WebSocketSetBufferSizes` |
 | `DecryptBuffer` | 256KB | Yes, via `WebSocketSetBufferSizes` |
 | `FragmentBuffer` | 256KB | Yes, via `WebSocketSetBufferSizes` |
 | Text queue | 512 entries | No (compile-time constant) |
@@ -632,8 +615,8 @@ functions:
 
 | Function | Purpose |
 |:---|:---|
-| `AddU32(a, b)` | Unsigned 32-bit addition using split high/low halves |
-| `RotL32(v, n)` | Left rotation by n bits using iterative shift and carry |
+| `ADD32(a, b)` | Unsigned 32-bit addition using split high/low halves |
+| `ROTL32(v, n)` | Left rotation by n bits using iterative shift and carry |
 | `U32Shl1(v)` | Single-bit left shift handling the sign bit explicitly |
 
 These functions use bitmasks (`&H7FFF`, `&HFFFF`, `&H80000000`) to
@@ -661,8 +644,8 @@ h4 = 0xC3D2E1F0
 
 ## Proxy Tunnel
 
-When proxy is enabled, Wasabi establishes an HTTP CONNECT tunnel before
-performing TLS or WebSocket handshaking.
+When proxy is enabled, Wasabi establishes an HTTP CONNECT tunnel (or a
+SOCKS5 tunnel) before performing TLS or WebSocket handshaking.
 
 ```
 Client                     Proxy                     Server
@@ -692,7 +675,7 @@ Client                     Proxy                     Server
 ## Maintenance Cycle
 
 Every call to `WebSocketReceive` triggers an internal maintenance pass
-via `TickMaintenanceFor`. This is the only mechanism for time-based
+via `TickMaintenance`. This is the only mechanism for time-based
 features because VBA does not support background timers.
 
 ### What Maintenance Checks
@@ -701,6 +684,7 @@ features because VBA does not support background timers.
 |:---|:---|:---|
 | Automatic Ping | `PingIntervalMs > 0` and interval elapsed | Send Ping frame |
 | Inactivity Timeout | `InactivityTimeoutMs > 0` and threshold exceeded | Close connection, trigger reconnect if enabled |
+| MTU Probe | `AutoMTU` and `ProbeEnabled` and interval elapsed | Call `ProbeMTU` to re-measure MSS |
 
 > [!IMPORTANT]
 > If your code stops calling `WebSocketReceive`, maintenance also stops.
@@ -714,7 +698,7 @@ concatenation to minimize heap fragmentation in long-running sessions.
 ```
 Per connection memory footprint (default settings):
 
-  recvBuffer:      256 KB
+  RecvBuffer:      256 KB
   DecryptBuffer:   256 KB
   FragmentBuffer:  256 KB
   MsgQueue:        512 × String pointer
