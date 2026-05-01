@@ -16,6 +16,11 @@
   <img src="https://img.shields.io/badge/TLS-1.2%20%2F%201.3-brightgreen.svg" alt="TLS" />
   <img src="https://img.shields.io/badge/dependencies-none-success.svg" alt="Dependencies" />
   <img src="https://img.shields.io/badge/WebSocket-RFC%206455-orange.svg" alt="WebSocket" />
+  <img src="https://img.shields.io/badge/Proxy-HTTP%20%2B%20SOCKS5-yellowgreen" alt="Proxy" />
+  <img src="https://img.shields.io/badge/mTLS-PFX%20%2B%20Store-yellow" alt="mTLS" />
+  <img src="https://img.shields.io/badge/MQTT-3.1.1%20over%20WS-purple" alt="MQTT" />
+  <img src="https://img.shields.io/badge/Proxy%20Auth-NTLM%2FKerberos-red" alt="NTLM" />
+  <img src="https://img.shields.io/badge/revocation-CRL%2FOCSP-lightgrey" alt="Revocation" />
   <img src="https://img.shields.io/github/stars/uesleibros/wasabi?style=flat&color=gold" alt="Stars" />
   <img src="https://img.shields.io/github/last-commit/uesleibros/wasabi?style=flat" alt="Last Commit" />
 </p>
