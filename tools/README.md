@@ -1,7 +1,7 @@
 # Tools
 
 This folder contains auxiliary tools for developing and testing Wasabi.
-None of these tools are required to use the module — they exist purely
+None of these tools are required to use the module they exist purely
 for contributors and advanced users who want to run local tests.
 
 ## Contents
