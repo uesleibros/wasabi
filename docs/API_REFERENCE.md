@@ -394,6 +394,16 @@ Sends multiple text messages in a single TCP write (or a minimal number of write
 
 Returns `True` if the entire batch was sent successfully.
 
+#### WebSocketSendBatchBinary
+
+```vb
+Public Function WebSocketSendBatchBinary(ByRef messages() As Variant, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
+```
+
+Sends multiple binary payloads in a single TCP write (or a minimal number of writes). Each element of the `messages` array must be a `Byte()` array.
+
+Returns `True` if the entire batch was sent successfully.
+
 #### WebSocketSendMTUAware
 
 ```vb
@@ -748,6 +758,26 @@ WebSocketSetPingInterval 0, h
 > [!IMPORTANT]
 > Automatic pings are evaluated and dispatched during the maintenance phase that runs inside each `WebSocketReceive` call. If your code stops calling receive functions, automatic pings also stop. This is not a background timer.
 
+### WebSocketGetLatency
+
+```vb
+Public Function WebSocketGetLatency(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Long
+```
+
+Returns the most recent round-trip time (RTT) in milliseconds, measured from the last Ping frame sent (manual or automatic) to the corresponding Pong frame received.
+
+Returns `0` if no RTT measurement has been recorded yet.
+
+#### Example
+
+```vb
+' Send a ping and retrieve the latency
+WebSocketSendPing "", h
+Dim latency As Long
+latency = WebSocketGetLatency(h)
+Debug.Print "Current latency: " & latency & "ms"
+```
+
 ## Reconnect and Reliability
 
 ### WebSocketSetAutoReconnect
@@ -977,6 +1007,21 @@ WebSocketConnect "wss://api.example.com/ws", h
 
 > [!CAUTION]
 > If the proxy returns HTTP 407, Wasabi reports `ERR_PROXY_AUTH_FAILED`. If the CONNECT request returns any status other than 200, Wasabi reports `ERR_PROXY_TUNNEL_FAILED`. SOCKS5 failures map to `ERR_PROXY_CONNECT_FAILED` or `ERR_PROXY_AUTH_FAILED`.
+
+### WebSocketSetProxyNtlm
+
+```vb
+Public Sub WebSocketSetProxyNtlm(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+```
+
+Enables NTLM/Kerberos authentication for HTTP proxies. When active and the proxy returns `407 Proxy Authentication Required` with `Proxy-Authenticate: NTLM` (or `Negotiate`), Wasabi performs a full SSPI NTLM handshake to authenticate with the current Windows credentials.
+
+This function only affects HTTP proxies; SOCKS5 authentication continues to use the username and password supplied in `WebSocketSetProxy`.
+
+> [!NOTE]
+> This feature uses the SSPI `"NTLM"` package and the credentials of the
+> currently logged‑on Windows user. No explicit username or password is
+> required for the NTLM handshake.
 
 ### WebSocketClearProxy
 
@@ -1432,6 +1477,27 @@ WebSocketSetCertValidation True, h
 WebSocketConnect "wss://api.example.com/ws", h
 ```
 
+### WebSocketSetRevocationCheck
+
+```vb
+Public Sub WebSocketSetRevocationCheck(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+```
+
+Enables CRL/OCSP revocation checking during server certificate validation.
+
+When enabled and `WebSocketSetCertValidation` is also `True`, Wasabi passes `CERT_CHAIN_REVOCATION_CHECK_CHAIN` to `CertGetCertificateChain`. If the CRL or OCSP responder is unreachable, the connection fails with `ERR_CERT_VALIDATE_FAILED`.
+
+Default: disabled (maximizes compatibility with firewalled environments).
+
+#### Example
+
+```vb
+' Full certificate validation with revocation check
+WebSocketSetCertValidation True, h
+WebSocketSetRevocationCheck True, h
+WebSocketConnect "wss://api.example.com/ws", h
+```
+
 ### WebSocketSetClientCert
 
 ```vb
@@ -1450,6 +1516,106 @@ Loads a client certificate from a PFX file and its password. This certificate is
 
 > [!IMPORTANT]
 > Client certificate settings must be applied before `WebSocketConnect` and are ignored once the TLS handshake has begun.
+
+### WebSocketSetHttp2
+
+```vb
+Public Sub WebSocketSetHttp2(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+```
+
+Requests HTTP/2 during the TLS handshake by advertising the `h2` protocol via ALPN.
+
+> [!NOTE]
+> Support for HTTP/2 over WebSocket (RFC 8441) is experimental. Even when
+> this flag is enabled, the server must support `h2` ALPN negotiation and
+> HTTP/2 WebSocket upgrades.
+
+## MQTT Client
+
+Wasabi includes a minimal MQTT 3.1.1 client that uses the existing WebSocket transport. This allows direct connection to MQTT brokers that support WebSocket listeners (e.g., Mosquitto, HiveMQ, AWS IoT).
+
+All MQTT functions share the same WebSocket connection handle. You must call `WebSocketConnect` with a WebSocket URL before using any MQTT function.
+
+### MqttConnect
+
+```vb
+Public Function MqttConnect(ByVal clientId As String, Optional ByVal username As String, Optional ByVal password As String, Optional ByVal keepAlive As Integer = 60, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
+```
+
+Sends an MQTT CONNECT packet over the established WebSocket connection.
+
+#### Example
+
+```vb
+WebSocketConnect "wss://broker.emqx.io:8084/mqtt", h
+MqttConnect "wasabi-client", h
+```
+
+### MqttPublish
+
+```vb
+Public Function MqttPublish(ByVal topic As String, ByVal message As String, Optional ByVal qos As Byte = 0, Optional ByVal retained As Boolean = False, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
+```
+
+Publishes a text message to the given topic.
+
+### MqttSubscribe
+
+```vb
+Public Function MqttSubscribe(ByVal topic As String, Optional ByVal qos As Byte = 0, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
+```
+
+Subscribes to a topic with the specified QoS.
+
+### MqttUnsubscribe
+
+```vb
+Public Function MqttUnsubscribe(ByVal topic As String, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
+```
+
+Removes a topic subscription.
+
+### MqttDisconnect
+
+```vb
+Public Function MqttDisconnect(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
+```
+
+Sends an MQTT DISCONNECT packet and closes the MQTT session.
+
+### MqttPingReq
+
+```vb
+Public Function MqttPingReq(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
+```
+
+Sends an MQTT PINGREQ keep-alive packet.
+
+### MqttReceive
+
+```vb
+Public Function MqttReceive(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
+```
+
+Polls for incoming MQTT messages. Returns a string in the format `topic|payload` when a PUBLISH packet is received, or an empty string when no message is available.
+
+Internally uses `WebSocketReceiveBinaryCheck` and a state-machine parser to decode MQTT packets.
+
+#### Example
+
+```vb
+Dim msg As String
+msg = MqttReceive(h)
+If msg <> "" Then
+    Dim parts() As String
+    parts = Split(msg, "|", 2)
+    Debug.Print "Topic:", parts(0)
+    Debug.Print "Payload:", parts(1)
+End If
+```
+
+> [!NOTE]
+> The MQTT client supports QoS 0 (at most once) for publish. QoS 1 and 2 are not yet implemented.
 
 ## Error Reference
 
@@ -1606,6 +1772,41 @@ Sub ConnectWithDiagnostics()
         ' Use the new combined description
         Debug.Print WebSocketGetErrorDescription(h)
     End If
+End Sub
+```
+
+### MQTT IoT dashboard
+
+```vb
+Sub StartMqttDashboard()
+    Dim h As Long
+    If Not WebSocketConnect("wss://test.mosquitto.org:8081/mqtt", h) Then
+        Debug.Print "Connection failed"
+        Exit Sub
+    End If
+    MqttConnect "wasabi-dashboard", h
+    MqttSubscribe "sensors/temperature", 0, h
+    MqttSubscribe "sensors/humidity", 0, h
+
+    Do
+        Dim msg As String
+        msg = MqttReceive(h)
+        If msg <> "" Then
+            Dim parts() As String
+            parts = Split(msg, "|", 2)
+            If parts(0) = "sensors/temperature" Then
+                Sheet1.Cells(2, 1).Value = Now()
+                Sheet1.Cells(2, 2).Value = parts(1)
+            ElseIf parts(0) = "sensors/humidity" Then
+                Sheet1.Cells(3, 1).Value = Now()
+                Sheet1.Cells(3, 2).Value = parts(1)
+            End If
+        End If
+        DoEvents
+    Loop While WebSocketIsConnected(h)
+    
+    MqttDisconnect h
+    WebSocketDisconnect h
 End Sub
 ```
 
