@@ -1,4 +1,4 @@
-# package
+# Package
 
 This folder contains **Wasabi.bas**, the single, self‑contained file that
 brings the entire WebSocket stack to any VBA project.
