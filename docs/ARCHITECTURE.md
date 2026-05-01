@@ -96,20 +96,24 @@ Each `WasabiConnection` entry contains:
 | Category | Fields |
 |:---|:---|
 | Socket | `Connected`, `TLS`, `Host`, `Port`, `Path` |
-| TLS | `hCred`, `hContext`, `Sizes` |
+| TLS | `hCred`, `hContext`, `Sizes`, `hNtlmCred` |
 | Receive | `RecvBuffer()`, `RecvLen`, `DecryptBuffer()`, `DecryptLen` |
 | Text Queue | `MsgQueue()`, `MsgHead`, `MsgTail`, `MsgCount` |
 | Binary Queue | `BinaryQueue()`, `BinaryHead`, `BinaryTail`, `BinaryCount` |
 | Fragmentation | `FragmentBuffer()`, `FragmentLen`, `FragmentOpcode`, `Fragmenting` |
 | Reconnect | `AutoReconnect`, `ReconnectMaxAttempts`, `ReconnectAttempts`, `ReconnectBaseDelayMs` |
-| Proxy | `ProxyHost`, `ProxyPort`, `ProxyUser`, `ProxyPass`, `ProxyEnabled`, `ProxyType` |
-| Heartbeat | `PingIntervalMs`, `LastPingSentAt` |
+| Proxy | `ProxyHost`, `ProxyPort`, `ProxyUser`, `ProxyPass`, `ProxyEnabled`, `ProxyType`, `ProxyUseNtlm` |
+| Heartbeat | `PingIntervalMs`, `LastPingSentAt`, `LastPingTimestamp` |
 | Timeouts | `ReceiveTimeoutMs`, `InactivityTimeoutMs`, `LastActivityAt` |
 | Headers | `CustomHeaders()`, `CustomHeaderCount`, `SubProtocol` |
 | Statistics | `Stats` (BytesSent, BytesReceived, MessagesSent, MessagesReceived, ConnectedAt) |
-| Diagnostics | `LastError`, `LastErrorCode`, `TechnicalDetails` |
+| Diagnostics | `LastError`, `LastErrorCode`, `TechnicalDetails`, `LastRttMs` |
 | Logging | `LogCallback`, `EnableErrorDialog` |
-| Configuration | `NoDelay`, `CustomBufferSize`, `CustomFragmentSize`, `OriginalUrl` |
+| MTU | `MTU` (CurrentMTU, MaxSegmentSize, OptimalFrameSize, LastProbeTime, ProbeEnabled, UseTLSFragmentation) |
+| Security | `ValidateServerCert`, `EnableRevocationCheck`, `ClientCertThumb`, `ClientCertPfxPath`, `ClientCertPfxPass` |
+| HTTP/2 | `UseHttp2` |
+| MQTT | `MqttParserStage`, `MqttBuffer()`, `MqttBufLen`, `MqttExpectedRemaining`, `MqttCurrentPacketType`, `MqttCurrentFlags` |
+| Configuration | `NoDelay`, `CustomBufferSize`, `CustomFragmentSize`, `OriginalUrl`, `AutoMTU`, `PreferIPv6`, `ZeroCopyEnabled` |
 
 ## Connection Sequence
 
@@ -124,9 +128,9 @@ graph TD
     C["ResolveAndConnect<br/>getaddrinfo → Happy Eyeballs → TCP connect"]
     D["ApplySocketOptions<br/>TCP_NODELAY, SO_KEEPALIVE, buffer sizes"]
     E{ProxyEnabled?}
-    F["DoProxyHTTP or DoProxySOCKS5"]
+    F["DoProxyHTTP or DoProxySOCKS5<br/>(with optional NTLM/Kerberos auth)"]
     G{TLS wss://?}
-    H["AcquireCredentialsHandle<br/>DoTLSHandshake<br/>QueryContextAttributes<br/>ValidateServerCert (opt)"]
+    H["AcquireCredentialsHandle<br/>DoTLSHandshake<br/>QueryContextAttributes<br/>ValidateServerCert (opt)<br/>CRL/OCSP check (opt)"]
     I["DoWebSocketHandshake<br/>HTTP upgrade + Sec-WebSocket-Accept validation"]
     J["Connected = True<br/>Stats reset"]
 
@@ -176,14 +180,20 @@ with the following configuration:
 | `grbitEnabledProtocols` | `SP_PROT_TLS1_2_CLIENT \| SP_PROT_TLS1_3_CLIENT` | Accepted TLS versions |
 | `dwFlags` | `SCH_CRED_NO_DEFAULT_CREDS` | Do not use Windows credential store |
 | `dwFlags` | `SCH_CRED_MANUAL_CRED_VALIDATION` | Skip automatic certificate chain validation |
-| `dwFlags` | `SCH_CRED_IGNORE_NO_REVOCATION_CHECK` | Do not fail if CRL is unavailable |
-| `dwFlags` | `SCH_CRED_IGNORE_REVOCATION_OFFLINE` | Do not fail if CRL server is unreachable |
+| `dwFlags` | `SCH_CRED_IGNORE_NO_REVOCATION_CHECK` | Do not fail if CRL is unavailable (unless revocation check is enabled) |
+| `dwFlags` | `SCH_CRED_IGNORE_REVOCATION_OFFLINE` | Do not fail if CRL server is unreachable (unless revocation check is enabled) |
 
 This credential is passed to `AcquireCredentialsHandle` with the package
 name `"Microsoft Unified Security Protocol Provider"`.
 
 > [!IMPORTANT]
-> Certificate revocation checking is explicitly disabled (`IGNORE_NO_REVOCATION_CHECK` and `IGNORE_REVOCATION_OFFLINE`) to maximize compatibility with firewalled and offline corporate environments. This means that even if the certificate is issued by a trusted CA, the connection will proceed even if the CRL or OCSP responder is unreachable. Enabling strict revocation checking would require a registry change and is not recommended for client-side WebSocket connections in typical Office automation scenarios.
+> Certificate revocation checking (`CRL/OCSP`) is configurable via
+> `WebSocketSetRevocationCheck`. When disabled (the default), Wasabi
+> passes `SCH_CRED_IGNORE_NO_REVOCATION_CHECK` and
+> `SCH_CRED_IGNORE_REVOCATION_OFFLINE` to maximize compatibility with
+> firewalled and offline corporate environments. When enabled, these
+> flags are removed, and `CertGetCertificateChain` is called with
+> `CERT_CHAIN_REVOCATION_CHECK_CHAIN`.
 
 ### Handshake Loop
 
@@ -213,6 +223,18 @@ Each round follows this pattern:
 
 The loop is protected by a maximum iteration count of 30 to prevent infinite
 loops on malformed server responses.
+
+### TLS Renegotiation
+
+Wasabi explicitly does not support server-initiated TLS renegotiation. If
+`DecryptMessage` returns `SEC_I_RENEGOTIATE`, the connection is closed with
+error `ERR_TLS_RENEGOTIATE` and, if auto-reconnect is enabled, a new
+connection is established automatically.
+
+> [!NOTE]
+> TLS renegotiation is rarely used in modern servers and its complexity
+> outweighs the benefit in a single-threaded VBA environment. Auto-reconnect
+> serves as the practical recovery mechanism.
 
 ### Post-Handshake
 
@@ -262,7 +284,8 @@ graph TD
     style Encrypted fill:none,stroke:#333,stroke-width:1px
 ```
 
-`TLSSend` automatically splits data larger than `cbMaximumMessage` into multiple TLS records, each encrypted separately and sent sequentially.
+`TLSSend` automatically splits data larger than `cbMaximumMessage` into
+multiple TLS records, each encrypted separately and sent sequentially.
 
 ### Decryption (Receiving)
 
@@ -406,6 +429,10 @@ When `WebSocketSend` or `WebSocketSendBinary` is called:
 5. Each payload byte is XORed with `mask(i Mod 4)`
 6. The complete frame is sent via `RawSendFor` (or `TLSSend` for TLS)
 
+> [!NOTE]
+> The RSV1 bit (`0x40`) is reserved for future `permessage-deflate` support.
+> `BuildWSFrame` already accepts an optional `rsv1` parameter for this purpose.
+
 ### Incoming Frames (Receiving)
 
 The internal function `ProcessFrames` parses frames from the
@@ -429,6 +456,7 @@ graph TD
     N["0x02 Binary<br/>enqueue raw bytes"]
     O["0x08 Close<br/>send close response, disconnect"]
     P["0x09 Ping<br/>send pong with same payload"]
+    Q["0x0A Pong<br/>update RTT measurement"]
 
     A --> B --> C --> D
     D -- "&lt;126" --> E --> H
@@ -442,6 +470,7 @@ graph TD
     K -- "0x02" --> N
     K -- "0x08" --> O
     K -- "0x09" --> P
+    K -- "0x0A" --> Q
 
     style A fill:#e1f5fe,stroke:#0277bd
     style D fill:#fff9c4,stroke:#f9a825
@@ -452,6 +481,7 @@ graph TD
     style N fill:#c8e6c9,stroke:#2e7d32
     style O fill:#ffcdd2,stroke:#c62828
     style P fill:#ffe0b2,stroke:#e65100
+    style Q fill:#e1f5fe,stroke:#0277bd
 ```
 
 ### Fragmentation
@@ -474,7 +504,8 @@ assembled and enqueued as a single message.
 
 > [!NOTE]
 > The fragment buffer size defaults to 256KB and can be configured via
-> `WebSocketSetBufferSizes` before connecting.
+> `WebSocketSetBufferSizes` before connecting. If a fragmented message
+> exceeds this limit, the connection is closed with `ERR_FRAGMENT_OVERFLOW`.
 
 ## Message Queues
 
@@ -688,7 +719,37 @@ h4 = 0xC3D2E1F0
 ## Proxy Tunnel
 
 When proxy is enabled, Wasabi establishes an HTTP CONNECT tunnel (or a
-SOCKS5 tunnel) before performing TLS or WebSocket handshaking.
+SOCKS5 tunnel) before performing TLS or WebSocket handshaking. Both
+proxy types support authentication: HTTP Basic for HTTP proxies and
+username/password for SOCKS5.
+
+### HTTP Proxy with NTLM/Kerberos Authentication
+
+For corporate environments that require integrated Windows authentication,
+Wasabi supports NTLM/Kerberos via `WebSocketSetProxyNtlm`. When enabled
+and the proxy returns `407 Proxy Authentication Required` with
+`Proxy-Authenticate: NTLM` (or `Negotiate`), Wasabi performs a full
+SSPI NTLM handshake via `GenerateNtlmToken`. This function uses
+`AcquireCredentialsHandle` with the `"NTLM"` package and
+`InitializeSecurityContext` to produce a token sent in the
+`Proxy-Authorization: NTLM <base64>` header.
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant P as Proxy
+    participant S as Server
+
+    C->>+P: CONNECT host:port HTTP/1.1<br/>[Proxy-Authorization: NTLM TlRMT...]
+    P-->>-C: HTTP/1.1 407 Proxy Authentication Required<br/>Proxy-Authenticate: NTLM <challenge>
+    C->>+P: CONNECT host:port HTTP/1.1<br/>Proxy-Authorization: NTLM <response>
+    P->>+S: TCP connect
+    P-->>-C: HTTP/1.1 200 Connection Established
+
+    Note over C,S: TLS Handshake through tunnel
+    Note over C,S: WebSocket Handshake through tunnel
+    Note over C,S: WebSocket Frames through tunnel
+```
 
 ```mermaid
 sequenceDiagram
@@ -710,6 +771,65 @@ sequenceDiagram
 > all subsequent traffic (TLS, WebSocket) passes through opaquely. The proxy
 > cannot inspect the encrypted content.
 
+## RTT Latency Measurement
+
+Wasabi provides round-trip time (RTT) measurement through the
+`WebSocketGetLatency` function. When `WebSocketSendPing` is called, the
+current tick count is stored in `LastPingTimestamp`. When a Pong frame
+is received, `ProcessPongForLatency` calculates the elapsed time and
+stores it in `LastRttMs`.
+
+```
+Client                          Server
+  │                               │
+  │  Ping (opcode 0x09)           │
+  │  LastPingTimestamp = now      │
+  │──────────────────────────────>│
+  │                               │
+  │  Pong (opcode 0x0A)           │
+  │  LastRttMs = now - timestamp  │
+  │<──────────────────────────────│
+```
+
+> [!NOTE]
+> RTT values are updated on every Pong frame received, including automatic
+> pongs triggered by the server's response to periodic pings configured
+> via `WebSocketSetPingInterval`.
+
+## MQTT over WebSocket
+
+Wasabi includes a minimal MQTT 3.1.1 client that operates over its existing
+WebSocket transport. This enables direct integration with IoT brokers
+(like Mosquitto, HiveMQ, AWS IoT) from any VBA host without additional
+dependencies.
+
+### Supported Operations
+
+| Function | MQTT Packet | Description |
+|:---|:---|:---|
+| `MqttConnect` | CONNECT | Authenticates and establishes an MQTT session |
+| `MqttPublish` | PUBLISH | Sends a message to a topic with optional QoS |
+| `MqttSubscribe` | SUBSCRIBE | Subscribes to one or more topics |
+| `MqttUnsubscribe` | UNSUBSCRIBE | Removes a topic subscription |
+| `MqttDisconnect` | DISCONNECT | Gracefully terminates the MQTT session |
+| `MqttPingReq` | PINGREQ | Sends a keep-alive ping |
+| `MqttReceive` | — | Polls for and parses incoming MQTT packets |
+
+### Internal Architecture
+
+The MQTT subsystem reuses Wasabi's existing WebSocket connection. MQTT
+packets are built as binary WebSocket frames and sent via
+`WebSocketSendBinary`. Incoming binary frames are fed byte-by-byte into
+`MqttParseByte`, a state machine that decodes the MQTT fixed header,
+remaining length, and variable payload.
+
+The parser state is stored per-connection in `MqttParserStage`,
+`MqttBuffer`, and related fields.
+
+> [!NOTE]
+> The MQTT client supports QoS 0 (at most once) for publish. QoS 1 and 2
+> are not yet implemented.
+
 ## Maintenance Cycle
 
 Every call to `WebSocketReceive` triggers an internal maintenance pass
@@ -720,7 +840,7 @@ features because VBA does not support background timers.
 
 | Check | Condition | Action |
 |:---|:---|:---|
-| Automatic Ping | `PingIntervalMs > 0` and interval elapsed | Send Ping frame |
+| Automatic Ping | `PingIntervalMs > 0` and interval elapsed | Send Ping frame (also records timestamp for RTT) |
 | Inactivity Timeout | `InactivityTimeoutMs > 0` and threshold exceeded | Close connection, trigger reconnect if enabled |
 | MTU Probe | `AutoMTU` and `ProbeEnabled` and interval elapsed | Call `ProbeMTU` to re-measure MSS |
 
@@ -742,9 +862,10 @@ Per connection memory footprint (default settings):
   MsgQueue:        512 × String pointer
   BinaryQueue:     512 × Byte array pointer
   CustomHeaders:   32 × String pointer
+  MqttBuffer:      4 KB
 
-  Total baseline: ~768 KB + queue overhead per connection
-  Maximum (64 connections): ~48 MB
+  Total baseline: ~772 KB + queue overhead per connection
+  Maximum (64 connections): ~49 MB
 ```
 
 > [!NOTE]
@@ -779,6 +900,42 @@ graph TD
 When a function is called with a valid handle, the per-connection error
 state is returned. When called without a handle or with an invalid handle,
 the global error state is returned.
+
+### Error Codes
+
+The `WasabiError` enumeration includes 29 distinct error codes:
+
+| Code | Name | Description |
+|:---|:---|:---|
+| 0 | `ERR_NONE` | No error |
+| 1 | `ERR_WSA_STARTUP_FAILED` | `WSAStartup` failed |
+| 2 | `ERR_SOCKET_CREATE_FAILED` | `socket()` returned invalid handle |
+| 3 | `ERR_DNS_RESOLVE_FAILED` | `gethostbyname()` could not resolve host |
+| 4 | `ERR_CONNECT_FAILED` | TCP connection could not be established |
+| 5 | `ERR_TLS_ACQUIRE_CREDS_FAILED` | `AcquireCredentialsHandle` failed |
+| 6 | `ERR_TLS_HANDSHAKE_FAILED` | `InitializeSecurityContext` returned fatal error |
+| 7 | `ERR_TLS_HANDSHAKE_TIMEOUT` | TLS handshake exceeded iteration limit or timeout |
+| 8 | `ERR_WEBSOCKET_HANDSHAKE_FAILED` | Could not send or receive HTTP upgrade |
+| 9 | `ERR_WEBSOCKET_HANDSHAKE_TIMEOUT` | No response to upgrade request |
+| 10 | `ERR_SEND_FAILED` | `send()` returned zero or negative |
+| 11 | `ERR_RECV_FAILED` | `recv()` returned negative value |
+| 12 | `ERR_NOT_CONNECTED` | Operation attempted on disconnected handle |
+| 13 | `ERR_ALREADY_CONNECTED` | Reserved for future use |
+| 14 | `ERR_TLS_ENCRYPT_FAILED` | `EncryptMessage` failed |
+| 15 | `ERR_TLS_DECRYPT_FAILED` | `DecryptMessage` failed (non-renegotiation) |
+| 16 | `ERR_INVALID_URL` | URL could not be parsed |
+| 17 | `ERR_HANDSHAKE_REJECTED` | Server rejected WebSocket upgrade |
+| 18 | `ERR_CONNECTION_LOST` | Connection dropped during operation |
+| 19 | `ERR_INVALID_HANDLE` | Handle out of valid range |
+| 20 | `ERR_MAX_CONNECTIONS` | Pool exhausted (64 connections) |
+| 21 | `ERR_PROXY_CONNECT_FAILED` | Could not reach proxy |
+| 22 | `ERR_PROXY_AUTH_FAILED` | Proxy returned 407 (or SOCKS5 auth rejected) |
+| 23 | `ERR_PROXY_TUNNEL_FAILED` | Proxy rejected CONNECT |
+| 24 | `ERR_INACTIVITY_TIMEOUT` | No data received within inactivity window |
+| 25 | `ERR_CERT_LOAD_FAILED` | Client certificate could not be loaded |
+| 26 | `ERR_CERT_VALIDATE_FAILED` | Server certificate chain validation failed |
+| 27 | `ERR_FRAGMENT_OVERFLOW` | Fragmented message exceeded buffer size |
+| 28 | `ERR_TLS_RENEGOTIATE` | Server requested TLS renegotiation |
 
 > [!TIP]
 > Always pass the handle when checking errors to get the most specific
