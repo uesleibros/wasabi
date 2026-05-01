@@ -34,10 +34,10 @@ Wasabi is a VBA module designed to make WebSocket communication simple, predicta
 - [x] IPv6 and SNI support
 - [x] Mutual TLS (mTLS) for client certificate authentication
 - [x] SOCKS5 proxy support
-- [ ] WebSocket over HTTP/2
-- [ ] NTLM/Kerberos for proxies
-- [ ] MQTT over WebSocket
-- [ ] RTT measurement (GetLatency)
+- [x] WebSocket over HTTP/2
+- [x] NTLM/Kerberos for proxies
+- [x] MQTT over WebSocket
+- [x] RTT measurement (GetLatency)
 - [ ] permessage-deflate compression (RFC 7692)
 - [ ] I/O Completion Ports (IOCP) for kernel-driven socket monitoring
 - [x] Zero-copy receive buffers
