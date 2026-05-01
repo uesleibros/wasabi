@@ -13,37 +13,23 @@ COM component, or registered DLL.
 The module is organized into five distinct layers, each responsible for one
 aspect of the communication pipeline.
 
-```
-┌─────────────────────────────────────────────────┐
-│                   Your VBA Code                 │
-│         WebSocketConnect / Send / Receive       │
-└──────────────────────┬──────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────┐
-│              Public API Layer                   │
-│     Handle resolution, validation, routing      │
-└──────────────────────┬──────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────┐
-│           WebSocket Protocol Layer              │
-│    Frame construction, parsing, masking,         │
-│    fragmentation, control frame handling         │
-└──────────────────────┬──────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────┐
-│              TLS Layer (Schannel)                │
-│    Handshake, EncryptMessage, DecryptMessage     │
-└──────────────────────┬──────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────┐
-│            Transport Layer (Winsock)             │
-│     socket, connect, send, recv, select          │
-└──────────────────────┬──────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────┐
-│              Windows Kernel                     │
-│       TCP/IP stack, network driver               │
-└─────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    A["Your VBA Code<br/>WebSocketConnect / Send / Receive"]
+    B["Public API Layer<br/>Handle resolution, validation, routing"]
+    C["WebSocket Protocol Layer<br/>Frame construction, parsing, masking,<br/>fragmentation, control frame handling"]
+    D["TLS Layer Schannel<br/>Handshake, EncryptMessage, DecryptMessage"]
+    E["Transport Layer Winsock<br/>socket, connect, send, recv, select"]
+    F["Windows Kernel<br/>TCP/IP stack, network driver"]
+
+    A --> B --> C --> D --> E --> F
+
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style B fill:#ccf,stroke:#333,stroke-width:2px
+    style C fill:#cfc,stroke:#333,stroke-width:2px
+    style D fill:#ffc,stroke:#333,stroke-width:2px
+    style E fill:#fca,stroke:#333,stroke-width:2px
+    style F fill:#ddd,stroke:#333,stroke-width:2px
 ```
 
 ## Connection Pool
