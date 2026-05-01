@@ -1,6 +1,6 @@
 Attribute VB_Name = "Wasabi"
 ' ============================================================================
-' Wasabi v2.0.0-vNext
+' Wasabi v2.1.0-vNext
 ' Copyright (c) 2026 UesleiDev
 '
 ' Permission is hereby granted, free of charge, to any person obtaining a
@@ -23,8 +23,16 @@ Attribute VB_Name = "Wasabi"
 ' ============================================================================
 
 Option Explicit
+Option Private Module
 
 #If VBA7 Then
+    Private Declare PtrSafe Function LoadLibrary Lib "kernel32" Alias "LoadLibraryA" (ByVal lpLibFileName As String) As LongPtr
+    Private Declare PtrSafe Function zlib_deflateInit2 Lib "zlib1.dll" Alias "deflateInit2_" (ByRef strm As ZStream, ByVal level As Long, ByVal method As Long, ByVal windowBits As Long, ByVal memLevel As Long, ByVal strategy As Long, ByVal version As String, ByVal stream_size As Long) As Long
+    Private Declare PtrSafe Function zlib_deflate Lib "zlib1.dll" Alias "deflate" (ByRef strm As ZStream, ByVal flush As Long) As Long
+    Private Declare PtrSafe Function zlib_deflateEnd Lib "zlib1.dll" Alias "deflateEnd" (ByRef strm As ZStream) As Long
+    Private Declare PtrSafe Function zlib_inflateInit2 Lib "zlib1.dll" Alias "inflateInit2_" (ByRef strm As ZStream, ByVal windowBits As Long, ByVal version As String, ByVal stream_size As Long) As Long
+    Private Declare PtrSafe Function zlib_inflate Lib "zlib1.dll" Alias "inflate" (ByRef strm As ZStream, ByVal flush As Long) As Long
+    Private Declare PtrSafe Function zlib_inflateEnd Lib "zlib1.dll" Alias "inflateEnd" (ByRef strm As ZStream) As Long
     Private Declare PtrSafe Function CertGetCertificateChain Lib "crypt32.dll" (ByVal hChainEngine As LongPtr, ByVal pCertContext As LongPtr, ByVal pTime As LongPtr, ByVal hAdditionalStore As LongPtr, ByRef pChainPara As CERT_CHAIN_PARA, ByVal dwFlags As Long, ByVal pvReserved As LongPtr, ByRef ppChainContext As LongPtr) As Long
     Private Declare PtrSafe Function CertVerifyCertificateChainPolicy Lib "crypt32.dll" (ByVal pszPolicyOID As LongPtr, ByVal pChainContext As LongPtr, ByRef pPolicyPara As CERT_CHAIN_POLICY_PARA, ByRef pPolicyStatus As CERT_CHAIN_POLICY_STATUS) As Long
     Private Declare PtrSafe Sub CertFreeCertificateChain Lib "crypt32.dll" (ByVal pChainContext As LongPtr)
@@ -67,6 +75,13 @@ Option Explicit
     Private Declare PtrSafe Function CryptGenRandom Lib "advapi32.dll" (ByVal hProv As LongPtr, ByVal dwLen As Long, ByRef pbBuffer As Byte) As Long
     Private Const NULL_PTR As LongPtr = 0
 #Else
+    Private Declare Function LoadLibrary Lib "kernel32" Alias "LoadLibraryA" (ByVal lpLibFileName As String) As Long
+    Private Declare Function zlib_deflateInit2 Lib "zlib1.dll" Alias "deflateInit2_" (ByRef strm As ZStream, ByVal level As Long, ByVal method As Long, ByVal windowBits As Long, ByVal memLevel As Long, ByVal strategy As Long, ByVal version As String, ByVal stream_size As Long) As Long
+    Private Declare Function zlib_deflate Lib "zlib1.dll" Alias "deflate" (ByRef strm As ZStream, ByVal flush As Long) As Long
+    Private Declare Function zlib_deflateEnd Lib "zlib1.dll" Alias "deflateEnd" (ByRef strm As ZStream) As Long
+    Private Declare Function zlib_inflateInit2 Lib "zlib1.dll" Alias "inflateInit2_" (ByRef strm As ZStream, ByVal windowBits As Long, ByVal version As String, ByVal stream_size As Long) As Long
+    Private Declare Function zlib_inflate Lib "zlib1.dll" Alias "inflate" (ByRef strm As ZStream, ByVal flush As Long) As Long
+    Private Declare Function zlib_inflateEnd Lib "zlib1.dll" Alias "inflateEnd" (ByRef strm As ZStream) As Long
     Private Declare Function CertGetCertificateChain Lib "crypt32.dll" (ByVal hChainEngine As Long, ByVal pCertContext As Long, ByVal pTime As Long, ByVal hAdditionalStore As Long, ByRef pChainPara As CERT_CHAIN_PARA, ByVal dwFlags As Long, ByVal pvReserved As Long, ByRef ppChainContext As Long) As Long
     Private Declare Function CertVerifyCertificateChainPolicy Lib "crypt32.dll" (ByVal pszPolicyOID As Long, ByVal pChainContext As Long, ByRef pPolicyPara As CERT_CHAIN_POLICY_PARA, ByRef pPolicyStatus As CERT_CHAIN_POLICY_STATUS) As Long
     Private Declare Sub CertFreeCertificateChain Lib "crypt32.dll" (ByVal pChainContext As Long)
@@ -117,6 +132,37 @@ Private Const TCP_MAXSEG As Long = 4
 #Else
     Private Const INVALID_SOCKET As Long = -1
 #End If
+
+Private Type ZStream
+#If VBA7 Then
+    next_in   As LongPtr
+    avail_in  As Long
+    total_in  As Long
+    next_out  As LongPtr
+    avail_out As Long
+    total_out As Long
+    msg       As LongPtr
+    state     As LongPtr
+    zalloc    As LongPtr
+    zfree     As LongPtr
+    opaque    As LongPtr
+#Else
+    next_in   As Long
+    avail_in  As Long
+    total_in  As Long
+    next_out  As Long
+    avail_out As Long
+    total_out As Long
+    msg       As Long
+    state     As Long
+    zalloc    As Long
+    zfree     As Long
+    opaque    As Long
+#End If
+    data_type As Long
+    adler     As Long
+    reserved  As Long
+End Type
 
 Private Type CRYPT_DATA_BLOB
 #If VBA7 Then
@@ -357,7 +403,7 @@ Private Type WasabiConnection
     TLS As Boolean
     Host As String
     port As Long
-    Path As String
+    path As String
     OriginalUrl As String
     hCred As SecHandle
     hContext As SecHandle
@@ -427,6 +473,19 @@ Private Type WasabiConnection
     MqttExpectedRemaining As Long
     MqttCurrentPacketType As Byte
     MqttCurrentFlags As Byte
+    DeflateEnabled          As Boolean
+    DeflateContextTakeover  As Boolean
+    InflateContextTakeover  As Boolean
+    DeflateWindowBits       As Long
+    InflateWindowBits       As Long
+    DeflateStream           As ZStream
+    InflateStream           As ZStream
+    DeflateReady            As Boolean
+    InflateReady            As Boolean
+    DeflateActive           As Boolean
+    FragmentIsCompressed As Boolean
+    ClientMaxWindowBits As Long
+    ServerMaxWindowBits As Long
 End Type
 
 Public Enum WasabiError
@@ -538,6 +597,17 @@ Private Const WS_OPCODE_CLOSE As Byte = 8
 Private Const WS_OPCODE_PING As Byte = 9
 Private Const WS_OPCODE_PONG As Byte = 10
 
+Private Const ZLIB_VERSION          As String = "1.2.11"
+Private Const Z_OK                  As Long = 0
+Private Const Z_STREAM_END          As Long = 1
+Private Const Z_SYNC_FLUSH          As Long = 2
+Private Const Z_FINISH              As Long = 4
+Private Const Z_DEFLATED            As Long = 8
+Private Const Z_DEFAULT_COMPRESSION As Long = -1
+Private Const Z_DEFAULT_STRATEGY    As Long = 0
+Private Const ZLIB_WBITS_RAW       As Long = -15
+Private Const ZLIB_MEM_LEVEL       As Long = 8
+
 Private Const SECPKG_CRED_OUTBOUND_NTLM As Long = &H2
 Private Const SEC_I_COMPLETE_NEEDED As Long = &H90313
 
@@ -615,6 +685,13 @@ Private Function SafeArrayLen(ByRef arr() As Byte) As Long
     Else
         SafeArrayLen = 0
     End If
+End Function
+
+Private Function GetProjectPath() As String
+    Dim path As String
+    path = Application.VBE.ActiveVBProject.FileName
+    path = Left(path, InStrRev(path, "\"))
+    GetProjectPath = path
 End Function
 
 Private Function ResolveHandle(ByVal handle As Long) As Long
@@ -769,7 +846,7 @@ Private Sub ResetConnectionState(ByVal handle As Long)
         .TLS = False
         .Host = ""
         .port = 0
-        .Path = ""
+        .path = ""
         .OriginalUrl = ""
         .recvLen = 0
         .DecryptLen = 0
@@ -840,10 +917,22 @@ Private Sub ResetConnectionState(ByVal handle As Long)
         .mtu.LastProbeTime = 0
         .mtu.ProbeEnabled = True
         .mtu.UseTLSFragmentation = .TLS
+        .DeflateEnabled = False
+        .DeflateContextTakeover = True
+        .InflateContextTakeover = True
+        .DeflateWindowBits = ZLIB_WBITS_RAW
+        .InflateWindowBits = ZLIB_WBITS_RAW
+        .DeflateReady = False
+        .InflateReady = False
+        .DeflateActive = False
+        .FragmentIsCompressed = False
+        .ClientMaxWindowBits = 15
+        .ServerMaxWindowBits = 15
     End With
 End Sub
 
 Private Sub FreeSecurityHandles(ByVal handle As Long)
+    FreeDeflateStreams handle
     With m_Connections(handle)
         If .pClientCertCtx <> 0 Then
             CertFreeCertificateContext .pClientCertCtx
@@ -1001,18 +1090,20 @@ Private Function RawSendFor(ByVal handle As Long, ByRef frame() As Byte) As Bool
     RawSendFor = True
 End Function
 
-Private Function BuildWSFrame(ByRef payload() As Byte, ByVal payloadLen As Long, ByVal opcode As Byte, ByVal isFinal As Boolean) As Byte()
+Private Function BuildWSFrame(ByRef payload() As Byte, ByVal payloadLen As Long, ByVal opcode As Byte, ByVal isFinal As Boolean, Optional ByVal setRSV1 As Boolean = False) As Byte()
     Dim mask(0 To 3) As Byte
     Dim headerLen As Long
     Dim frame() As Byte
     Dim finBit As Byte
+    Dim rsv1 As Byte
     Dim i As Long
+    rsv1 = IIf(setRSV1, &H40, 0)
     FillRandomBytes mask, 4
     finBit = IIf(isFinal, &H80, 0)
     If payloadLen < 126 Then
         headerLen = 6
         ReDim frame(0 To headerLen + payloadLen - 1)
-        frame(0) = finBit Or opcode
+        frame(0) = finBit Or rsv1 Or opcode
         frame(1) = &H80 Or CByte(payloadLen)
         frame(2) = mask(0)
         frame(3) = mask(1)
@@ -1021,7 +1112,7 @@ Private Function BuildWSFrame(ByRef payload() As Byte, ByVal payloadLen As Long,
     ElseIf payloadLen < 65536 Then
         headerLen = 8
         ReDim frame(0 To headerLen + payloadLen - 1)
-        frame(0) = finBit Or opcode
+        frame(0) = finBit Or rsv1 Or opcode
         frame(1) = &HFE
         frame(2) = CByte((payloadLen \ 256) And &HFF)
         frame(3) = CByte(payloadLen And &HFF)
@@ -1032,7 +1123,7 @@ Private Function BuildWSFrame(ByRef payload() As Byte, ByVal payloadLen As Long,
     Else
         headerLen = 14
         ReDim frame(0 To headerLen + payloadLen - 1)
-        frame(0) = finBit Or opcode
+        frame(0) = finBit Or rsv1 Or opcode
         frame(1) = &HFF
         frame(2) = 0
         frame(3) = 0
@@ -1089,7 +1180,7 @@ Private Function Utf8ToString(ByRef utf8() As Byte, ByVal length As Long) As Str
     Utf8ToString = result
 End Function
 
-Private Function Base64Encode(ByRef bytes() As Byte) As String
+Private Function Base64Encode(ByRef Bytes() As Byte) As String
     Dim b64 As String
     Dim dataLen As Long
     Dim result() As String
@@ -1100,18 +1191,18 @@ Private Function Base64Encode(ByRef bytes() As Byte) As String
     Dim chunk As Long
     Dim idx As Long
     b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-    dataLen = UBound(bytes) - LBound(bytes) + 1
+    dataLen = UBound(Bytes) - LBound(Bytes) + 1
     ReDim result(0 To ((dataLen + 2) \ 3) * 4 - 1)
     idx = 0
-    For i = LBound(bytes) To LBound(bytes) + dataLen - 1 Step 3
-        b1 = CLng(bytes(i))
-        If i + 1 <= LBound(bytes) + dataLen - 1 Then
-            b2 = CLng(bytes(i + 1))
+    For i = LBound(Bytes) To LBound(Bytes) + dataLen - 1 Step 3
+        b1 = CLng(Bytes(i))
+        If i + 1 <= LBound(Bytes) + dataLen - 1 Then
+            b2 = CLng(Bytes(i + 1))
         Else
             b2 = 0
         End If
-        If i + 2 <= LBound(bytes) + dataLen - 1 Then
-            b3 = CLng(bytes(i + 2))
+        If i + 2 <= LBound(Bytes) + dataLen - 1 Then
+            b3 = CLng(Bytes(i + 2))
         Else
             b3 = 0
         End If
@@ -1120,13 +1211,13 @@ Private Function Base64Encode(ByRef bytes() As Byte) As String
         idx = idx + 1
         result(idx) = Mid(b64, ((chunk \ 4096) And 63) + 1, 1)
         idx = idx + 1
-        If i + 1 <= LBound(bytes) + dataLen - 1 Then
+        If i + 1 <= LBound(Bytes) + dataLen - 1 Then
             result(idx) = Mid(b64, ((chunk \ 64) And 63) + 1, 1)
         Else
             result(idx) = "="
         End If
         idx = idx + 1
-        If i + 2 <= LBound(bytes) + dataLen - 1 Then
+        If i + 2 <= LBound(Bytes) + dataLen - 1 Then
             result(idx) = Mid(b64, (chunk And 63) + 1, 1)
         Else
             result(idx) = "="
@@ -2041,7 +2132,12 @@ Private Sub TLSDecrypt(ByVal handle As Long)
             For i = 0 To 3
                 If buffers(i).BufferType = SECBUFFER_DATA Then
                     dataLen = buffers(i).cbBuffer
-                    If dataLen > 0 And .DecryptLen + dataLen <= BUFFER_SIZE Then
+                    If dataLen > 0 Then
+                        If .DecryptLen + dataLen > UBound(.DecryptBuffer) + 1 Then
+                            Dim newSize As Long
+                            newSize = .DecryptLen + dataLen + BUFFER_SIZE
+                            ReDim Preserve .DecryptBuffer(0 To newSize - 1)
+                        End If
                         CopyMemoryFromPtr .DecryptBuffer(.DecryptLen), buffers(i).pvBuffer, dataLen
                         .DecryptLen = .DecryptLen + dataLen
                     End If
@@ -2279,10 +2375,66 @@ Private Function SHA1(ByRef data() As Byte) As Byte()
 End Function
 
 Private Function GenerateWSKey() As String
-    Dim bytes(0 To 15) As Byte
-    FillRandomBytes bytes, 16
-    GenerateWSKey = Base64Encode(bytes)
+    Dim Bytes(0 To 15) As Byte
+    FillRandomBytes Bytes, 16
+    GenerateWSKey = Base64Encode(Bytes)
 End Function
+
+Private Sub ParseDeflateResponse(ByVal handle As Long, ByVal response As String)
+    Dim extStart As Long
+    Dim extLine As String
+    Dim lf As Long
+    Dim swbPos As Long
+    Dim swbVal As Long
+    Dim cwbPos As Long
+    Dim cwbVal As Long
+    
+    extStart = InStr(LCase(response), "sec-websocket-extensions: permessage-deflate")
+    If extStart = 0 Then
+        m_Connections(handle).DeflateEnabled = False
+        m_Connections(handle).DeflateActive = False
+        Exit Sub
+    End If
+    
+    extLine = Mid(response, extStart)
+    lf = InStr(extLine, vbCrLf)
+    If lf > 0 Then
+        extLine = Left(extLine, lf - 1)
+    End If
+    
+    With m_Connections(handle)
+        If InStr(LCase(extLine), "client_no_context_takeover") > 0 Then
+            .DeflateContextTakeover = False
+        Else
+            .DeflateContextTakeover = True
+        End If
+        
+        If InStr(LCase(extLine), "server_no_context_takeover") > 0 Then
+            .InflateContextTakeover = False
+        Else
+            .InflateContextTakeover = True
+        End If
+        
+        swbPos = InStr(LCase(extLine), "server_max_window_bits=")
+        If swbPos > 0 Then
+            swbVal = Val(Mid(extLine, swbPos + 22))
+            If swbVal >= 8 And swbVal <= 15 Then
+                .DeflateWindowBits = -swbVal
+                .ServerMaxWindowBits = swbVal
+            End If
+        End If
+        
+        cwbPos = InStr(LCase(extLine), "client_max_window_bits=")
+        If cwbPos > 0 Then
+            cwbVal = Val(Mid(extLine, cwbPos + 22))
+            If cwbVal >= 8 And cwbVal <= 15 Then
+                .InflateWindowBits = -cwbVal
+                .ClientMaxWindowBits = cwbVal
+            End If
+        End If
+        .DeflateActive = True
+    End With
+End Sub
 
 Private Function DoWebSocketHandshake(ByVal handle As Long) As Boolean
     Dim handshake As String
@@ -2301,6 +2453,7 @@ Private Function DoWebSocketHandshake(ByVal handle As Long) As Boolean
     Dim recvBuf() As Byte
     Dim received As Long
     wsKey = GenerateWSKey()
+    
     With m_Connections(handle)
         hostHeader = IIf((.TLS And .port <> 443) Or (Not .TLS And .port <> 80), .Host & ":" & .port, .Host)
         If .TLS Then
@@ -2308,12 +2461,26 @@ Private Function DoWebSocketHandshake(ByVal handle As Long) As Boolean
         Else
             originHeader = "http://" & IIf(.port <> 80, .Host & ":" & .port, .Host)
         End If
-        handshake = "GET " & .Path & " HTTP/1.1" & vbCrLf
+        handshake = "GET " & .path & " HTTP/1.1" & vbCrLf
         handshake = handshake & "Host: " & hostHeader & vbCrLf
         handshake = handshake & "Upgrade: websocket" & vbCrLf
         handshake = handshake & "Connection: Upgrade" & vbCrLf
         handshake = handshake & "Sec-WebSocket-Key: " & wsKey & vbCrLf
         handshake = handshake & "Sec-WebSocket-Version: 13" & vbCrLf
+        If .DeflateEnabled Then
+            Dim deflateExt As String
+            deflateExt = "permessage-deflate"
+            If Not .DeflateContextTakeover Then
+                deflateExt = deflateExt & "; client_no_context_takeover"
+            End If
+            If Not .InflateContextTakeover Then
+                deflateExt = deflateExt & "; server_no_context_takeover"
+            End If
+            If .ClientMaxWindowBits <> 15 Then
+                deflateExt = deflateExt & "; client_max_window_bits=" & .ClientMaxWindowBits
+            End If
+            handshake = handshake & "Sec-WebSocket-Extensions: " & deflateExt & vbCrLf
+        End If
         If .SubProtocol <> "" Then
             handshake = handshake & "Sec-WebSocket-Protocol: " & .SubProtocol & vbCrLf
         End If
@@ -2363,6 +2530,9 @@ Private Function DoWebSocketHandshake(ByVal handle As Long) As Boolean
             SetError ERR_HANDSHAKE_REJECTED, "Server rejected WS upgrade: " & statusLine, "WebSocket connection rejected: " & statusLine, handle
             Exit Function
         End If
+        If .DeflateEnabled Then
+            ParseDeflateResponse handle, response
+        End If
         expectedAccept = Base64Encode(SHA1(StrConv(wsKey & "258EAFA5-E914-47DA-95CA-C5AB0DC85B11", vbFromUnicode)))
         acceptPos = InStr(LCase(response), "sec-websocket-accept:")
         If acceptPos > 0 Then
@@ -2382,7 +2552,9 @@ End Function
 Private Sub ProcessFrames(ByVal handle As Long)
     Dim opcode As Byte
     Dim fin As Boolean
+    Dim isCompressed As Boolean
     Dim payloadLen As Long
+    Dim wirePayloadLen As Long
     Dim maskFlag As Boolean
     Dim frameStart As Long
     Dim i As Long
@@ -2390,9 +2562,12 @@ Private Sub ProcessFrames(ByVal handle As Long)
     Dim textMsg As String
     Dim binaryData() As Byte
     Dim totalFrameLen As Long
+    Dim inflLen As Long
+    Dim inflBytes() As Byte
     With m_Connections(handle)
         Do While .DecryptLen >= 2
             fin = (.DecryptBuffer(0) And &H80) <> 0
+            isCompressed = (.DecryptBuffer(0) And &H40) <> 0
             opcode = .DecryptBuffer(0) And &HF
             maskFlag = (.DecryptBuffer(1) And &H80) <> 0
             payloadLen = .DecryptBuffer(1) And &H7F
@@ -2411,6 +2586,7 @@ Private Sub ProcessFrames(ByVal handle As Long)
             End If
             If maskFlag Then frameStart = frameStart + 4
             If .DecryptLen < frameStart + payloadLen Then Exit Do
+            wirePayloadLen = payloadLen
             If payloadLen > 0 Then
                 ReDim payload(0 To payloadLen - 1)
                 CopyMemory payload(0), .DecryptBuffer(frameStart), payloadLen
@@ -2420,12 +2596,15 @@ Private Sub ProcessFrames(ByVal handle As Long)
                     If Not fin Then
                         .Fragmenting = True
                         .FragmentOpcode = WS_OPCODE_TEXT
+                        .FragmentIsCompressed = isCompressed
                         .FragmentLen = 0
                         If payloadLen > 0 Then
                             CopyMemory .FragmentBuffer(0), payload(0), payloadLen
                             .FragmentLen = payloadLen
                         End If
                     Else
+                        Dim textPayload() As Byte
+                        Dim textPayloadLen As Long
                         If .Fragmenting Then
                             If .FragmentLen + payloadLen > UBound(.FragmentBuffer) + 1 Then
                                 SetError ERR_FRAGMENT_OVERFLOW, "Fragment buffer overflow on TEXT frame", "Received message too large.", handle
@@ -2436,14 +2615,43 @@ Private Sub ProcessFrames(ByVal handle As Long)
                                 CopyMemory .FragmentBuffer(.FragmentLen), payload(0), payloadLen
                                 .FragmentLen = .FragmentLen + payloadLen
                             End If
-                            textMsg = Utf8ToString(.FragmentBuffer, .FragmentLen)
+                            If .FragmentIsCompressed And .DeflateActive Then
+                                Dim inflTextBytes() As Byte
+                                Dim inflTextLen As Long
+                                inflTextBytes = InflatePayload(handle, .FragmentBuffer, .FragmentLen, inflTextLen)
+                                If inflTextLen = 0 Then
+                                    WebSocketSendClose 1007, "Decompression failed", handle
+                                    .Connected = False
+                                    .Fragmenting = False
+                                    .FragmentLen = 0
+                                    Exit Sub
+                                End If
+                                textPayload = inflTextBytes
+                                textPayloadLen = inflTextLen
+                            Else
+                                textPayload = .FragmentBuffer
+                                textPayloadLen = .FragmentLen
+                            End If
+                            textMsg = Utf8ToString(textPayload, textPayloadLen)
                             .Fragmenting = False
                             .FragmentLen = 0
                         Else
-                            If payloadLen > 0 Then
-                                textMsg = Utf8ToString(payload, payloadLen)
+                            If isCompressed And .DeflateActive Then
+                                Dim inflTextSingle() As Byte
+                                Dim inflTextSingleLen As Long
+                                inflTextSingle = InflatePayload(handle, payload, payloadLen, inflTextSingleLen)
+                                If inflTextSingleLen = 0 Then
+                                    WebSocketSendClose 1007, "Decompression failed", handle
+                                    .Connected = False
+                                    Exit Sub
+                                End If
+                                textMsg = Utf8ToString(inflTextSingle, inflTextSingleLen)
                             Else
-                                textMsg = ""
+                                If payloadLen > 0 Then
+                                    textMsg = Utf8ToString(payload, payloadLen)
+                                Else
+                                    textMsg = ""
+                                End If
                             End If
                         End If
                         If .MsgCount < MSG_QUEUE_SIZE Then
@@ -2455,10 +2663,12 @@ Private Sub ProcessFrames(ByVal handle As Long)
                             WasabiLog handle, "Warning: message queue full, dropping message (handle=" & handle & ")"
                         End If
                     End If
+
                 Case WS_OPCODE_BINARY
                     If Not fin Then
                         .Fragmenting = True
                         .FragmentOpcode = WS_OPCODE_BINARY
+                        .FragmentIsCompressed = isCompressed
                         .FragmentLen = 0
                         If payloadLen > 0 Then
                             CopyMemory .FragmentBuffer(0), payload(0), payloadLen
@@ -2475,14 +2685,40 @@ Private Sub ProcessFrames(ByVal handle As Long)
                                 CopyMemory .FragmentBuffer(.FragmentLen), payload(0), payloadLen
                                 .FragmentLen = .FragmentLen + payloadLen
                             End If
-                            ReDim binaryData(0 To .FragmentLen - 1)
-                            CopyMemory binaryData(0), .FragmentBuffer(0), .FragmentLen
+                            If .FragmentIsCompressed And .DeflateActive Then
+                                Dim inflBinBytes() As Byte
+                                Dim inflBinLen As Long
+                                inflBinBytes = InflatePayload(handle, .FragmentBuffer, .FragmentLen, inflBinLen)
+                                If inflBinLen = 0 Then
+                                    WebSocketSendClose 1007, "Decompression failed", handle
+                                    .Connected = False
+                                    .Fragmenting = False
+                                    .FragmentLen = 0
+                                    Exit Sub
+                                End If
+                                binaryData = inflBinBytes
+                            Else
+                                ReDim binaryData(0 To .FragmentLen - 1)
+                                CopyMemory binaryData(0), .FragmentBuffer(0), .FragmentLen
+                            End If
                             .Fragmenting = False
                             .FragmentLen = 0
                         Else
-                            If payloadLen > 0 Then
-                                ReDim binaryData(0 To payloadLen - 1)
-                                CopyMemory binaryData(0), payload(0), payloadLen
+                            If isCompressed And .DeflateActive Then
+                                Dim inflBinSingle() As Byte
+                                Dim inflBinSingleLen As Long
+                                inflBinSingle = InflatePayload(handle, payload, payloadLen, inflBinSingleLen)
+                                If inflBinSingleLen = 0 Then
+                                    WebSocketSendClose 1007, "Decompression failed", handle
+                                    .Connected = False
+                                    Exit Sub
+                                End If
+                                binaryData = inflBinSingle
+                            Else
+                                If payloadLen > 0 Then
+                                    ReDim binaryData(0 To payloadLen - 1)
+                                    CopyMemory binaryData(0), payload(0), payloadLen
+                                End If
                             End If
                         End If
                         If .BinaryCount < MSG_QUEUE_SIZE Then
@@ -2494,6 +2730,7 @@ Private Sub ProcessFrames(ByVal handle As Long)
                             WasabiLog handle, "Warning: binary queue full, dropping message (handle=" & handle & ")"
                         End If
                     End If
+
                 Case WS_OPCODE_CONTINUATION
                     If .Fragmenting Then
                         If .FragmentLen + payloadLen > UBound(.FragmentBuffer) + 1 Then
@@ -2506,8 +2743,27 @@ Private Sub ProcessFrames(ByVal handle As Long)
                             .FragmentLen = .FragmentLen + payloadLen
                         End If
                         If fin Then
+                            Dim contPayload() As Byte
+                            Dim contPayloadLen As Long
+                            If .FragmentIsCompressed And .DeflateActive Then
+                                Dim inflContBytes() As Byte
+                                Dim inflContLen As Long
+                                inflContBytes = InflatePayload(handle, .FragmentBuffer, .FragmentLen, inflContLen)
+                                If inflContLen = 0 Then
+                                    WebSocketSendClose 1007, "Decompression failed", handle
+                                    .Connected = False
+                                    .Fragmenting = False
+                                    .FragmentLen = 0
+                                    Exit Sub
+                                End If
+                                contPayload = inflContBytes
+                                contPayloadLen = inflContLen
+                            Else
+                                contPayload = .FragmentBuffer
+                                contPayloadLen = .FragmentLen
+                            End If
                             If .FragmentOpcode = WS_OPCODE_TEXT Then
-                                textMsg = Utf8ToString(.FragmentBuffer, .FragmentLen)
+                                textMsg = Utf8ToString(contPayload, contPayloadLen)
                                 If .MsgCount < MSG_QUEUE_SIZE Then
                                     .MsgQueue(.MsgTail) = textMsg
                                     .MsgTail = (.MsgTail + 1) Mod MSG_QUEUE_SIZE
@@ -2515,8 +2771,8 @@ Private Sub ProcessFrames(ByVal handle As Long)
                                     .Stats.MessagesReceived = .Stats.MessagesReceived + 1
                                 End If
                             ElseIf .FragmentOpcode = WS_OPCODE_BINARY Then
-                                ReDim binaryData(0 To .FragmentLen - 1)
-                                CopyMemory binaryData(0), .FragmentBuffer(0), .FragmentLen
+                                ReDim binaryData(0 To contPayloadLen - 1)
+                                CopyMemory binaryData(0), contPayload(0), contPayloadLen
                                 If .BinaryCount < MSG_QUEUE_SIZE Then
                                     .BinaryQueue(.BinaryTail).data = binaryData
                                     .BinaryTail = (.BinaryTail + 1) Mod MSG_QUEUE_SIZE
@@ -2528,16 +2784,34 @@ Private Sub ProcessFrames(ByVal handle As Long)
                             .FragmentLen = 0
                         End If
                     End If
+
                 Case WS_OPCODE_CLOSE
+                    If isCompressed Then
+                        WebSocketSendClose 1002, "RSV1 on control frame", handle
+                        .Connected = False
+                        Exit Sub
+                    End If
                     ProcessCloseFrame handle, payload, payloadLen
                     Exit Sub
+
                 Case WS_OPCODE_PING
+                    If isCompressed Then
+                        WebSocketSendClose 1002, "RSV1 on control frame", handle
+                        .Connected = False
+                        Exit Sub
+                    End If
                     SendPongFrame handle, payload, payloadLen
+
                 Case WS_OPCODE_PONG
+                    If isCompressed Then
+                        WebSocketSendClose 1002, "RSV1 on control frame", handle
+                        .Connected = False
+                        Exit Sub
+                    End If
                     ProcessPongForLatency handle
                     WasabiLog handle, "PONG received (handle=" & handle & ")"
             End Select
-            totalFrameLen = frameStart + payloadLen
+            totalFrameLen = frameStart + wirePayloadLen
             If .DecryptLen > totalFrameLen Then
                 CopyMemory .DecryptBuffer(0), .DecryptBuffer(totalFrameLen), .DecryptLen - totalFrameLen
             End If
@@ -2743,6 +3017,9 @@ Private Sub TryReconnect(ByVal handle As Long)
     Dim savedSubProtocol As String
     Dim savedBufferSize As Long
     Dim savedFragmentSize As Long
+    Dim savedDeflateEnabled As Boolean
+    Dim savedDeflateCtx As Boolean
+    Dim savedInflateCtx As Boolean
     Dim startTick As Long
     If Not m_Connections(handle).AutoReconnect Then Exit Sub
     If m_Connections(handle).ReconnectMaxAttempts > 0 And m_Connections(handle).ReconnectAttempts >= m_Connections(handle).ReconnectMaxAttempts Then
@@ -2783,6 +3060,9 @@ Private Sub TryReconnect(ByVal handle As Long)
         savedSubProtocol = .SubProtocol
         savedBufferSize = .CustomBufferSize
         savedFragmentSize = .CustomFragmentSize
+        savedDeflateEnabled = .DeflateEnabled
+        savedDeflateCtx = .DeflateContextTakeover
+        savedInflateCtx = .InflateContextTakeover
         If savedHeaderCount > 0 Then
             ReDim savedHeaders(0 To savedHeaderCount - 1)
             For i = 0 To savedHeaderCount - 1
@@ -2833,6 +3113,9 @@ Private Sub TryReconnect(ByVal handle As Long)
         .SubProtocol = savedSubProtocol
         .CustomBufferSize = savedBufferSize
         .CustomFragmentSize = savedFragmentSize
+        .DeflateEnabled = savedDeflateEnabled
+        .DeflateContextTakeover = savedDeflateCtx
+        .InflateContextTakeover = savedInflateCtx
         For i = 0 To savedHeaderCount - 1
             .CustomHeaders(i) = savedHeaders(i)
         Next i
@@ -2858,7 +3141,7 @@ Private Function ConnectHandle(ByVal handle As Long, ByVal url As String) As Boo
         .LastErrorCode = 0
         .TechnicalDetails = ""
         .OriginalUrl = url
-        If Not ParseURL(url, .Host, .port, .Path, .TLS) Then
+        If Not ParseURL(url, .Host, .port, .path, .TLS) Then
             SetError ERR_INVALID_URL, "Invalid URL: " & url, "Invalid WebSocket URL. Use ws:// or wss://", handle
             GoTo Fail
         End If
@@ -3075,7 +3358,107 @@ Private Sub MqttResetParser(ByVal handle As Long)
     m_Connections(handle).MqttBufLen = 0
 End Sub
 
-Public Function WebSocketConnect(ByVal url As String, Optional ByRef outHandle As Long = -1) As Boolean
+Private Function GetZlibName() As String
+    #If Win64 Then
+        GetZlibName = "zlib1_x64.dll"
+    #Else
+        GetZlibName = "zlib1_x86.dll"
+    #End If
+End Function
+
+Private Function FindZlibPath() As String
+    Dim searchPaths As Variant
+    Dim i As Long
+    Dim base As String
+    Dim dllName As String
+    
+    searchPaths = Array( _
+        GetProjectPath(), _
+        GetProjectPath() & "\lib", _
+        GetProjectPath() & "\deps", _
+        GetProjectPath() & "\dlls", _
+        GetProjectPath() & "\zlib", _
+        GetProjectPath() & "\bin", _
+        GetProjectPath() & "\x64", _
+        GetProjectPath() & "\x86", _
+        GetProjectPath() & "\native", _
+        Environ$("SystemRoot") & "\System32", _
+        Environ$("SystemRoot") & "\SysWOW64" _
+    )
+    
+    dllName = GetZlibName()
+    
+    For i = LBound(searchPaths) To UBound(searchPaths)
+        base = searchPaths(i)
+        If Len(base) = 0 Then GoTo Continue
+        
+        If Dir$(base & "\" & dllName) <> "" Then
+            FindZlibPath = base
+            Exit Function
+        End If
+        
+        If Dir$(base & "\zlib1.dll") <> "" Then
+            FindZlibPath = base
+            Exit Function
+        End If
+        
+Continue:
+    Next i
+End Function
+
+Private Sub LoadZlib()
+    Static loaded As Boolean
+    #If VBA7 Then
+        Dim h As LongPtr
+    #Else
+        Dim h As Long
+    #End If
+    Dim dllName As String
+    Dim fullPath As String
+    
+    If loaded Then Exit Sub
+    
+    dllName = GetZlibName()
+    Dim projectPath As String
+    projectPath = GetProjectPath()
+    
+    If projectPath <> "" Then
+        fullPath = projectPath & "\" & dllName
+        If Dir$(fullPath) <> "" Then
+            h = LoadLibrary(fullPath)
+            If h <> 0 Then loaded = True: Exit Sub
+        End If
+        
+        fullPath = projectPath & "\zlib1.dll"
+        If Dir$(fullPath) <> "" Then
+            h = LoadLibrary(fullPath)
+            If h <> 0 Then loaded = True: Exit Sub
+        End If
+    End If
+    
+    Dim foundPath As String
+    foundPath = FindZlibPath()
+    If foundPath <> "" Then
+        fullPath = foundPath & "\" & dllName
+        If Dir$(fullPath) <> "" Then
+            h = LoadLibrary(fullPath)
+            If h <> 0 Then loaded = True: Exit Sub
+        End If
+        
+        fullPath = foundPath & "\zlib1.dll"
+        If Dir$(fullPath) <> "" Then
+            h = LoadLibrary(fullPath)
+            If h <> 0 Then loaded = True: Exit Sub
+        End If
+    End If
+    
+    h = LoadLibrary("zlib1.dll")
+    If h <> 0 Then loaded = True: Exit Sub
+    
+    WasabiLog INVALID_CONN_HANDLE, "LoadZlib: zlib1.dll not found - deflate unavailable"
+End Sub
+
+Public Function WebSocketConnect(ByVal url As String, Optional ByRef outHandle As Long = -1, Optional ByVal DeflateEnabled As Boolean = False, Optional ByVal DeflateContextTakeover As Boolean = True) As Boolean
     Dim wsa As WSADATA
     Dim wsaErr As Long
     Dim handle As Long
@@ -3083,6 +3466,7 @@ Public Function WebSocketConnect(ByVal url As String, Optional ByRef outHandle A
     m_LastErrorCode = 0
     m_TechnicalDetails = ""
     InitConnectionPool
+    If DeflateEnabled Then LoadZlib
     If Not m_WSAInitialized Then
         wsaErr = WSAStartup(&H202, wsa)
         If wsaErr <> 0 Then
@@ -3098,6 +3482,9 @@ Public Function WebSocketConnect(ByVal url As String, Optional ByRef outHandle A
         outHandle = INVALID_CONN_HANDLE
         Exit Function
     End If
+    m_Connections(handle).DeflateEnabled = DeflateEnabled
+    m_Connections(handle).DeflateContextTakeover = DeflateContextTakeover
+    m_Connections(handle).InflateContextTakeover = DeflateContextTakeover
     If Not ConnectHandle(handle, url) Then
         outHandle = INVALID_CONN_HANDLE
         Exit Function
@@ -3106,6 +3493,31 @@ Public Function WebSocketConnect(ByVal url As String, Optional ByRef outHandle A
     outHandle = handle
     WebSocketConnect = True
     WasabiLog handle, "Connected to " & url & " (handle=" & handle & ")"
+End Function
+
+Public Sub WebSocketSetDeflate(ByVal enabled As Boolean, Optional ByVal contextTakeover As Boolean = True, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Sub
+    With m_Connections(h)
+        If .Connected Then
+            .DeflateEnabled = enabled
+            .DeflateContextTakeover = contextTakeover
+            .InflateContextTakeover = contextTakeover
+            WasabiLog h, "DeflateEnabled set to " & enabled & " - will apply on next reconnect (handle=" & h & ")"
+            Exit Sub
+        End If
+        .DeflateEnabled = enabled
+        .DeflateContextTakeover = contextTakeover
+        .InflateContextTakeover = contextTakeover
+    End With
+End Sub
+
+Public Function WebSocketGetDeflateEnabled(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Function
+    WebSocketGetDeflateEnabled = m_Connections(h).DeflateActive
 End Function
 
 Public Sub WebSocketDisconnect(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
@@ -3154,6 +3566,9 @@ Public Function WebSocketSend(ByVal message As String, Optional ByVal handle As 
     Dim msgBytes() As Byte
     Dim msgLen As Long
     Dim frame() As Byte
+    Dim useDeflate As Boolean
+    Dim compLen As Long
+    Dim compBytes() As Byte
     h = ResolveHandle(handle)
     If Not ValidIndex(h) Then Exit Function
     With m_Connections(h)
@@ -3167,7 +3582,13 @@ Public Function WebSocketSend(ByVal message As String, Optional ByVal handle As 
             WebSocketSend = True
             Exit Function
         End If
-        frame = BuildWSFrame(msgBytes, msgLen, WS_OPCODE_TEXT, True)
+        useDeflate = .DeflateActive
+        If useDeflate Then
+            compBytes = DeflatePayload(h, msgBytes, msgLen, compLen)
+            msgBytes = compBytes
+            msgLen = compLen
+        End If
+        frame = BuildWSFrame(msgBytes, msgLen, WS_OPCODE_TEXT, True, useDeflate)
         If SendFrameFor(h, frame) Then
             .Stats.BytesSent = .Stats.BytesSent + (UBound(frame) + 1)
             .Stats.MessagesSent = .Stats.MessagesSent + 1
@@ -3180,6 +3601,10 @@ Public Function WebSocketSendBinary(ByRef data() As Byte, Optional ByVal handle 
     Dim h As Long
     Dim dataLen As Long
     Dim frame() As Byte
+    Dim useDeflate As Boolean
+    Dim compLen As Long
+    Dim compBytes() As Byte
+    Dim sendData() As Byte
     h = ResolveHandle(handle)
     If Not ValidIndex(h) Then Exit Function
     With m_Connections(h)
@@ -3192,7 +3617,15 @@ Public Function WebSocketSendBinary(ByRef data() As Byte, Optional ByVal handle 
             WebSocketSendBinary = True
             Exit Function
         End If
-        frame = BuildWSFrame(data, dataLen, WS_OPCODE_BINARY, True)
+        useDeflate = .DeflateActive
+        If useDeflate Then
+            compBytes = DeflatePayload(h, data, dataLen, compLen)
+            sendData = compBytes
+            dataLen = compLen
+        Else
+            sendData = data
+        End If
+        frame = BuildWSFrame(sendData, dataLen, WS_OPCODE_BINARY, True, useDeflate)
         If SendFrameFor(h, frame) Then
             .Stats.BytesSent = .Stats.BytesSent + (UBound(frame) + 1)
             .Stats.MessagesSent = .Stats.MessagesSent + 1
@@ -4215,7 +4648,7 @@ Public Function WebSocketGetPath(Optional ByVal handle As Long = INVALID_CONN_HA
     Dim h As Long
     h = ResolveHandle(handle)
     If Not ValidIndex(h) Then Exit Function
-    WebSocketGetPath = m_Connections(h).Path
+    WebSocketGetPath = m_Connections(h).path
 End Function
 
 Public Sub WebSocketSetHttp2(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
@@ -4410,3 +4843,109 @@ Private Function NullByteArray() As Byte()
     NullByteArray = b
 End Function
 
+Private Function DeflatePayload(ByVal handle As Long, ByRef data() As Byte, ByVal dataLen As Long, ByRef outLen As Long) As Byte()
+    Dim outBuf()    As Byte
+    Dim strm        As ZStream
+    Dim ret         As Long
+    Dim pIn()       As Byte
+    Dim windowBits  As Long
+
+    windowBits = m_Connections(handle).DeflateWindowBits
+    If windowBits = 0 Then windowBits = ZLIB_WBITS_RAW
+
+    ReDim outBuf(0 To dataLen + 256)
+    ReDim pIn(0 To dataLen - 1)
+    CopyMemory pIn(0), data(LBound(data)), dataLen
+
+    If m_Connections(handle).DeflateContextTakeover And m_Connections(handle).DeflateReady Then
+        strm = m_Connections(handle).DeflateStream
+    Else
+        zlib_deflateInit2 strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED, windowBits, ZLIB_MEM_LEVEL, Z_DEFAULT_STRATEGY, ZLIB_VERSION, LenB(strm)
+        m_Connections(handle).DeflateReady = True
+    End If
+
+    strm.next_in = VarPtr(pIn(0))
+    strm.avail_in = dataLen
+    strm.next_out = VarPtr(outBuf(0))
+    strm.avail_out = UBound(outBuf) + 1
+
+    zlib_deflate strm, Z_SYNC_FLUSH
+
+    outLen = (UBound(outBuf) + 1) - strm.avail_out
+    
+    If m_Connections(handle).DeflateContextTakeover Then
+        m_Connections(handle).DeflateStream = strm
+    Else
+        zlib_deflateEnd strm
+        m_Connections(handle).DeflateReady = False
+    End If
+
+    ReDim Preserve outBuf(0 To outLen - 1)
+    DeflatePayload = outBuf
+End Function
+
+Private Function InflatePayload(ByVal handle As Long, ByRef data() As Byte, ByVal dataLen As Long, ByRef outLen As Long) As Byte()
+    Dim inBuf()    As Byte
+    Dim outBuf()   As Byte
+    Dim strm       As ZStream
+    Dim ret        As Long
+    Dim windowBits As Long
+    Dim trailer(0 To 3) As Byte
+
+    windowBits = m_Connections(handle).InflateWindowBits
+    If windowBits = 0 Then windowBits = ZLIB_WBITS_RAW
+
+    ReDim inBuf(0 To dataLen + 3)
+    CopyMemory inBuf(0), data(LBound(data)), dataLen
+    trailer(0) = &H0: trailer(1) = &H0: trailer(2) = &HFF: trailer(3) = &HFF
+    CopyMemory inBuf(dataLen), trailer(0), 4
+
+    ReDim outBuf(0 To dataLen * 8 + 4096)
+
+    If m_Connections(handle).InflateContextTakeover And m_Connections(handle).InflateReady Then
+        strm = m_Connections(handle).InflateStream
+    Else
+        zlib_inflateInit2 strm, windowBits, ZLIB_VERSION, LenB(strm)
+        m_Connections(handle).InflateReady = True
+    End If
+
+    strm.next_in = VarPtr(inBuf(0))
+    strm.avail_in = dataLen + 4
+    strm.next_out = VarPtr(outBuf(0))
+    strm.avail_out = UBound(outBuf) + 1
+
+    ret = zlib_inflate(strm, Z_SYNC_FLUSH)
+    
+    If ret <> Z_OK And ret <> Z_STREAM_END Then
+        zlib_inflateEnd strm
+        m_Connections(handle).InflateReady = False
+        outLen = 0
+        InflatePayload = NullByteArray()
+        Exit Function
+    End If
+
+    outLen = (UBound(outBuf) + 1) - strm.avail_out
+
+    If m_Connections(handle).InflateContextTakeover Then
+        m_Connections(handle).InflateStream = strm
+    Else
+        zlib_inflateEnd strm
+        m_Connections(handle).InflateReady = False
+    End If
+
+    ReDim Preserve outBuf(0 To outLen - 1)
+    InflatePayload = outBuf
+End Function
+
+Private Sub FreeDeflateStreams(ByVal handle As Long)
+    With m_Connections(handle)
+        If .DeflateReady Then
+            zlib_deflateEnd .DeflateStream
+            .DeflateReady = False
+        End If
+        If .InflateReady Then
+            zlib_inflateEnd .InflateStream
+            .InflateReady = False
+        End If
+    End With
+End Sub
