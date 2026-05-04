@@ -193,7 +193,22 @@ End If
 
 > For the complete reference with examples, parameters, return values, and usage
 notes, see [API Reference](docs/API_REFERENCE.md).
-> 
+
+## Performance
+
+All cryptographic and encoding primitives are delegated to native Windows
+APIs (`advapi32.dll` / `crypt32.dll`). This yields throughput close to the
+hardware limit, even inside the VBA runtime.
+
+![Throughput Benchmark](resources/benchmark-throughput.png)
+
+> [!NOTE]
+> SHA‑1 now runs at **400 MB/s** (down from 1.8 s per 128 KB in pure VBA).
+> Base64 operations stay around **41 MB/s**, UTF‑8 conversion exceeds
+> **1 GB/s**, and WebSocket frame construction tops **25 MB/s**.
+>
+> The test harness and raw data are in [`benchmark/`](benchmark/).
+
 ## Compatibility
 
 Wasabi was designed to run without any external dependencies, using exclusively
