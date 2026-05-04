@@ -62,3 +62,5 @@ when called from Wasabi.
   the actual content.
 - The Joveler package is a reliable third-party source with a clear version
   history, making it acceptable for redistribution in binary form (zlib license).
+
+> Point: https://www.reddit.com/r/vba/comments/1t3ed1q/comment/ojvjsue
