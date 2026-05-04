@@ -102,9 +102,6 @@ Working with networking in VBA often becomes a project of its own. Some typical 
 
 ## Quick Start
 
-> [!NOTE]
-> Before using Wasabi, it is highly recommended that you review the [documentation](docs).
-
 ### Import
 
 [Download the latest version of Wasabi](../../releases) and import it into your VBA project via
@@ -112,9 +109,91 @@ Working with networking in VBA often becomes a project of its own. Some typical 
 
 No references need to be enabled in **Tools → References**.
 
+### Connect and send a message
+
+```vb
+Dim h As Long
+
+If WebSocketConnect("wss://echo.websocket.org", h) Then
+    WebSocketSend "Hello, Wasabi!", h
+
+    Dim msg As String
+    msg = WebSocketReceive(h)
+
+    If msg <> "" Then
+        Debug.Print "Received: " & msg
+    End If
+
+    WebSocketDisconnect h
+End If
+```
+
+### Connect with TLS certificate validation
+
+```vb
+Dim h As Long
+
+WebSocketSetCertValidation True, h
+WebSocketSetRevocationCheck True, h
+
+If WebSocketConnect("wss://example.com/ws", h) Then
+    WebSocketSend "Secure hello", h
+    WebSocketDisconnect h
+End If
+```
+
+### Connect with compression enabled
+
+```vb
+Dim h As Long
+
+If WebSocketConnect("wss://example.com/ws", h, True, True) Then
+    Debug.Print "Compression active: " & WebSocketGetDeflateEnabled(h)
+    WebSocketSend "Compressed message", h
+    WebSocketDisconnect h
+End If
+```
+
+> [!WARNING]
+> Compression requires `zlib1.dll` to be present alongside your project file.
+> Without it, compression is silently disabled and the connection proceeds normally.
+> See [DEFLATE.md](docs/DEFLATE.md) for setup instructions.
+
+### Connect through a proxy
+
+```vb
+Dim h As Long
+
+WebSocketSetProxy "proxy.company.com", 8080, "user", "pass", 0, h
+WebSocketSetProxyNtlm True, h
+
+If WebSocketConnect("wss://example.com/ws", h) Then
+    WebSocketSend "Behind the firewall", h
+    WebSocketDisconnect h
+End If
+```
+
+### Auto-reconnect with ping keepalive
+
+```vb
+Dim h As Long
+
+WebSocketSetAutoReconnect True, 5, 1000, h
+WebSocketSetPingInterval 30000, h
+
+If WebSocketConnect("wss://example.com/ws", h) Then
+    Do While WebSocketIsConnected(h)
+        Dim msg As String
+        msg = WebSocketReceive(h)
+        If msg <> "" Then Debug.Print "Received: " & msg
+        DoEvents
+    Loop
+End If
+```
+
 > For the complete reference with examples, parameters, return values, and usage
 notes, see [API Reference](docs/API_REFERENCE.md).
-
+> 
 ## Compatibility
 
 Wasabi was designed to run without any external dependencies, using exclusively
