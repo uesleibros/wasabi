@@ -3,8 +3,7 @@
 This folder contains **Wasabi.bas**, the single, self‑contained file that
 brings the entire WebSocket stack to any VBA project.
 
-> When you import `Wasabi.bas`, the VBA runtime compiles it on the spot.
-
+> When you import `Wasabi.bas`, the VBA runtime compiles it on the spot. \
 > There is no build step, no binary, and no packaging. What you see is
 exactly what runs inside the Office process.
 
