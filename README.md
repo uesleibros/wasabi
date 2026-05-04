@@ -348,6 +348,19 @@ No messages are lost.
 - **Connection doesn't drop.** The socket stays active regardless of polling frequency.
 - **No infinite loop required.** Simple send/receive/disconnect workflows work fine.
 
+## Research
+
+The [`research/`](research) directory contains detailed design notes, investigation logs,
+and reference materials for every major subsystem in Wasabi. It is intended
+for maintainers and advanced users who want to understand *why* certain
+decisions were made, not just *what* the code does. Each subfolder covers a
+specific topic (TLS verification, pointer fixes, the zlib stdcall hunt,
+permessage-deflate, Happy Eyeballs, MTU discovery, MQTT, proxies, batching,
+zero‑copy, TCP tuning, fragmentation, reconnect backoff, TLS renegotiation,
+cryptographic random, SHA‑1, Base64, structure alignment, VBA6 compatibility,
+UTF‑8, and error handling) and includes relevant RFCs and Microsoft
+documentation links.
+
 ## Acknowledgements
 
 Wasabi was built on years of community efforts to bring real-time networking
