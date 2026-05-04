@@ -18,21 +18,39 @@ with Wasabi and must be provided by the user only if compression is desired.
 
 ## Obtaining zlib
 
-You need the correct build of zlib for your Office environment.
+You need a build of zlib that uses the **stdcall** calling convention
+(`WINAPI`). The official `zlib1.dll` from zlib.net uses `cdecl` and will
+**not** work with Wasabi's VBA declarations.
 
-| Office architecture | Required DLL |
-|---|---|
-| 32‑bit | `zlib1_x86.dll` |
-| 64‑bit | `zlib1_x64.dll` |
+| Office architecture | Required DLL         | Calling convention |
+|---------------------|----------------------|--------------------|
+| 32‑bit              | `zlib1_x86.dll`      | `stdcall` (WINAPI) |
+| 64‑bit              | `zlib1_x64.dll`      | `stdcall` (WINAPI) |
 
-Pre‑compiled DLLs can be downloaded from the official zlib website:
+### Option 1 – Use the pre‑compiled DLLs from this repository (recommended)
 
-- [https://zlib.net](https://zlib.net)
+This repository already contains the correct DLLs inside the
+[`../libs/`](../libs/) folder. They were extracted from the
+[Joveler.Compression.ZLib](https://www.nuget.org/packages/Joveler.Compression.ZLib/4.2.0)
+NuGet package (version **4.2.0**) and renamed to match Wasabi's expected
+names. See the [README inside `libs/`](../libs/README.md) for full details.
 
-> [!NOTE]
-> Many applications already ship a `zlib1.dll` in their installation
-> directory. Wasabi will attempt to load a generic `zlib1.dll` as a
-> fallback, but using the architecture‑specific name is preferred.
+### Option 2 – Extract them yourself from NuGet
+
+If you prefer to obtain the files directly:
+
+1. Download the `.nupkg` from the link above.
+2. Rename the file extension from `.nupkg` to `.zip`.
+3. Unzip and navigate to:
+   - `runtimes/win-x86/native/zlibwapi.dll` → rename to **`zlib1_x86.dll`**
+   - `runtimes/win-x64/native/zlibwapi.dll` → rename to **`zlib1_x64.dll`**
+
+### Option 3 – Build from source
+
+If you need a different zlib version, compile the source with the
+`ZLIB_WINAPI` macro defined. Official source code is available at
+[https://zlib.net](https://zlib.net). The resulting `zlibwapi.dll` must be
+renamed to `zlib1_x86.dll` or `zlib1_x64.dll` to be found by Wasabi.
 
 ## Where to place the DLL
 
