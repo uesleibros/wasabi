@@ -1,6 +1,6 @@
 Attribute VB_Name = "Wasabi"
 ' ============================================================================
-' Wasabi v2.1.1-vNext
+' Wasabi v2.1.2-vNext
 ' Copyright (c) 2026 UesleiDev
 '
 ' Permission is hereby granted, free of charge, to any person obtaining a
@@ -689,10 +689,14 @@ Private Function SafeArrayLen(ByRef arr() As Byte) As Long
 End Function
 
 Private Function GetProjectPath() As String
+#If ((VBA7 = 1) Or (VBA6 = 1)) And (TWINBASIC = 0) Then
     Dim path As String
     path = Application.VBE.ActiveVBProject.FileName
     path = Left(path, InStrRev(path, "\"))
     GetProjectPath = path
+#Else
+    GetProjectPath = App.Path
+#End If
 End Function
 
 Private Function ResolveHandle(ByVal handle As Long) As Long
@@ -1302,7 +1306,7 @@ Private Function ResolveHostname(ByVal hostname As String, ByVal handle As Long)
         SetError ERR_DNS_RESOLVE_FAILED, "gethostbyname failed for '" & hostname & "': " & WSAErrDesc(wsaErr), "Cannot resolve address: " & hostname & vbCrLf & WSAErrDesc(wsaErr), handle, wsaErr
         Exit Function
     End If
-#If VBA7 Then
+#If Win64 Then
     CopyMemoryFromPtr he, hostent, LenB(he)
     addrList = he.h_addr_list
     If addrList = 0 Then Exit Function
@@ -1375,20 +1379,20 @@ Private Function ResolveAndConnect(ByVal handle As Long, ByVal hostname As Strin
     If sock_getaddrinfo(hostname, CStr(port), VarPtr(hints(0)), ppResult) = 0 And ppResult <> 0 Then
         pCur = ppResult
         Do While pCur <> 0
-#If VBA7 Then
-            CopyMemoryFromPtr aiFamily, pCur + 4, 4
-            CopyMemoryFromPtr aiSocktype, pCur + 8, 4
-            CopyMemoryFromPtr aiAddrLenFull, pCur + 16, 8
-            aiAddrLen = CLng(aiAddrLenFull And &H7FFFFFFF)
-            CopyMemoryFromPtr pSockaddr, pCur + 32, 8
-            CopyMemoryFromPtr pNext, pCur + 40, 8
-#Else
-            CopyMemoryFromPtr aiFamily, pCur + 4, 4
-            CopyMemoryFromPtr aiSocktype, pCur + 8, 4
-            CopyMemoryFromPtr aiAddrLen, pCur + 16, 4
-            CopyMemoryFromPtr pSockaddr, pCur + 24, 4
-            CopyMemoryFromPtr pNext, pCur + 28, 4
-#End If
+			#If Win64 Then
+			    CopyMemoryFromPtr aiFamily, pCur + 4, 4
+			    CopyMemoryFromPtr aiSocktype, pCur + 8, 4
+			    CopyMemoryFromPtr aiAddrLenFull, pCur + 16, 8
+			    aiAddrLen = CLng(aiAddrLenFull And &H7FFFFFFF)
+			    CopyMemoryFromPtr pSockaddr, pCur + 32, 8
+			    CopyMemoryFromPtr pNext, pCur + 40, 8
+			#Else
+			    CopyMemoryFromPtr aiFamily, pCur + 4, 4
+			    CopyMemoryFromPtr aiSocktype, pCur + 8, 4
+			    CopyMemoryFromPtr aiAddrLen, pCur + 16, 4
+			    CopyMemoryFromPtr pSockaddr, pCur + 24, 4
+			    CopyMemoryFromPtr pNext, pCur + 28, 4
+			#End If
             If aiSocktype = SOCK_STREAM And aiAddrLen > 0 And pSockaddr <> 0 Then
                 If aiFamily = AF_INET6 And Not found6 Then
                     ReDim sa6(0 To aiAddrLen - 1)
