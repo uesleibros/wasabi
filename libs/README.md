@@ -45,7 +45,7 @@ location first.
 For a complete description of the search order, fallback names, and
 compression configuration, please refer to the main documentation:
 
-📄 [../docs/README.md – Optional zlib Dependency](../docs/README.md)
+[../docs/README.md – Optional zlib Dependency](../docs/README.md)
 
 ## Version info
 
