@@ -1,6 +1,6 @@
 Attribute VB_Name = "Wasabi"
 ' ============================================================================
-' Wasabi v2.1.0-vNext
+' Wasabi v2.1.1-vNext
 ' Copyright (c) 2026 UesleiDev
 '
 ' Permission is hereby granted, free of charge, to any person obtaining a
@@ -570,6 +570,7 @@ Private Const SECPKG_ATTR_STREAM_SIZES As Long = 4
 Private Const AUTHTYPE_SERVER As Long = 1
 Private Const CERT_STORE_PROV_SYSTEM As Long = 10
 Private Const CERT_SYSTEM_STORE_CURRENT_USER As Long = &H10000
+Private Const CERT_CHAIN_REVOCATION_CHECK_CHAIN As Long = &H20000000
 Private Const X509_ASN_ENCODING As Long = 1
 Private Const PKCS_7_ASN_ENCODING As Long = &H10000
 Private Const CRYPT_EXPORTABLE As Long = 1
@@ -4041,7 +4042,6 @@ End Function
 
 Public Function WebSocketReceiveBinary(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Byte()
     Dim h As Long
-    Dim empty() As Byte
     h = ResolveHandle(handle)
     If Not ValidIndex(h) Then
         WebSocketReceiveBinary = Empty
@@ -4089,7 +4089,11 @@ Public Function WebSocketReceiveBinaryCheck(ByRef outData() As Byte, Optional By
     End With
 End Function
 
+#If VBA7 Then
+Public Function WebSocketReceiveZeroCopy(ByRef outPtr As LongPtr, ByRef outLen As Long, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
+#Else
 Public Function WebSocketReceiveZeroCopy(ByRef outPtr As Long, ByRef outLen As Long, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
+#End If
     Dim h As Long
     h = ResolveHandle(handle)
     If Not ValidIndex(h) Then Exit Function
