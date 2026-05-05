@@ -13,8 +13,6 @@ latency, using the same native Windows APIs that Wasabi calls internally.
 | **StringToUtf8**| Conversion from VBA String to UTF‑8 bytes (`WideCharToMultiByte`)  |
 | **Utf8ToString**| Conversion from UTF‑8 bytes to VBA String (`MultiByteToWideChar`)  |
 | **BuildWSFrame**| Full WebSocket frame construction, including `CryptGenRandom` mask |
-| **DeflatePayload**   | Compression via `permessage-deflate` (requires local echo server) |
-| **InflatePayload**   | Decompression via `permessage-deflate` (requires local echo server) |
 
 ## Prerequisites
 
