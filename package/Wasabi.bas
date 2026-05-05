@@ -1,6 +1,6 @@
 Attribute VB_Name = "Wasabi"
 ' ============================================================================
-' Wasabi v2.2.0-vNext
+' Wasabi v2.2.1-vNext
 ' Copyright (c) 2026 UesleiDev
 '
 ' Permission is hereby granted, free of charge, to any person obtaining a
