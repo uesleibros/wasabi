@@ -10,7 +10,7 @@ Feel free to browse, but the canonical documentation is in `docs/`.
 
 ## Reference URLs by topic
 
-> [!NOTE]
+> [!IMPORTANT]
 > Not all references mentioned here have been properly documented in this folder, some because the documentation is already sufficient and others because they are too simple and don't require it.
 
 ### tls-verification
