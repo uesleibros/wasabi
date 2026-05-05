@@ -1,5 +1,8 @@
 # Wasabi Benchmark Suite
 
+> [!WARNING]
+> These benchmark tests can only be run within the ![](../resources/svg/ms-excel.svg) **Microsoft Excel** environment.
+
 This folder contains a self-contained benchmark harness for Wasabi's
 core primitives. It measures raw CPU throughput, independent of network
 latency, using the same native Windows APIs that Wasabi calls internally.
