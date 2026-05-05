@@ -537,6 +537,14 @@ Private Type WasabiConnection
     MqttNextPacketId As Integer
     MqttInFlight() As MqttInFlightMsg
     MqttInFlightCount As Long
+    OfflineQueueEnabled As Boolean
+    OfflineTextQueue() As String
+    OfflineTextCount As Long
+    OfflineBinaryQueue() As BinaryMessage
+    OfflineBinaryCount As Long
+    
+    PingJitterMaxMs As Long
+    CurrentPingIntervalMs As Long
 End Type
 
 Public Enum WasabiError
@@ -908,6 +916,8 @@ Private Function AllocConnection() As Long
             ReDim m_Connections(i).FragmentBuffer(0 To fragSize - 1)
             ReDim m_Connections(i).CustomHeaders(0 To 31)
             ReDim m_Connections(i).MqttBuffer(0 To 4095)
+            ReDim m_Connections(i).OfflineTextQueue(0 To MSG_QUEUE_SIZE - 1)
+            ReDim m_Connections(i).OfflineBinaryQueue(0 To MSG_QUEUE_SIZE - 1)
             ResetConnectionState i
             InitializeMTU i
             AllocConnection = i
@@ -2510,7 +2520,9 @@ Private Function DoWebSocketHandshake(ByVal handle As Long) As Boolean
             handshake = handshake & .CustomHeaders(i) & vbCrLf
         Next i
         handshake = handshake & vbCrLf
-        sendBuf = StrConv(handshake, vbFromUnicode)
+        
+        sendBuf = StringToUtf8(handshake)
+        
         If .TLS Then
             If Not TLSSend(handle, sendBuf) Then
                 SetError ERR_WEBSOCKET_HANDSHAKE_FAILED, "TLS send of WS handshake failed", "WebSocket upgrade request failed.", handle
@@ -2959,6 +2971,7 @@ Private Sub FeedBuffer(ByVal handle As Long)
                 copyLen = received
                 If .recvLen + copyLen > BUFFER_SIZE Then copyLen = BUFFER_SIZE - .recvLen
                 If copyLen > 0 Then
+                    EnsureBufferCapacity .recvBuffer, .recvLen + copyLen
                     CopyMemory .recvBuffer(.recvLen), tempBuf(0), copyLen
                     .recvLen = .recvLen + copyLen
                 End If
@@ -2967,6 +2980,7 @@ Private Sub FeedBuffer(ByVal handle As Long)
                 copyLen = received
                 If .DecryptLen + copyLen > BUFFER_SIZE Then copyLen = BUFFER_SIZE - .DecryptLen
                 If copyLen > 0 Then
+                    EnsureBufferCapacity .DecryptBuffer, .DecryptLen + copyLen
                     CopyMemory .DecryptBuffer(.DecryptLen), tempBuf(0), copyLen
                     .DecryptLen = .DecryptLen + copyLen
                 End If
@@ -2993,8 +3007,9 @@ Private Sub TickMaintenance(ByVal handle As Long)
         If .State <> STATE_OPEN Then Exit Sub
         now = GetTickCount()
         If .PingIntervalMs > 0 Then
-            If TickDiff(.LastPingSentAt, now) >= .PingIntervalMs Then
+            If TickDiff(.LastPingSentAt, now) >= .CurrentPingIntervalMs Then
                 WebSocketSendPing "", handle
+                CalculateNextPing handle
             End If
         End If
         If .InactivityTimeoutMs > 0 And .LastActivityAt > 0 Then
@@ -3225,6 +3240,8 @@ Private Function ConnectHandle(ByVal handle As Long, ByVal url As String) As Boo
         .Stats.MessagesReceived = 0
         .LastPingSentAt = GetTickCount()
         .LastActivityAt = GetTickCount()
+        
+        If .OfflineQueueEnabled Then FlushOfflineQueues handle
     End With
     ConnectHandle = True
     Exit Function
@@ -3354,6 +3371,15 @@ Private Function MqttBuildPacket(ByVal ptype As Byte, ByVal flags As Byte, ByRef
     
     MqttBuildPacket = packet
 End Function
+
+Private Sub MqttSendAck(ByVal handle As Long, ByVal packetType As Byte, ByVal flags As Byte, ByVal packetId As Integer)
+    Dim packet(0 To 3) As Byte
+    packet(0) = (packetType * 16) Or flags
+    packet(1) = 2
+    packet(2) = CByte((packetId \ 256) And &HFF)
+    packet(3) = CByte(packetId And &HFF)
+    WebSocketSendBinary packet, handle
+End Sub
 
 Private Sub MqttParseByte(ByVal handle As Long, ByVal b As Byte)
     With m_Connections(handle)
@@ -3491,6 +3517,41 @@ Private Sub LoadZlib()
     WasabiLog INVALID_CONN_HANDLE, "LoadZlib: zlib1.dll not found - deflate unavailable"
 End Sub
 
+Private Sub FlushOfflineQueues(ByVal handle As Long)
+    Dim i As Long
+    Dim tCount As Long, bCount As Long
+    Dim tQueue() As String, bQueue() As BinaryMessage
+    
+    With m_Connections(handle)
+        If Not .OfflineQueueEnabled Then Exit Sub
+        tCount = .OfflineTextCount
+        bCount = .OfflineBinaryCount
+        
+        If tCount > 0 Then
+            ReDim tQueue(0 To tCount - 1)
+            For i = 0 To tCount - 1: tQueue(i) = .OfflineTextQueue(i): Next i
+            .OfflineTextCount = 0
+        End If
+        
+        If bCount > 0 Then
+            ReDim bQueue(0 To bCount - 1)
+            For i = 0 To bCount - 1: bQueue(i) = .OfflineBinaryQueue(i): Next i
+            .OfflineBinaryCount = 0
+        End If
+    End With
+    
+    If tCount > 0 Then
+        For i = 0 To tCount - 1
+            WebSocketSend tQueue(i), handle
+        Next i
+    End If
+    If bCount > 0 Then
+        For i = 0 To bCount - 1
+            WebSocketSendBinary bQueue(i).data, handle
+        Next i
+    End If
+End Sub
+
 Public Function WebSocketConnect(ByVal url As String, Optional ByRef outHandle As Long = -1, Optional ByVal DeflateEnabled As Boolean = False, Optional ByVal DeflateContextTakeover As Boolean = True, Optional ByVal SubProtocol As String = "") As Boolean
     Dim wsa As WSADATA
     Dim wsaErr As Long
@@ -3530,6 +3591,13 @@ Public Function WebSocketConnect(ByVal url As String, Optional ByRef outHandle A
     WebSocketConnect = True
     WasabiLog handle, "Connected to " & url & " (handle=" & handle & ")"
 End Function
+
+Public Sub WebSocketSetOfflineQueueing(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Sub
+    m_Connections(h).OfflineQueueEnabled = enabled
+End Sub
 
 Public Sub WebSocketSetDeflate(ByVal enabled As Boolean, Optional ByVal contextTakeover As Boolean = True, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
@@ -3609,8 +3677,18 @@ Public Function WebSocketSend(ByVal message As String, Optional ByVal handle As 
     If Not ValidIndex(h) Then Exit Function
     With m_Connections(h)
         If .State <> STATE_OPEN Then
-            SetError ERR_NOT_CONNECTED, "Send on disconnected handle=" & h, "Not connected to WebSocket server.", h
-            Exit Function
+            If .OfflineQueueEnabled Then
+                If .OfflineTextCount > UBound(.OfflineTextQueue) Then
+                    ReDim Preserve .OfflineTextQueue(0 To UBound(.OfflineTextQueue) + 64)
+                End If
+                .OfflineTextQueue(.OfflineTextCount) = message
+                .OfflineTextCount = .OfflineTextCount + 1
+                WebSocketSend = True
+                Exit Function
+            Else
+                SetError ERR_NOT_CONNECTED, "Send on disconnected handle=" & h, "Not connected to WebSocket server.", h
+                Exit Function
+            End If
         End If
         msgBytes = StringToUtf8(message)
         msgLen = SafeArrayLen(msgBytes)
@@ -3645,8 +3723,18 @@ Public Function WebSocketSendBinary(ByRef data() As Byte, Optional ByVal handle 
     If Not ValidIndex(h) Then Exit Function
     With m_Connections(h)
         If .State <> STATE_OPEN Then
-            SetError ERR_NOT_CONNECTED, "SendBinary on disconnected handle=" & h, "Not connected to WebSocket server.", h
-            Exit Function
+            If .OfflineQueueEnabled Then
+                If .OfflineBinaryCount > UBound(.OfflineBinaryQueue) Then
+                    ReDim Preserve .OfflineBinaryQueue(0 To UBound(.OfflineBinaryQueue) + 64)
+                End If
+                .OfflineBinaryQueue(.OfflineBinaryCount).data = data
+                .OfflineBinaryCount = .OfflineBinaryCount + 1
+                WebSocketSendBinary = True
+                Exit Function
+            Else
+                SetError ERR_NOT_CONNECTED, "SendBinary on disconnected handle=" & h, "Not connected to WebSocket server.", h
+                Exit Function
+            End If
         End If
         dataLen = SafeArrayLen(data)
         If dataLen = 0 Then
@@ -4424,11 +4512,23 @@ Public Function WebSocketGetReconnectInfo(Optional ByVal handle As Long = INVALI
     End With
 End Function
 
-Public Sub WebSocketSetPingInterval(ByVal intervalMs As Long, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+Private Sub CalculateNextPing(ByVal handle As Long)
+    With m_Connections(handle)
+        If .PingJitterMaxMs > 0 Then
+            .CurrentPingIntervalMs = .PingIntervalMs + CLng(Rnd * .PingJitterMaxMs)
+        Else
+            .CurrentPingIntervalMs = .PingIntervalMs
+        End If
+    End With
+End Sub
+
+Public Sub WebSocketSetPingInterval(ByVal intervalMs As Long, Optional ByVal jitterMaxMs As Long = 0, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
     If Not ValidIndex(h) Then Exit Sub
     m_Connections(h).PingIntervalMs = intervalMs
+    m_Connections(h).PingJitterMaxMs = jitterMaxMs
+    CalculateNextPing h
     m_Connections(h).LastPingSentAt = GetTickCount()
 End Sub
 
@@ -4902,6 +5002,7 @@ Public Function MqttReceive(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     Dim data() As Byte
     Dim i As Long
+    Dim j As Long
     Dim topicLen As Long
     Dim topic As String
     Dim msgBytes() As Byte
@@ -4956,6 +5057,12 @@ Public Function MqttReceive(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
                             packetId = 0
                         End If
                         
+                        If qos = 1 Then
+                            MqttSendAck h, MQTT_PUBACK, 0, packetId
+                        ElseIf qos = 2 Then
+                            MqttSendAck h, MQTT_PUBREC, 0, packetId
+                        End If
+                        
                         msgLen = m_Connections(h).MqttBufLen - skipLen
                         If msgLen > 0 Then
                             ReDim msgBytes(0 To msgLen - 1)
@@ -4973,7 +5080,39 @@ Public Function MqttReceive(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
                             packetId = CInt(m_Connections(h).MqttBuffer(0)) * 256 + CInt(m_Connections(h).MqttBuffer(1))
                             WasabiLog h, "MQTT PUBACK received for PacketID=" & packetId
                             
-                            Dim j As Long
+                            For j = 0 To m_Connections(h).MqttInFlightCount - 1
+                                If m_Connections(h).MqttInFlight(j).packetId = packetId Then
+                                    If j < m_Connections(h).MqttInFlightCount - 1 Then
+                                        m_Connections(h).MqttInFlight(j) = m_Connections(h).MqttInFlight(m_Connections(h).MqttInFlightCount - 1)
+                                    End If
+                                    m_Connections(h).MqttInFlightCount = m_Connections(h).MqttInFlightCount - 1
+                                    Exit For
+                                 End If
+                            Next j
+                        End If
+                        MqttResetParser h
+                        
+                    Case MQTT_PUBREC
+                        If m_Connections(h).MqttBufLen >= 2 Then
+                            packetId = CInt(m_Connections(h).MqttBuffer(0)) * 256 + CInt(m_Connections(h).MqttBuffer(1))
+                            WasabiLog h, "MQTT PUBREC received for PacketID=" & packetId
+                            MqttSendAck h, MQTT_PUBREL, 2, packetId
+                        End If
+                        MqttResetParser h
+                        
+                    Case MQTT_PUBREL
+                        If m_Connections(h).MqttBufLen >= 2 Then
+                            packetId = CInt(m_Connections(h).MqttBuffer(0)) * 256 + CInt(m_Connections(h).MqttBuffer(1))
+                            WasabiLog h, "MQTT PUBREL received for PacketID=" & packetId
+                            MqttSendAck h, MQTT_PUBCOMP, 0, packetId
+                        End If
+                        MqttResetParser h
+                        
+                    Case MQTT_PUBCOMP
+                        If m_Connections(h).MqttBufLen >= 2 Then
+                            packetId = CInt(m_Connections(h).MqttBuffer(0)) * 256 + CInt(m_Connections(h).MqttBuffer(1))
+                            WasabiLog h, "MQTT PUBCOMP received for PacketID=" & packetId
+                            
                             For j = 0 To m_Connections(h).MqttInFlightCount - 1
                                 If m_Connections(h).MqttInFlight(j).packetId = packetId Then
                                     If j < m_Connections(h).MqttInFlightCount - 1 Then
@@ -5064,6 +5203,7 @@ Private Function InflatePayload(ByVal handle As Long, ByRef data() As Byte, ByVa
     Dim ret        As Long
     Dim windowBits As Long
     Dim trailer(0 To 3) As Byte
+    Const Z_BUF_ERROR As Long = -5
 
     windowBits = m_Connections(handle).InflateWindowBits
     If windowBits = 0 Then windowBits = ZLIB_WBITS_RAW
@@ -5087,15 +5227,32 @@ Private Function InflatePayload(ByVal handle As Long, ByRef data() As Byte, ByVa
     strm.next_out = VarPtr(outBuf(0))
     strm.avail_out = UBound(outBuf) + 1
 
-    ret = zlib_inflate(strm, Z_SYNC_FLUSH)
-    
-    If ret <> Z_OK And ret <> Z_STREAM_END Then
-        zlib_inflateEnd strm
-        m_Connections(handle).InflateReady = False
-        outLen = 0
-        InflatePayload = NullByteArray()
-        Exit Function
-    End If
+    Do
+        ret = zlib_inflate(strm, Z_SYNC_FLUSH)
+        
+        If ret = Z_STREAM_END Then Exit Do
+        
+        If ret <> Z_OK And ret <> Z_BUF_ERROR Then
+            zlib_inflateEnd strm
+            m_Connections(handle).InflateReady = False
+            outLen = 0
+            InflatePayload = NullByteArray()
+            Exit Function
+        End If
+        
+        If strm.avail_out = 0 Then
+            Dim currentUBound As Long
+            currentUBound = UBound(outBuf)
+            ReDim Preserve outBuf(0 To currentUBound + 16384)
+            
+            #If VBA7 Then
+                strm.next_out = VarPtr(outBuf(currentUBound + 1))
+            #Else
+                strm.next_out = VarPtr(outBuf(currentUBound + 1))
+            #End If
+            strm.avail_out = 16384
+        End If
+    Loop While strm.avail_out = 0 Or ret = Z_BUF_ERROR
 
     outLen = (UBound(outBuf) + 1) - strm.avail_out
 
@@ -5109,6 +5266,7 @@ Private Function InflatePayload(ByVal handle As Long, ByRef data() As Byte, ByVa
     ReDim Preserve outBuf(0 To outLen - 1)
     InflatePayload = outBuf
 End Function
+
 
 Private Sub FreeDeflateStreams(ByVal handle As Long)
     With m_Connections(handle)
