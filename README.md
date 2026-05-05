@@ -282,7 +282,7 @@ This is a deliberate architectural choice. Many competing modules depend on the 
 | ![](resources/svg/ms-powerpoint.svg) PowerPoint 64-bit | ✅ |
 | ![](resources/svg/ms-access.svg) Access 32-bit | ✅ |
 | ![](resources/svg/ms-access.svg) Access 64-bit | ✅ |
-| ![](resources/svg/ms-vba.png) Any VBA7 host (Office 2010+) | ✅ |
+| <img src="resources/ms-vba.png" width="30" /> Any VBA7 host (Office 2010+) | ✅ |
 | ![](resources/svg/ms-office.svg) VBA6 (Office 2007 and earlier) | ✅ |
 
 The transition from 32-bit to 64-bit Office broke many VBA modules that used
