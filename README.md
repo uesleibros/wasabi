@@ -40,6 +40,7 @@
 > **Platform**
 > 
 > ![](resources/svg/windows.svg)
+> Currently available only on **Windows**, as it relies on Windows-specific APIs to function.
 
 ## What is Wasabi
 
