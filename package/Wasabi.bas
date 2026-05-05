@@ -1,6 +1,6 @@
 Attribute VB_Name = "Wasabi"
 ' ============================================================================
-' Wasabi v2.3.0-beta
+' Wasabi v2.3.1-beta
 ' Copyright (c) 2026 UesleiDev
 '
 ' Permission is hereby granted, free of charge, to any person obtaining a
@@ -949,7 +949,6 @@ Private Sub ResetConnectionState(ByVal handle As Long)
         .LastError = ERR_NONE
         .LastErrorCode = 0
         .TechnicalDetails = ""
-        .CustomHeaderCount = 0
         .AutoReconnect = False
         .ReconnectMaxAttempts = DEFAULT_RECONNECT_MAX_ATTEMPTS
         .ReconnectAttempts = 0
@@ -4649,12 +4648,17 @@ End Function
 
 Public Sub WebSocketAddHeader(ByVal headerName As String, ByVal headerValue As String, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
+    
     h = ResolveHandle(handle)
     If Not ValidIndex(h) Then Exit Sub
+    
     With m_Connections(h)
-        If .CustomHeaderCount > UBound(.CustomHeaders) Then
+        If .CustomHeaderCount = 0 Then
+            ReDim .CustomHeaders(0 To 31)
+        ElseIf .CustomHeaderCount > UBound(.CustomHeaders) Then
             ReDim Preserve .CustomHeaders(0 To UBound(.CustomHeaders) + 8)
         End If
+        
         .CustomHeaders(.CustomHeaderCount) = headerName & ": " & headerValue
         .CustomHeaderCount = .CustomHeaderCount + 1
     End With
