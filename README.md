@@ -44,9 +44,9 @@
 
 ## What is Wasabi
 
-Wasabi is a VBA module designed to make WebSocket communication simple, predictable, and practical — bringing an experience similar to [socket.io](https://socket.io) in Node.js, but entirely within the Office ecosystem. It is a single, self-contained `.bas` file that compiles seamlessly on 32-bit and 64-bit Office hosts, from Windows XP to Windows 11.
+Wasabi is a VBA module designed to make WebSocket communication simple, predictable, and practical, bringing an experience similar to [socket.io](https://socket.io) in Node.js entirely within the Office ecosystem. It is a single, self-contained `.bas` file that compiles seamlessly on 32-bit and 64-bit Office hosts, from Windows XP to Windows 11.
 
-Beyond basic WebSocket messaging, Wasabi bundles an MQTT 3.1.1 client, NTLM/Kerberos proxy authentication, RTT latency measurement, fine-grained TLS certificate control, and `permessage-deflate` compression (RFC 7692) — all without mandatory external dependencies.
+Beyond basic WebSocket messaging, Wasabi bundles an MQTT 3.1.1 client, NTLM/Kerberos proxy authentication, RTT latency measurement, fine-grained TLS certificate control, and `permessage-deflate` compression (RFC 7692), all without mandatory external dependencies.
 
 ## Roadmap
 
@@ -69,69 +69,69 @@ Beyond basic WebSocket messaging, Wasabi bundles an MQTT 3.1.1 client, NTLM/Kerb
 - [ ] `WSAAsyncSelect` event-driven socket notifications
 - [ ] `WebSocketStartListening` helper for one-line polling loops
 
-## Why Wasabi exists
+## Why Wasabi Exists
 
-VBA is excellent for automation and integration with Excel, PowerPoint, Word and other Office applications, but it hits a wall when real-time communication is required. In practice, anyone trying to build a project that depends on live messaging usually runs into three problems:
+VBA is excellent for automation and integration with Excel, PowerPoint, Word, and other Office applications, but it hits a wall when real-time communication is required. In practice, anyone trying to build a project that depends on live messaging usually runs into three problems:
 
-- **No standardization:** there is no official, modern path for sockets and WebSockets in VBA.
-- **Verbose low-level APIs:** the most common options require a lot of infrastructure code just to connect and maintain a stable session.
-- **Limited event-driven patterns:** it is common to end up with loops, timers and control logic just to simulate something that other languages handle natively.
+- **No standardization:** There is no official, modern path for sockets and WebSockets in VBA.
+- **Verbose low-level APIs:** The most common options require a lot of infrastructure code just to connect and maintain a stable session.
+- **Limited event-driven patterns:** It is common to end up with loops, timers, and control logic just to simulate something that other languages handle natively.
 
 ## What VBA limitations it solves
 
-Working with networking in VBA often becomes a project of its own. Some typical pain points:
+Working with networking in VBA often becomes a project of its own. Wasabi addresses typical pain points directly:
 
 **Winsock and Windows API calls**
-- Require declarations, structs, callbacks and low-level details unrelated to the actual goal.
-- Small adjustments can break compatibility or introduce hard-to-track bugs.
+- Requires zero low-level declarations, structs, or callbacks in your actual project code.
+- Shields your application from API breaking changes across Windows versions.
 
-**Security**
-- Uses `CryptGenRandom` for RFC-compliant frame masking (superior to VBA's `Rnd`).
-- Native TLS 1.2/1.3 handling via Schannel SSPI without relying on outdated IE settings.
+**Security & Cryptography**
+- Uses `CryptGenRandom` for RFC-compliant frame masking instead of VBA's predictable `Rnd`.
+- Handles native TLS 1.2/1.3 via Schannel SSPI without relying on outdated Internet Explorer settings or registry keys.
 
 **Corporate Environments**
-- **Auto-Proxy Discovery:** Interacts with `winhttp.dll` to automatically resolve corporate proxies and PAC scripts.
-- **NTLM/Kerberos:** Transparently authenticates against secure proxies using current Windows credentials.
+- **Auto-Proxy Discovery:** Resolves corporate proxies and PAC scripts automatically using `winhttp.dll`.
+- **NTLM/Kerberos:** Transparently authenticates against secure proxies using the current logged-in Windows credentials.
 
 **HTTP is not WebSocket**
 - Even with WinHTTP or MSXML, you are in a request/response world.
 - Real-time scenarios turn into polling, long-polling or workarounds that consume resources and increase latency.
 
-**Limited asynchronism**
-- VBA was not designed for modern concurrency.
-- Without a good abstraction, it is easy to freeze the UI or create inconsistent state.
-
-**No built-in MQTT, NTLM, or latency measurement**
-- IoT integration, corporate proxy authentication, and network diagnostics are common requirements that have no standard VBA solution.
-- Wasabi provides all three out of the box: `MqttConnect`, `WebSocketSetProxyNtlm`, and `WebSocketGetLatency`.
-
 **Maintenance and readability**
 - Most handcrafted solutions grow long and fragile.
 - The networking layer becomes the largest part of the project, making simple things hard to maintain.
+
+**Modern Asynchronous Networking**
+- Eliminates polling or long-polling HTTP workarounds.
+- Maintains a stable, low-latency connection without freezing the Office UI.
 
 **Reliability**
 - **QoS 1 MQTT:** Implements a real In-Flight queue with Packet ID tracking, ensuring messages are acknowledged by the broker.
 - **MTU Discovery:** Dynamically tunes frame sizes to match network segments, preventing IP fragmentation.
 
-## Where it is useful
+**Built-in IoT and Diagnostics**
+- Provides native standard MQTT 3.1.1 protocol handling out of the box (`MqttConnect`, `MqttPublish`, `MqttSubscribe`).
+- Implements QoS 1 In-Flight queue with Packet ID tracking, ensuring messages are acknowledged by the broker.
+- **MTU Discovery:** Dynamically tunes frame sizes to match network segments, preventing IP fragmentation.
 
-- **Bots** (Discord, Slack, Telegram), connect to gateways and handle real-time events and messages directly from Excel or Word
-- **Trading and finance**, stream live prices from exchanges like Binance, Coinbase or B3 into spreadsheet cells with millisecond-level latency
-- **Dashboards**, update live data on a spreadsheet without manual refresh or polling HTTP endpoints
-- **IoT and industrial**, receive sensor data from ESP32, Raspberry Pi or SCADA systems via WebSocket or MQTT directly into Office
-- **Games and interactive tools**, build client/server communication for VBA-based games or collaborative tools
-- **Corporate automation**, connect Office to internal WebSocket APIs behind proxies and firewalls without installing anything
+## Use Cases
+
+- **Bots and Chat Integrations:** Connect to Discord, Slack, or Telegram gateways and handle real-time events directly from Excel or Word.
+- **Trading and Finance:** Stream live market data from exchanges like Binance, Coinbase, or B3 into spreadsheet cells with millisecond-level latency.
+- **Live Dashboards:** Update live data on a spreadsheet seamlessly without manual refreshes or HTTP endpoint polling.
+- **IoT and Industrial SCADA:** Receive sensor data from ESP32, Raspberry Pi, or PLC systems via WebSocket or MQTT natively into Office.
+- **Games and Interactive Tools:** Build reliable client/server communication for VBA-based multiplayer games or collaborative tools.
+- **Corporate Automation:** Connect Office to internal WebSocket APIs behind firewalls and proxies without requiring IT to install third-party software.
 
 ## Quick Start
 
 ### Import
 
-[Download the latest version of Wasabi](../../releases) and import it into your VBA project via
-**File → Import File** in the VBA editor.
+[Download the latest version of Wasabi](../../releases) and import it into your VBA project via **File → Import File** in the VBA editor.
 
 No references need to be enabled in **Tools → References**.
 
-### Connect and send a message
+### Connect and Send a Message
 
 ```vb
 Dim h As Long
@@ -150,7 +150,7 @@ If WebSocketConnect("wss://echo.websocket.org", h) Then
 End If
 ```
 
-### Connect with TLS certificate validation
+### Connect with TLS Certificate Validation
 
 ```vb
 Dim h As Long
@@ -167,22 +167,26 @@ End If
 ### MQTT with QoS 1 (Guaranteed Delivery)
 
 ```vb
-' Connect with subprotocol declaration
-WebSocketConnect "ws://[broker.hivemq.com:8000/mqtt](https://broker.hivemq.com:8000/mqtt)", h, , , "mqtt"
+Dim h As Long
+
+' Connect with MQTT subprotocol declaration
+WebSocketConnect "wss://broker.hivemq.com:8443/mqtt", h, , , "mqtt"
 
 MqttConnect "WasabiClient_123", , , 60, h
+
 ' Publishes and tracks delivery via internal In-Flight queue
 MqttPublish "sensors/data", "Value: 42", 1, False, h
 ```
 
-### Connect with compression enabled
+### Connect with Compression Enabled (permessage-deflate)
 
 ```vb
 Dim h As Long
 
-If WebSocketConnect("wss://example.com/ws", h, True, True) Then
+' Set third parameter to True to enable Deflate
+If WebSocketConnect("wss://example.com/ws", h, True) Then
     Debug.Print "Compression active: " & WebSocketGetDeflateEnabled(h)
-    WebSocketSend "Compressed message", h
+    WebSocketSend "Compressed message payload", h
     WebSocketDisconnect h
 End If
 ```
@@ -190,13 +194,14 @@ End If
 > [!WARNING]
 > Compression requires `zlib1.dll` to be present alongside your project file.
 > Without it, compression is silently disabled and the connection proceeds normally.
-> See [DEFLATE.md](docs/DEFLATE.md) for setup instructions.
+> See [DEFLATE.md](docs/DEFLATE.md) for detailed setup instructions.
 
-### Connect through a proxy
+### Connect Through a Proxy
 
 ```vb
 Dim h As Long
 
+' Hardcoded proxy or use WebSocketAutoDiscoverProxy()
 WebSocketSetProxy "proxy.company.com", 8080, "user", "pass", 0, h
 WebSocketSetProxyNtlm True, h
 
@@ -206,13 +211,14 @@ If WebSocketConnect("wss://example.com/ws", h) Then
 End If
 ```
 
-### Auto-reconnect with ping keepalive
+### Auto-Reconnect with Ping Keepalive
 
 ```vb
 Dim h As Long
 
+' Set max attempts to 5, base delay to 1000ms
 WebSocketSetAutoReconnect True, 5, 1000, h
-WebSocketSetPingInterval 30000, h
+WebSocketSetPingInterval 30000, h ' Send ping every 30s
 
 If WebSocketConnect("wss://example.com/ws", h) Then
     Do While WebSocketIsConnected(h)
@@ -224,8 +230,7 @@ If WebSocketConnect("wss://example.com/ws", h) Then
 End If
 ```
 
-> For the complete reference with examples, parameters, return values, and usage
-notes, see [API Reference](docs/API_REFERENCE.md).
+> For the complete reference with examples, parameters, return values, and usage notes, see the [API Reference](docs/API_REFERENCE.md).
 
 ## Performance
 
@@ -261,16 +266,9 @@ project is all it takes.
 | Windows 10 | ✅ |
 | Windows 11 | ✅ |
 
-Wasabi relies on `ws2_32.dll`, `secur32.dll`, `kernel32.dll`, `advapi32.dll`, and
-`crypt32.dll`. These libraries are present in every version of Windows since XP,
-which is why Wasabi runs on machines over 20 years old without modifications.
+Wasabi relies on `ws2_32.dll`, `secur32.dll`, `kernel32.dll`, `advapi32.dll`, and `crypt32.dll`. These libraries are present in every version of Windows since XP, which is why Wasabi runs on machines over 20 years old without modifications.
 
-This is a deliberate architectural choice. Many competing modules depend on the
-`WinHttpWebSocket*` family of functions (`WinHttpWebSocketSend`,
-`WinHttpWebSocketReceive`, `WinHttpWebSocketCompleteUpgrade`) introduced only in
-Windows 8. As a result, those modules silently fail on Windows 7 machines, which
-remain common in corporate and industrial environments. Wasabi has no such
-limitation.
+This is a deliberate architectural choice. Many competing modules depend on the `WinHttpWebSocket*` family of functions (`WinHttpWebSocketSend`, `WinHttpWebSocketReceive`, `WinHttpWebSocketCompleteUpgrade`) introduced only in Windows 8. As a result, those modules silently fail on Windows 7 machines, which remain common in corporate and industrial environments. Wasabi has no such limitation.
 
 ### Office and VBA
 
@@ -300,7 +298,7 @@ Every API declaration uses `#If VBA7` to switch between `Long` (32-bit) and
 ### Native DLLs
 
 | Library | Role in Wasabi | Optional |
-|---|---|---|
+|---|---|:---:|
 | `ws2_32.dll` | TCP socket creation, DNS, send/recv | No |
 | `secur32.dll` | TLS 1.2/1.3 via Schannel SSPI | No |
 | `kernel32.dll` | Memory operations, UTF-8, tick count | No |
@@ -308,49 +306,10 @@ Every API declaration uses `#If VBA7` to switch between `Long` (32-bit) and
 | `crypt32.dll` | Certificate store, chain validation | No |
 | `zlib1.dll` | Compression for `permessage-deflate` | **Yes** |
 
-**ws2_32.dll (Windows Sockets 2)**
-Core networking. Creates TCP sockets, resolves hostnames, sends and receives raw
-bytes. Direct use avoids performance and flexibility limitations of WinHTTP.
+**What does "zero external dependencies" mean in practice?**
+Wasabi requires nothing beyond Windows and the standard VBA runtime. There is no installer, no COM registration, no ActiveX control, no third-party DLL, no Python runtime, no .NET package, and no `regsvr32`. 
 
-**secur32.dll (Security Support Provider Interface)**
-Windows security library for TLS. Wasabi performs the full TLS handshake via
-`AcquireCredentialsHandle` and `InitializeSecurityContext`, then encrypts/decrypts
-via `EncryptMessage` and `DecryptMessage`. This gives complete control over TLS
-flags, protocol versions, and cipher negotiation.
-
-**kernel32.dll**
-`RtlMoveMemory` for buffer manipulation, `MultiByteToWideChar`/`WideCharToMultiByte`
-for UTF-8, and `GetTickCount` for timeouts with wraparound handling.
-
-**advapi32.dll**
-`CryptGenRandom` for cryptographically secure random bytes used in WebSocket frame
-masks. Falls back to `Rnd` only if the cryptographic API is unavailable.
-
-**crypt32.dll**
-PFX import, certificate store search, chain building, and server certificate
-validation. Same library used by Internet Explorer and Edge.
-
-**zlib1.dll (optional)**
-Required only when `permessage-deflate` compression is enabled via
-`WebSocketConnect(url, handle, True)`. Wasabi searches for `zlib1_x64.dll` or
-`zlib1_x86.dll` in the project folder and several subdirectories. If not found,
-compression is silently disabled and the connection proceeds normally. See
-[DEFLATE.md](docs/DEFLATE.md) for details.
-
-### What does "zero external dependencies" mean in practice
-
-Wasabi requires nothing beyond Windows and the VBA runtime.
-
-No installer, no COM registration, no ActiveX control, no third-party DLL, no
-Python runtime, no .NET package, no `regsvr32`. Just import the `.bas` file.
-
-The only optional component is `zlib1.dll`, needed only if you enable
-`permessage-deflate`. The module detects its presence automatically and works
-perfectly without it.
-
-This matters in corporate environments where IT policies prevent software
-installation. You can distribute a workbook containing Wasabi without asking
-the user to install anything first.
+The only optional component is `zlib1.dll`, needed strictly if you enable `permessage-deflate`. The module detects its presence automatically and works perfectly without it. This is highly beneficial in corporate environments where IT policies prevent software installation. You can distribute a workbook containing Wasabi without asking the user to install anything first.
 
 ## Compression (permessage-deflate)
 
@@ -396,36 +355,23 @@ No messages are lost.
 - **Connection doesn't drop.** The socket stays active regardless of polling frequency.
 - **No infinite loop required.** Simple send/receive/disconnect workflows work fine.
 
-## Research
+## Research& Architecture
 
-The [`research/`](research) directory contains detailed design notes, investigation logs,
-and reference materials for every major subsystem in Wasabi. It is intended
-for maintainers and advanced users who want to understand *why* certain
-decisions were made, not just *what* the code does. Each subfolder covers a
-specific topic (TLS verification, pointer fixes, the zlib stdcall hunt,
-permessage-deflate, Happy Eyeballs, MTU discovery, MQTT, proxies, batching,
-zero‑copy, TCP tuning, fragmentation, reconnect backoff, TLS renegotiation,
-cryptographic random, SHA‑1, Base64, structure alignment, VBA6 compatibility,
-UTF‑8, and error handling) and includes relevant RFCs and Microsoft
-documentation links.
+The [`research/`](research) directory contains detailed design notes, investigation logs, and reference materials for every major subsystem in Wasabi. It is intended for maintainers and advanced users who want to understand *why* certain decisions were made, not just *what* the code does. Topics include TLS verification, pointer fixes, `permessage-deflate` negotiations, Happy Eyeballs, MTU discovery, MQTT state logic, zero-copy buffer management, fragmentation, and VBA6 compatibility.
 
 ## Acknowledgements
 
 Wasabi was built on years of community efforts to bring real-time networking
 to the Office ecosystem.
 
-- [**WinHttpWebSocket**](https://github.com/EagleAglow/vba-websocket) — first serious WebSocket attempt in VBA using native APIs
-- [**VbAsyncSocket**](https://github.com/wqweto/VbAsyncSocket) — the most sophisticated VB6/VBA networking library, with native Schannel
-- [**VBA-Web**](https://github.com/VBA-tools/VBA-Web) — standard for HTTP/REST communication in VBA
-- [**TlsSocketWSS**](https://github.com/Maatooh/TlsSocketWSS-vb6) — TLS WebSocket server for VB6
-- [**VB6-WebSocket-Server-SSL**](https://github.com/JoshyFrancis/vb6-websocket-server-ssl) — pure VB6 secure WebSocket server
-- [**VBA_WinSockAPI**](https://github.com/papanda925/VBA_WinsockAPI_TCP_Sample) — educational Winsock TCP client/server in VBA
+- [**WinHttpWebSocket**](https://github.com/EagleAglow/vba-websocket): First serious WebSocket attempt in VBA using native APIs.
+- [**VbAsyncSocket**](https://github.com/wqweto/VbAsyncSocket): The most sophisticated VB6/VBA networking library, with native Schannel.
+- [**VBA-Web**](https://github.com/VBA-tools/VBA-Web): Standard for HTTP/REST communication in VBA.
+- [**TlsSocketWSS**](https://github.com/Maatooh/TlsSocketWSS-vb6): TLS WebSocket server for VB6.
+- [**VB6-WebSocket-Server-SSL**](https://github.com/JoshyFrancis/vb6-websocket-server-ssl): Pure VB6 secure WebSocket server.
+- [**VBA_WinSockAPI**](https://github.com/papanda925/VBA_WinsockAPI_TCP_Sample): Educational Winsock TCP client/server in VBA.
 
-These projects shaped every architectural decision in Wasabi: the non-blocking
-I/O model, manual Schannel, ring buffers, and auto-reconnect.
-
-The VBA community is smaller than it deserves to be. Anyone building open source
-in this ecosystem is doing genuinely valuable work. Wasabi stands on their shoulders.
+These projects shaped every architectural decision in Wasabi: the non-blocking I/O model, manual Schannel handling, ring buffers, and auto-reconnect flows.
 
 ## Contributing
 
