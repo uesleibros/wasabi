@@ -77,6 +77,45 @@ VBA is excellent for automation and integration with Excel, PowerPoint, Word, an
 - **Verbose low-level APIs:** The most common options require a lot of infrastructure code just to connect and maintain a stable session.
 - **Limited event-driven patterns:** It is common to end up with loops, timers, and control logic just to simulate something that other languages handle natively.
 
+Aqui está a seção dedicada exclusivamente à explicação técnica da escolha do formato de módulo padrão (`.bas`), integrada ao seu Markdown e otimizada para ser informativa e profissional:
+
+## Why a Standard Module (.bas) instead of Classes (.cls)?
+
+A common architectural question is why Wasabi is implemented as a standard procedural module rather than an Object-Oriented class. This design is a deliberate strategic choice to maximize performance, stability, and compatibility within the specific constraints of the VBA environment.
+
+### 1. Zero COM Overhead
+
+In VBA, every Class is technically a **COM (Component Object Model) Object**. Instantiating, invoking methods via IDispatch, and managing reference counting adds significant overhead. By using a standard `.bas` module, Wasabi communicates directly with the CPU and memory, eliminating the COM layer and providing the high-speed execution required for real-time networking.
+
+### 2. Static Connection Pool & Data-Oriented Design
+
+Wasabi manages up to 64 concurrent connections using a statically allocated pool of **User-Defined Types (UDTs)**. 
+* **Memory Predictability:** All connection data resides in a contiguous block of memory, which is much more cache-friendly than objects scattered across the heap.
+* **No Heap Fragmentation:** Objects are frequently allocated and destroyed, which can lead to memory fragmentation in long-running Office sessions. Wasabi's static pool is allocated once at startup and recycled, ensuring long-term stability without memory leaks.
+
+### 3. Native Win32 API Alignment
+
+Working with low-level networking requires heavy use of memory pointers (`StrPtr`, `VarPtr`) and direct memory manipulation (`RtlMoveMemory`). 
+* Standard modules provide a flatter, more reliable memory model for passing data to Windows Kernel and Security APIs.
+* Passing class properties to Win32 APIs often requires temporary buffering or extra copies; procedural modules allow "in-place" processing, which is essential for the **Zero-Copy** receive model.
+
+### 4. Minimal Integration Friction
+
+Using Wasabi does not require the developer to manage object lifecycles or worry about variables falling out of scope and terminating connections unexpectedly. 
+* State is managed globally through a simple integer **Handle**. 
+* This "Plug-and-Play" approach mimics how the Windows Kernel itself manages resources, providing a robust interface for both beginner and advanced developers.
+
+### 5. Developer Experience: Global Typings & Enums
+
+Wasabi is engineered to maximize developer productivity by leveraging the global scope of standard modules. By using Public Enums and Types, we provide a superior **IntelliSense** experience compared to Class-based libraries:
+
+* **Global Constants:** Access connection states (e.g., `STATE_OPEN`, `STATE_CLOSED`) and error codes anywhere in your project without instantiating objects.
+* **Strongly Typed Structures:** Use native Types like `WasabiStats` for high-performance data handling and telemetry.
+* **Zero-Friction API:** Functions like `WebSocketGetLastError` return specific Enum values, allowing for clean `Select Case` blocks and self-documenting code.
+
+> [!TIP]
+> This architecture transforms Wasabi from a simple script into a high-performance networking engine, bringing C-level memory management and stability to the VBA ecosystem.
+
 ## What VBA limitations it solves
 
 Working with networking in VBA often becomes a project of its own. Wasabi addresses typical pain points directly:
