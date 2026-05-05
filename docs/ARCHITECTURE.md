@@ -100,10 +100,11 @@ Each `WasabiConnection` entry contains:
 | Receive | `RecvBuffer()`, `RecvLen`, `DecryptBuffer()`, `DecryptLen` |
 | Text Queue | `MsgQueue()`, `MsgHead`, `MsgTail`, `MsgCount` |
 | Binary Queue | `BinaryQueue()`, `BinaryHead`, `BinaryTail`, `BinaryCount` |
+| Offline Queue | `OfflineQueueEnabled`, `OfflineTextQueue()`, `OfflineTextCount`, `OfflineBinaryQueue()`, `OfflineBinaryCount` |
 | Fragmentation | `FragmentBuffer()`, `FragmentLen`, `FragmentOpcode`, `Fragmenting` |
 | Reconnect | `AutoReconnect`, `ReconnectMaxAttempts`, `ReconnectAttempts`, `ReconnectBaseDelayMs` |
 | Proxy | `ProxyHost`, `ProxyPort`, `ProxyUser`, `ProxyPass`, `ProxyEnabled`, `ProxyType`, `ProxyUseNtlm` |
-| Heartbeat | `PingIntervalMs`, `LastPingSentAt`, `LastPingTimestamp` |
+| Heartbeat | `PingIntervalMs`, `CurrentPingIntervalMs`, `PingJitterMaxMs`, `LastPingSentAt`, `LastPingTimestamp` |
 | Timeouts | `ReceiveTimeoutMs`, `InactivityTimeoutMs`, `LastActivityAt` |
 | Headers | `CustomHeaders()`, `CustomHeaderCount`, `SubProtocol` |
 | Statistics | `Stats` (BytesSent, BytesReceived, MessagesSent, MessagesReceived, ConnectedAt) |
@@ -112,7 +113,7 @@ Each `WasabiConnection` entry contains:
 | MTU | `MTU` (CurrentMTU, MaxSegmentSize, OptimalFrameSize, LastProbeTime, ProbeEnabled, UseTLSFragmentation) |
 | Security | `ValidateServerCert`, `EnableRevocationCheck`, `ClientCertThumb`, `ClientCertPfxPath`, `ClientCertPfxPass` |
 | HTTP/2 | `UseHttp2` |
-| MQTT | `MqttParserStage`, `MqttBuffer()`, `MqttBufLen`, `MqttExpectedRemaining`, `MqttCurrentPacketType`, `MqttCurrentFlags` |
+| MQTT | `MqttParserStage`, `MqttBuffer()`, `MqttBufLen`, `MqttExpectedRemaining`, `MqttCurrentPacketType`, `MqttCurrentFlags`, `MqttInFlight()`, `MqttInFlightCount`, `MqttNextPacketId` |
 | Configuration | `NoDelay`, `CustomBufferSize`, `CustomFragmentSize`, `OriginalUrl`, `AutoMTU`, `PreferIPv6`, `ZeroCopyEnabled` |
 
 ## Connection Sequence
@@ -132,7 +133,7 @@ graph TD
     G{TLS wss://?}
     H["AcquireCredentialsHandle<br/>DoTLSHandshake<br/>QueryContextAttributes<br/>ValidateServerCert (opt)<br/>CRL/OCSP check (opt)"]
     I["DoWebSocketHandshake<br/>HTTP upgrade + Sec-WebSocket-Accept validation"]
-    J["Connected = True<br/>Stats reset"]
+    J["Connected = True<br/>Stats reset<br/>Flush Offline Queues (opt)"]
 
     A --> B --> C --> D --> E
     E -- YES --> F --> G
@@ -166,8 +167,6 @@ both are equally fast.
 The TLS layer is implemented through the Windows SSPI Schannel provider.
 Wasabi performs the entire handshake manually rather than delegating to
 WinHTTP or any higher-level abstraction.
-
-![TLS Handshake](https://www.thesslstore.com/blog/wp-content/uploads/2017/01/SSL_Handshake_10-Steps-1.png)
 
 ### Credential Acquisition
 
@@ -330,8 +329,6 @@ processes the first complete record and flags the remaining bytes as
 After the TCP connection (and optional TLS handshake) is established, Wasabi
 performs the WebSocket protocol upgrade as defined by
 [RFC 6455 Section 4](https://datatracker.ietf.org/doc/html/rfc6455#section-4).
-
-![WebSocket Handshake](https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRuz8ayWEYgqlNTWFMwLvocD7CsCBpVr3iP57zVbCGyuKHtpnKlBS_chhU&s=10)
 
 ### Request
 
@@ -512,8 +509,6 @@ assembled and enqueued as a single message.
 Each connection maintains two independent circular queues (ring buffers):
 one for text messages and one for binary messages.
 
-![Ring Buffer](https://www.intel.com/content/dam/developer/articles/technical/fast-core-to-core-communications/ring-buffer-arch.png)
-
 ### Structure
 
 ```mermaid
@@ -557,6 +552,11 @@ initial array setup.
 > [!WARNING]
 > When `MsgCount` reaches `MSG_QUEUE_SIZE` (512), new messages are
 > discarded and a warning is logged.
+
+### Offline Retention Queue
+
+If `WebSocketSetOfflineQueueing` is enabled, Wasabi utilizes a secondary set of dynamic queues (`OfflineTextQueue` and `OfflineBinaryQueue`).
+When the connection is in a disconnected state (`STATE_CLOSED`), calling `WebSocketSend` or `WebSocketSendBinary` pushes the message to this secondary queue instead of returning an error. Once the `AutoReconnect` subsystem successfully re-establishes the connection, `FlushOfflineQueues` is called automatically to replay all buffered messages in order.
 
 ## Receive Pipeline
 
@@ -612,9 +612,9 @@ graph TD
 
 | Buffer | Default Size | Configurable |
 |:---|:---|:---|
-| `RecvBuffer` | 256KB | Yes, via `WebSocketSetBufferSizes` |
-| `DecryptBuffer` | 256KB | Yes, via `WebSocketSetBufferSizes` |
-| `FragmentBuffer` | 256KB | Yes, via `WebSocketSetBufferSizes` |
+| `RecvBuffer` | 4096 B (auto-grows) | Yes, via `WebSocketSetBufferSizes` |
+| `DecryptBuffer` | 4096 B (auto-grows) | Yes, via `WebSocketSetBufferSizes` |
+| `FragmentBuffer` | 4096 B (auto-grows) | Yes, via `WebSocketSetBufferSizes` |
 | Text queue | 512 entries | No (compile-time constant) |
 | Binary queue | 512 entries | No (compile-time constant) |
 
@@ -634,10 +634,12 @@ graph TD
     G["Restore all saved settings"]
     H["ConnectHandle(handle, savedUrl)"]
     I["Success → ReconnectAttempts = 0"]
+    K["Flush Offline Queues<br/>(if enabled)"]
     J["Failure → increment attempt counter<br/>try again if under max"]
 
     A --> B --> C --> D --> E --> F --> G --> H
     H --> I
+    I --> K
     H --> J
 
     style A fill:#ffcdd2,stroke:#c62828
@@ -649,6 +651,7 @@ graph TD
     style G fill:#e1f5fe,stroke:#0277bd
     style H fill:#fff9c4,stroke:#f9a825
     style I fill:#c8e6c9,stroke:#2e7d32
+    style K fill:#c8e6c9,stroke:#2e7d32
     style J fill:#ffcdd2,stroke:#c62828
 ```
 
@@ -779,16 +782,13 @@ current tick count is stored in `LastPingTimestamp`. When a Pong frame
 is received, `ProcessPongForLatency` calculates the elapsed time and
 stores it in `LastRttMs`.
 
-```
-Client                          Server
-  │                               │
-  │  Ping (opcode 0x09)           │
-  │  LastPingTimestamp = now      │
-  │──────────────────────────────>│
-  │                               │
-  │  Pong (opcode 0x0A)           │
-  │  LastRttMs = now - timestamp  │
-  │<──────────────────────────────│
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+
+    Client->>Server: Ping (opcode 0x09)\nLastPingTimestamp = now
+    Server-->>Client: Pong (opcode 0x0A)\nLastRttMs = now - timestamp
 ```
 
 > [!NOTE]
@@ -808,12 +808,12 @@ dependencies.
 | Function | MQTT Packet | Description |
 |:---|:---|:---|
 | `MqttConnect` | CONNECT | Authenticates and establishes an MQTT session |
-| `MqttPublish` | PUBLISH | Sends a message to a topic with optional QoS |
+| `MqttPublish` | PUBLISH | Sends a message to a topic with QoS 0, 1, or 2 |
 | `MqttSubscribe` | SUBSCRIBE | Subscribes to one or more topics |
 | `MqttUnsubscribe` | UNSUBSCRIBE | Removes a topic subscription |
 | `MqttDisconnect` | DISCONNECT | Gracefully terminates the MQTT session |
 | `MqttPingReq` | PINGREQ | Sends a keep-alive ping |
-| `MqttReceive` | — | Polls for and parses incoming MQTT packets |
+| `MqttReceive` | — | Polls for and parses incoming MQTT packets, and automatically handles QoS 1 & 2 acknowledgments (PUBACK, PUBREC, PUBREL, PUBCOMP) |
 
 ### Internal Architecture
 
@@ -827,8 +827,7 @@ The parser state is stored per-connection in `MqttParserStage`,
 `MqttBuffer`, and related fields.
 
 > [!NOTE]
-> The MQTT client supports QoS 0 (at most once) for publish. QoS 1 and 2
-> are not yet implemented.
+> The MQTT client supports QoS 0 (at most once), QoS 1 (at least once), and QoS 2 (exactly once) for publish, utilizing an internal In-Flight queue and Packet ID tracking to guarantee delivery without duplication.
 
 ## Maintenance Cycle
 
@@ -840,7 +839,7 @@ features because VBA does not support background timers.
 
 | Check | Condition | Action |
 |:---|:---|:---|
-| Automatic Ping | `PingIntervalMs > 0` and interval elapsed | Send Ping frame (also records timestamp for RTT) |
+| Automatic Ping | `PingIntervalMs > 0` and `CurrentPingIntervalMs` elapsed | Send Ping frame, record timestamp for RTT, calculate next `CurrentPingIntervalMs` (applying Jitter) |
 | Inactivity Timeout | `InactivityTimeoutMs > 0` and threshold exceeded | Close connection, trigger reconnect if enabled |
 | MTU Probe | `AutoMTU` and `ProbeEnabled` and interval elapsed | Call `ProbeMTU` to re-measure MSS |
 
@@ -856,22 +855,21 @@ concatenation to minimize heap fragmentation in long-running sessions.
 ```
 Per connection memory footprint (default settings):
 
-  RecvBuffer:      256 KB
-  DecryptBuffer:   256 KB
-  FragmentBuffer:  256 KB
+  RecvBuffer:      4 KB (auto-grows up to CustomBufferSize)
+  DecryptBuffer:   4 KB (auto-grows up to CustomBufferSize)
+  FragmentBuffer:  4 KB (auto-grows up to CustomFragmentSize)
   MsgQueue:        512 × String pointer
   BinaryQueue:     512 × Byte array pointer
   CustomHeaders:   32 × String pointer
   MqttBuffer:      4 KB
 
-  Total baseline: ~772 KB + queue overhead per connection
-  Maximum (64 connections): ~49 MB
+  Total baseline: ~36 KB + queue overhead per connection
 ```
 
 > [!NOTE]
 > The actual memory consumed depends on the size of queued messages and
-> the configured buffer sizes. The baseline above represents the fixed
-> allocation before any messages are received.
+> dynamically grown buffers. The baseline above represents the fixed
+> allocation before any large messages are received.
 
 ## Error Propagation
 
