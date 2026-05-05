@@ -11,7 +11,7 @@ Feel free to browse, but the canonical documentation is in `docs/`.
 ## Reference URLs by topic
 
 > [!IMPORTANT]
-> Not all references mentioned here have been properly documented in this folder, some because the documentation is already sufficient and others because they are too simple and don't require it.
+> Not all references mentioned here have been properly documented in this folder, some because the documentation is already sufficient and others because they are too simple and don't require it. Additionally, some information may be outdated with respect to the current version of the project.
 
 ### tls-verification
 - Microsoft Schannel documentation: https://learn.microsoft.com/en-us/windows/win32/secauthn/sspi-ssl
