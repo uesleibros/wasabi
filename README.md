@@ -259,12 +259,12 @@ project is all it takes.
 
 | Version | Support |
 |---|---|
-| Windows XP | ✅ |
-| Windows Vista | ✅ |
-| Windows 7 | ✅ |
-| Windows 8 / 8.1 | ✅ |
-| Windows 10 | ✅ |
-| Windows 11 | ✅ |
+| ![](resources/svg/windows.svg) Windows XP | ✅ |
+| ![](resources/svg/windows.svg) Windows Vista | ✅ |
+| ![](resources/svg/windows.svg) Windows 7 | ✅ |
+| ![](resources/svg/windows.svg) Windows 8 / 8.1 | ✅ |
+| ![](resources/svg/windows.svg) Windows 10 | ✅ |
+| ![](resources/svg/windows.svg) Windows 11 | ✅ |
 
 Wasabi relies on `ws2_32.dll`, `secur32.dll`, `kernel32.dll`, `advapi32.dll`, and `crypt32.dll`. These libraries are present in every version of Windows since XP, which is why Wasabi runs on machines over 20 years old without modifications.
 
@@ -274,16 +274,16 @@ This is a deliberate architectural choice. Many competing modules depend on the 
 
 | Environment | Support |
 |---|---|
-| Excel 32-bit | ✅ |
-| Excel 64-bit | ✅ |
-| Word 32-bit | ✅ |
-| Word 64-bit | ✅ |
-| PowerPoint 32-bit | ✅ |
-| PowerPoint 64-bit | ✅ |
-| Access 32-bit | ✅ |
-| Access 64-bit | ✅ |
-| Any VBA7 host (Office 2010+) | ✅ |
-| VBA6 (Office 2007 and earlier) | ✅ |
+| ![](resources/svg/ms-excel.svg) Excel 32-bit | ✅ |
+| ![](resources/svg/ms-excel.svg) Excel 64-bit | ✅ |
+| ![](resources/svg/ms-word.svg) Word 32-bit | ✅ |
+| ![](resources/svg/ms-word.svg) Word 64-bit | ✅ |
+| ![](resources/svg/ms-powerpoint.svg) PowerPoint 32-bit | ✅ |
+| ![](resources/svg/ms-powerpoint.svg) PowerPoint 64-bit | ✅ |
+| ![](resources/svg/ms-access.svg) Access 32-bit | ✅ |
+| ![](resources/svg/ms-access.svg) Access 64-bit | ✅ |
+| ![](resources/svg/ms-vba.svg) Any VBA7 host (Office 2010+) | ✅ |
+| ![](resources/svg/ms-office.svg) VBA6 (Office 2007 and earlier) | ✅ |
 
 The transition from 32-bit to 64-bit Office broke many VBA modules that used
 native API declarations. Wasabi handles this transparently through conditional
