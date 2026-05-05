@@ -18,7 +18,8 @@
   <img src="https://img.shields.io/badge/WebSocket-RFC%206455-orange.svg" alt="WebSocket" />
   <img src="https://img.shields.io/badge/Proxy-Auto--Discovery-yellowgreen" alt="Proxy" />
   <img src="https://img.shields.io/badge/mTLS-PFX%20%2B%20Store-yellow" alt="mTLS" />
-  <img src="https://img.shields.io/badge/MQTT-QoS%201%20In--Flight-purple" alt="MQTT" />
+  <img src="https://img.shields.io/badge/MQTT-QoS%201%20%26%202-purple" alt="MQTT" />
+  <img src="https://img.shields.io/badge/Resilience-Offline%20Queue-success" alt="Offline Queue" />
   <img src="https://img.shields.io/badge/Proxy%20Auth-NTLM%2FKerberos-red" alt="NTLM" />
   <img src="https://img.shields.io/badge/RTT-latency%20measurement-orange" alt="RTT" />
   <img src="https://img.shields.io/badge/Deflate-permessage--deflate-success" alt="Deflate" />
@@ -56,7 +57,7 @@ Beyond basic WebSocket messaging, Wasabi bundles an MQTT 3.1.1 client, NTLM/Kerb
 - [x] HTTP/2 upgrade via ALPN (opt-in)
 - [x] NTLM/Kerberos authentication for HTTP proxies
 - [x] **Windows System Proxy Auto-Discovery**
-- [x] MQTT 3.1.1 client with **QoS 1 In-Flight Management**
+- [x] MQTT 3.1.1 client with **QoS 1 & QoS 2 (Exactly Once) Support**
 - [x] RTT latency measurement (GetLatency)
 - [x] permessage-deflate compression (RFC 7692)
 - [x] Zero-copy receive buffers
@@ -66,6 +67,8 @@ Beyond basic WebSocket messaging, Wasabi bundles an MQTT 3.1.1 client, NTLM/Kerb
 - [x] Happy Eyeballs (RFC 6555)
 - [x] Configurable CRL/OCSP certificate revocation checking
 - [x] **Strict State Machine Control** (Connecting/Open/Closing/Closed)
+- [x] **Offline Queueing** to retain and flush messages during network drops
+- [x] **Ping Jitter** to prevent strict gateway timeouts
 - [ ] `WSAAsyncSelect` event-driven socket notifications
 - [ ] `WebSocketStartListening` helper for one-line polling loops
 
@@ -76,8 +79,6 @@ VBA is excellent for automation and integration with Excel, PowerPoint, Word, an
 - **No standardization:** There is no official, modern path for sockets and WebSockets in VBA.
 - **Verbose low-level APIs:** The most common options require a lot of infrastructure code just to connect and maintain a stable session.
 - **Limited event-driven patterns:** It is common to end up with loops, timers, and control logic just to simulate something that other languages handle natively.
-
-Aqui está a seção dedicada exclusivamente à explicação técnica da escolha do formato de módulo padrão (`.bas`), integrada ao seu Markdown e otimizada para ser informativa e profissional:
 
 ## Why a Standard Module (.bas) instead of Classes (.cls)?
 
@@ -145,12 +146,12 @@ Working with networking in VBA often becomes a project of its own. Wasabi addres
 - Maintains a stable, low-latency connection without freezing the Office UI.
 
 **Reliability**
-- **QoS 1 MQTT:** Implements a real In-Flight queue with Packet ID tracking, ensuring messages are acknowledged by the broker.
-- **MTU Discovery:** Dynamically tunes frame sizes to match network segments, preventing IP fragmentation.
+- **Offline Queueing:** Messages sent during a disconnect are safely buffered in memory and automatically flushed when `AutoReconnect` succeeds.
+- **Ping Jitter:** Adds pseudo-random variance to keepalive pings to bypass strict anti-bot gateway filters.
 
 **Built-in IoT and Diagnostics**
 - Provides native standard MQTT 3.1.1 protocol handling out of the box (`MqttConnect`, `MqttPublish`, `MqttSubscribe`).
-- Implements QoS 1 In-Flight queue with Packet ID tracking, ensuring messages are acknowledged by the broker.
+- **QoS 1 & 2 MQTT:** Implements a real In-Flight queue with Packet ID tracking, ensuring messages are acknowledged and delivered Exactly Once (PUBREC/PUBREL/PUBCOMP).
 - **MTU Discovery:** Dynamically tunes frame sizes to match network segments, preventing IP fragmentation.
 
 ## Use Cases
@@ -203,7 +204,7 @@ If WebSocketConnect("wss://example.com/ws", h) Then
 End If
 ```
 
-### MQTT with QoS 1 (Guaranteed Delivery)
+### MQTT with QoS 2 (Exactly Once) and Offline Queueing
 
 ```vb
 Dim h As Long
@@ -211,10 +212,13 @@ Dim h As Long
 ' Connect with MQTT subprotocol declaration
 WebSocketConnect "wss://broker.hivemq.com:8443/mqtt", h, , , "mqtt"
 
+' Enable offline queueing so messages aren't lost if the connection drops
+WebSocketSetOfflineQueueing True, h
+
 MqttConnect "WasabiClient_123", , , 60, h
 
-' Publishes and tracks delivery via internal In-Flight queue
-MqttPublish "sensors/data", "Value: 42", 1, False, h
+' Publishes and tracks delivery via internal In-Flight queue (QoS 2)
+MqttPublish "sensors/data", "Value: 42", 2, False, h
 ```
 
 ### Connect with Compression Enabled (permessage-deflate)
@@ -250,14 +254,15 @@ If WebSocketConnect("wss://example.com/ws", h) Then
 End If
 ```
 
-### Auto-Reconnect with Ping Keepalive
+### Auto-Reconnect with Ping Keepalive and Jitter
 
 ```vb
 Dim h As Long
 
 ' Set max attempts to 5, base delay to 1000ms
 WebSocketSetAutoReconnect True, 5, 1000, h
-WebSocketSetPingInterval 30000, h ' Send ping every 30s
+' Send ping every 30s, with up to 5s of random jitter to avoid strict gateway filters
+WebSocketSetPingInterval 30000, 5000, h 
 
 If WebSocketConnect("wss://example.com/ws", h) Then
     Do While WebSocketIsConnected(h)
