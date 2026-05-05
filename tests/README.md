@@ -1,5 +1,8 @@
 # Tests
 
+> [!NOTE]
+> These unit tests can run and display results in any ![](../resources/svg/ms-office.svg) **Microsoft Office** program.
+
 This folder contains unit and integration tests for Wasabi. The tests are
 written in pure VBA and run inside the VBA IDE without any external tools.
 
