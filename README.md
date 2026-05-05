@@ -16,12 +16,10 @@
   <img src="https://img.shields.io/badge/TLS-1.2%20%2F%201.3-brightgreen.svg" alt="TLS" />
   <img src="https://img.shields.io/badge/dependencies-none-success.svg" alt="Dependencies" />
   <img src="https://img.shields.io/badge/WebSocket-RFC%206455-orange.svg" alt="WebSocket" />
-  <img src="https://img.shields.io/badge/Proxy-HTTP%20%2B%20SOCKS5-yellowgreen" alt="Proxy" />
+  <img src="https://img.shields.io/badge/Proxy-Auto--Discovery-yellowgreen" alt="Proxy" />
   <img src="https://img.shields.io/badge/mTLS-PFX%20%2B%20Store-yellow" alt="mTLS" />
-  <img src="https://img.shields.io/badge/MQTT-3.1.1%20over%20WS-purple" alt="MQTT" />
+  <img src="https://img.shields.io/badge/MQTT-QoS%201%20In--Flight-purple" alt="MQTT" />
   <img src="https://img.shields.io/badge/Proxy%20Auth-NTLM%2FKerberos-red" alt="NTLM" />
-  <img src="https://img.shields.io/badge/revocation-CRL%2FOCSP-lightgrey" alt="Revocation" />
-  <img src="https://img.shields.io/badge/HTTP%2F2-ALPN%20negotiation-blue" alt="HTTP/2" />
   <img src="https://img.shields.io/badge/RTT-latency%20measurement-orange" alt="RTT" />
   <img src="https://img.shields.io/badge/Deflate-permessage--deflate-success" alt="Deflate" />
   <img src="https://img.shields.io/github/stars/uesleibros/wasabi?style=flat&color=gold" alt="Stars" />
@@ -41,16 +39,17 @@ Beyond basic WebSocket messaging, Wasabi bundles an MQTT 3.1.1 client, NTLM/Kerb
 - [x] SOCKS5 proxy support
 - [x] HTTP/2 upgrade via ALPN (opt-in)
 - [x] NTLM/Kerberos authentication for HTTP proxies
-- [x] MQTT 3.1.1 client over WebSocket (publish, subscribe, receive)
+- [x] **Windows System Proxy Auto-Discovery**
+- [x] MQTT 3.1.1 client with **QoS 1 In-Flight Management**
 - [x] RTT latency measurement (GetLatency)
 - [x] permessage-deflate compression (RFC 7692)
-- [ ] I/O Completion Ports (IOCP) for kernel-driven socket monitoring
 - [x] Zero-copy receive buffers
 - [x] MTU-aware frame sizing
 - [x] Send batching (text and binary)
 - [x] Close frame payload parsing
 - [x] Happy Eyeballs (RFC 6555)
 - [x] Configurable CRL/OCSP certificate revocation checking
+- [x] **Strict State Machine Control** (Connecting/Open/Closing/Closed)
 - [ ] `WSAAsyncSelect` event-driven socket notifications
 - [ ] `WebSocketStartListening` helper for one-line polling loops
 
@@ -70,10 +69,13 @@ Working with networking in VBA often becomes a project of its own. Some typical 
 - Require declarations, structs, callbacks and low-level details unrelated to the actual goal.
 - Small adjustments can break compatibility or introduce hard-to-track bugs.
 
-**Security and randomness**
-- WebSocket connections require cryptographically secure XOR masks to protect against proxy cache poisoning attacks.
-- VBA's built-in `Rnd` function is deterministic and unsuitable for this purpose.
-- Wasabi uses `CryptGenRandom` from `advapi32.dll` for all WebSocket frame masks, falling back to `Rnd` only in the extraordinary case that the cryptographic API is unavailable.
+**Security**
+- Uses `CryptGenRandom` for RFC-compliant frame masking (superior to VBA's `Rnd`).
+- Native TLS 1.2/1.3 handling via Schannel SSPI without relying on outdated IE settings.
+
+**Corporate Environments**
+- **Auto-Proxy Discovery:** Interacts with `winhttp.dll` to automatically resolve corporate proxies and PAC scripts.
+- **NTLM/Kerberos:** Transparently authenticates against secure proxies using current Windows credentials.
 
 **HTTP is not WebSocket**
 - Even with WinHTTP or MSXML, you are in a request/response world.
@@ -90,6 +92,10 @@ Working with networking in VBA often becomes a project of its own. Some typical 
 **Maintenance and readability**
 - Most handcrafted solutions grow long and fragile.
 - The networking layer becomes the largest part of the project, making simple things hard to maintain.
+
+**Reliability**
+- **QoS 1 MQTT:** Implements a real In-Flight queue with Packet ID tracking, ensuring messages are acknowledged by the broker.
+- **MTU Discovery:** Dynamically tunes frame sizes to match network segments, preventing IP fragmentation.
 
 ## Where it is useful
 
@@ -140,6 +146,17 @@ If WebSocketConnect("wss://example.com/ws", h) Then
     WebSocketSend "Secure hello", h
     WebSocketDisconnect h
 End If
+```
+
+### MQTT with QoS 1 (Guaranteed Delivery)
+
+```vb
+' Connect with subprotocol declaration
+WebSocketConnect "ws://[broker.hivemq.com:8000/mqtt](https://broker.hivemq.com:8000/mqtt)", h, , , "mqtt"
+
+MqttConnect "WasabiClient_123", , , 60, h
+' Publishes and tracks delivery via internal In-Flight queue
+MqttPublish "sensors/data", "Value: 42", 1, False, h
 ```
 
 ### Connect with compression enabled
