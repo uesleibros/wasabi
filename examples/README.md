@@ -7,6 +7,9 @@ This folder contains a curated collection of production-ready examples demonstra
 
 ## What is included
 
+> [!NOTE]
+> <img src="../resources/logo.png" width="20" /> **Wasabi Version used:** [v2.3.1-beta](https://github.com/uesleibros/wasabi/releases/tag/v2.3.1-beta)
+
 | File | Description |
 |:---|:---|
 | **`Ex01_Binance_Live_Ticker.xlsm`** | Connects to a public crypto stream and updates a spreadsheet cell in real-time. Demonstrates string extraction without freezing the UI. |
