@@ -72,6 +72,18 @@ Beyond basic WebSocket messaging, Wasabi bundles an MQTT 3.1.1 client, NTLM/Kerb
 - [ ] `WSAAsyncSelect` event-driven socket notifications
 - [ ] `WebSocketStartListening` helper for one-line polling loops
 
+## Examples
+
+Ready to see Wasabi in action? Check out the [`examples/`](examples/) folder for a curated suite of production-ready `.xlsm` workbooks. These examples demonstrate how to seamlessly integrate Wasabi into Microsoft Excel without freezing the UI.
+
+Highlights include:
+* **Crypto Live Ticker**: Connect to public streams (like Binance) and update cells in real-time.
+* **MQTT QoS 2 Dashboard**: A full-duplex IoT dashboard with guaranteed message delivery, ping jitter, and offline queueing.
+* **Non-Blocking UI (Event Loop)**: The definitive architectural pattern using `Application.OnTime` to keep your spreadsheets 100% interactive while listening to background data.
+* **High-Speed Batching & Corporate Auth**: Advanced configurations for strict TLS, system proxies, and high-throughput telemetry.
+
+[Explore the Examples Suite](examples/)
+
 ## Why Wasabi Exists
 
 VBA is excellent for automation and integration with Excel, PowerPoint, Word, and other Office applications, but it hits a wall when real-time communication is required. In practice, anyone trying to build a project that depends on live messaging usually runs into three problems:
