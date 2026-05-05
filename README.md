@@ -4,6 +4,22 @@
 
 <h1 align="center">Wasabi</h1>
 
+<div align="center">
+
+  **Support:**
+  
+  ![](resources/svg/ms-powerpoint.svg)
+  ![](resources/svg/ms-excel.svg)
+  ![](resources/svg/ms-word.svg)
+  ![](resources/svg/ms-outlook.svg)
+  ![](resources/svg/ms-access.svg)
+
+  **Platform:**
+
+  ![](resources/svg/windows.svg)
+  
+</div>
+
 <p align="center">
   Production-ready WebSocket and WSS for VBA with native TLS, auto reconnect, proxy support, MQTT, permessage-deflate, and zero external dependencies
 </p>
