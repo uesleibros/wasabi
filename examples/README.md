@@ -21,8 +21,9 @@ This folder contains a curated collection of production-ready examples demonstra
 
 ## How to run
 
-1. Download and open some of the Spritesheets.
-2. Run the main public subroutine (e.g., `StartBinanceTicker` or `StartMqttDashboard`) from the Developer tab -> Macros dialog (`Alt + F8`) or directly from the Immediate Window.
+1. Download and open any of the `.xlsm` example spreadsheets.
+2. **Enable Macros** if prompted by Excel's security warning bar.
+3. Run the main public subroutine (e.g., `StartBinanceTicker` or `StartMqttDashboard`) from the Developer tab -> Macros dialog (`Alt + F8`) or directly from the VBA Immediate Window.
 
 ## Interpreting the patterns
 
