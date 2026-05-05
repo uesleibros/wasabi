@@ -4,14 +4,22 @@ Wasabi includes a built‑in MQTT 3.1.1 packet parser that works over WebSocket 
 
 ## Supported Features
 
-- **Full Control Packet Support**: CONNECT, CONNACK, PUBLISH, PUBACK, SUBSCRIBE, SUBACK, UNSUBSCRIBE, UNSUBACK, PINGREQ, PINGRESP, DISCONNECT.
-- **QoS 0 and 1**: Fully implemented. QoS 1 (At Least Once) includes an internal In-Flight queue that tracks Packet IDs and clears messages only upon receiving `PUBACK` from the broker.
+- **Full Control Packet Support**: CONNECT, CONNACK, PUBLISH, PUBACK, PUBREC, PUBREL, PUBCOMP, SUBSCRIBE, SUBACK, UNSUBSCRIBE, UNSUBACK, PINGREQ, PINGRESP, DISCONNECT.
+- **QoS 0, 1 and 2**: Fully implemented. QoS 2 (Exactly Once) ensures that messages are delivered exactly one time through a four-step handshake, preventing duplicates even in unstable network conditions.
+- **Full In-Flight Management**: Both QoS 1 and QoS 2 utilize an internal `MqttInFlight` queue that tracks Packet IDs and clears messages only upon the successful completion of the respective acknowledgment protocol (`PUBACK` for QoS 1; `PUBCOMP` for QoS 2).
 - **Dynamic Payload Handling**: The parser buffer uses an elastic allocation strategy (Chunk Allocation), allowing it to handle packets of any size (e.g., large JSON payloads), limited only by system memory.
-- **UTF-8 Integrity**: Tópico and Message length calculations are based on byte-count rather than character-count, ensuring full compatibility with accented characters, multi-byte strings, and emojis.
+- **UTF-8 Integrity**: Topic and Message length calculations are based on byte-count rather than character-count, ensuring full compatibility with accented characters, multi-byte strings, and emojis.
 - **Retained Messages**: Full support for the retained flag on outgoing and incoming publications.
 - **Authentication**: Supports standard MQTT username and password fields.
 
 ## Implementation Details
+
+### QoS 2 "Exactly Once" Handshake
+When a message is published or received with QoS 2, Wasabi manages the complete state machine:
+1. **PUBLISH**: Message is sent and stored in the in-flight queue.
+2. **PUBREC**: Broker confirms receipt; Wasabi automatically responds with `PUBREL`.
+3. **PUBREL**: Confirmation that the packet ID is released.
+4. **PUBCOMP**: Final step; Wasabi automatically responds to incoming `PUBREL` packets and clears its own in-flight messages only when this final ACK arrives.
 
 ### QoS 1 In-Flight Management
 When a message is published with QoS 1, Wasabi:
@@ -27,7 +35,6 @@ The `MqttReceive` function returns control tags (`[CONNACK]`, `[SUBACK]`, `[UNSU
 
 ## Current Limitations
 
-- **No QoS 2**: Packets requiring the four-way handshake (`PUBREC`, `PUBREL`, `PUBCOMP`) are ignored.
-- **Manual Retry**: While messages are tracked In-Flight, the client does not currently perform automatic re-transmission if a `PUBACK` is not received (must be handled by application logic if required).
+- **Manual Retry**: While messages are tracked In-Flight, the client does not currently perform automatic re-transmission if an acknowledgment is not received within a specific timeout (must be handled by application logic if required).
 - **No Last Will and Testament (LWT)**: Will message parameters are not currently exposed in the connection interface.
 - **Volatile Session**: Session state is stored in RAM; In-Flight queues are cleared if the VBA project is reset or the workbook is closed.
