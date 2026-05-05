@@ -94,7 +94,7 @@ Debug.Print "Remaining capacity:", capacity
 ### WebSocketConnect
 
 ```vb
-Public Function WebSocketConnect(ByVal url As String, Optional ByRef outHandle As Long = -1, Optional ByVal DeflateEnabled As Boolean = False, Optional ByVal DeflateContextTakeover As Boolean = True) As Boolean
+Public Function WebSocketConnect(ByVal url As String, Optional ByRef outHandle As Long = -1, Optional ByVal DeflateEnabled As Boolean = False, Optional ByVal DeflateContextTakeover As Boolean = True, Optional ByVal SubProtocol As String = "") As Boolean
 ```
 
 Opens a new WebSocket connection to the specified URL.
@@ -114,7 +114,7 @@ This function executes the complete connection sequence in order:
 11. Queries `SecPkgContext_StreamSizes` to determine TLS record framing parameters
 12. Sends the HTTP/1.1 WebSocket upgrade request
 13. Validates the `Sec-WebSocket-Accept` header value using SHA-1 and Base64
-14. Marks the connection as active and records the connection timestamp
+14. Marks the connection state as `STATE_OPEN` and records the connection timestamp
 
 #### Parameters
 
@@ -122,6 +122,7 @@ This function executes the complete connection sequence in order:
 * `outHandle`: receives the allocated integer handle. Set to `-1` on failure.
 * `DeflateEnabled`: set to `True` to request `permessage-deflate` compression during the WebSocket handshake.
 * `DeflateContextTakeover`: when `True`, the compression context is reused across messages for better compression ratios. Set to `False` to reset the context for each message.
+* `SubProtocol`: optional string to request a specific subprotocol during the handshake (e.g., `"mqtt"`).
 
 #### Returns
 
@@ -142,7 +143,7 @@ End If
 ```
 
 > [!IMPORTANT]
-> Configure all options (proxy, custom headers, subprotocol, buffer sizes, MTU, no-delay) before calling `WebSocketConnect`. These settings are applied during the connection sequence and cannot be changed mid-connection.
+> Configure all options (proxy, custom headers, buffer sizes, MTU, no-delay) before calling `WebSocketConnect`. These settings are applied during the connection sequence and cannot be changed mid-connection.
 
 > [!CAUTION]
 > The connection pool has a limit of 64 simultaneous connections. Attempting to connect beyond this limit returns `ERR_MAX_CONNECTIONS`.
@@ -202,7 +203,7 @@ Public Function WebSocketIsConnected(Optional ByVal handle As Long = INVALID_CON
 
 Returns the current connected state of the handle.
 
-This is a lightweight state check. It reads the internal `Connected` flag without touching the socket.
+This is a lightweight state check. It evaluates if the internal state is `STATE_OPEN` without touching the socket.
 
 > [!NOTE]
 > This function reports the last known state. It does not actively probe the socket. A connection may have dropped between the last receive call and this check.
@@ -226,7 +227,7 @@ Debug.Print "Connection ended"
 Public Function WebSocketSendClose(Optional ByVal code As Integer = 1000, Optional ByVal reason As String = "", Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
 ```
 
-Sends a WebSocket Close control frame and marks the connection as disconnected.
+Sends a WebSocket Close control frame and transitions the connection to `STATE_CLOSING`.
 
 The status code occupies the first two bytes of the Close frame payload in big-endian byte order, followed by the UTF-8 encoded reason string.
 
@@ -875,13 +876,13 @@ Default size for both is 256KB (262144 bytes).
 ```vb
 ' Increase buffers for a high-throughput stream
 WebSocketSetBufferSizes 1048576, 1048576, h
-WebSocketConnect "wss://stream.example.com/data", h
+WebSocketConnect "wss://[stream.example.com/data](https://stream.example.com/data)", h
 ```
 
 ```vb
 ' Reduce buffers for low-memory environments
 WebSocketSetBufferSizes 32768, 16384, h
-WebSocketConnect "wss://lightweight.example.com/ws", h
+WebSocketConnect "wss://[lightweight.example.com/ws](https://lightweight.example.com/ws)", h
 ```
 
 > [!IMPORTANT]
@@ -905,7 +906,7 @@ When Nagle's algorithm is active, the TCP stack coalesces small outgoing packets
 ```vb
 ' Enable low-latency mode before connecting
 WebSocketSetNoDelay True, h
-WebSocketConnect "wss://realtime.example.com/ws", h
+WebSocketConnect "wss://[realtime.example.com/ws](https://realtime.example.com/ws)", h
 ```
 
 ```vb
@@ -975,6 +976,17 @@ Forces an immediate MTU probe on the active socket. If the detected TCP MSS diff
 
 ## Proxy Configuration
 
+### WebSocketAutoDiscoverProxy
+
+```vb
+Public Sub WebSocketAutoDiscoverProxy(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+```
+
+Automatically discovers and applies the Windows system proxy settings (including PAC scripts) for the current user. If a proxy is found, it internally calls `WebSocketSetProxy`.
+
+> [!IMPORTANT]
+> Call this before `WebSocketConnect` if you want to automatically use the system's proxy configuration.
+
 ### WebSocketSetProxy
 
 ```vb
@@ -991,14 +1003,14 @@ Authentication for HTTP proxies uses the HTTP Basic scheme. SOCKS5 supports user
 
 ```vb
 WebSocketSetProxy "proxy.company.local", 8080, , , , h
-WebSocketConnect "wss://api.example.com/ws", h
+WebSocketConnect "wss://[api.example.com/ws](https://api.example.com/ws)", h
 ```
 
 #### Example with authentication
 
 ```vb
 WebSocketSetProxy "proxy.company.local", 8080, "domain\user", "p@ssw0rd", PROXY_TYPE_HTTP, h
-WebSocketConnect "wss://api.example.com/ws", h
+WebSocketConnect "wss://[api.example.com/ws](https://api.example.com/ws)", h
 ```
 
 > [!IMPORTANT]
@@ -1087,7 +1099,7 @@ WebSocketAddHeader "Authorization", "Bearer eyJhbGciOiJIUzI1NiJ9...", h
 WebSocketAddHeader "X-Client-Id", "ExcelDashboard-v1", h
 WebSocketAddHeader "X-Session-Id", "abc123", h
 
-WebSocketConnect "wss://api.example.com/ws", h
+WebSocketConnect "wss://[api.example.com/ws](https://api.example.com/ws)", h
 ```
 
 > [!IMPORTANT]
@@ -1125,13 +1137,13 @@ Sets the value sent in the `Sec-WebSocket-Protocol` header during the handshake.
 ```vb
 ' GraphQL over WebSocket
 WebSocketSetSubProtocol "graphql-transport-ws", h
-WebSocketConnect "wss://api.example.com/graphql", h
+WebSocketConnect "wss://[api.example.com/graphql](https://api.example.com/graphql)", h
 ```
 
 ```vb
 ' STOMP messaging protocol
 WebSocketSetSubProtocol "v12.stomp", h
-WebSocketConnect "wss://broker.example.com/stomp", h
+WebSocketConnect "wss://[broker.example.com/stomp](https://broker.example.com/stomp)", h
 ```
 
 > [!IMPORTANT]
@@ -1236,7 +1248,7 @@ Returns a single human-readable string combining the error category, optional sy
 #### Example
 
 ```vb
-If Not WebSocketConnect("wss://bad.example.com/ws", h) Then
+If Not WebSocketConnect("wss://[bad.example.com/ws](https://bad.example.com/ws)", h) Then
     Debug.Print WebSocketGetErrorDescription(h)
 End If
 ```
@@ -1476,7 +1488,7 @@ When enabled, Wasabi uses `CertGetCertificateChain` and `CertVerifyCertificateCh
 ```vb
 ' Require valid certificate for production
 WebSocketSetCertValidation True, h
-WebSocketConnect "wss://api.example.com/ws", h
+WebSocketConnect "wss://[api.example.com/ws](https://api.example.com/ws)", h
 ```
 
 ### WebSocketSetRevocationCheck
@@ -1497,7 +1509,7 @@ Default: disabled (maximizes compatibility with firewalled environments).
 ' Full certificate validation with revocation check
 WebSocketSetCertValidation True, h
 WebSocketSetRevocationCheck True, h
-WebSocketConnect "wss://api.example.com/ws", h
+WebSocketConnect "wss://[api.example.com/ws](https://api.example.com/ws)", h
 ```
 
 ### WebSocketSetClientCert
@@ -1538,6 +1550,9 @@ Wasabi includes a minimal MQTT 3.1.1 client that uses the existing WebSocket tra
 
 All MQTT functions share the same WebSocket connection handle. You must call `WebSocketConnect` with a WebSocket URL before using any MQTT function.
 
+> [!NOTE]
+> The MQTT client supports QoS 0 (at most once) and QoS 1 (at least once) for publishing, featuring an internal in-flight message queue and Packet ID generation. QoS 2 is not yet implemented.
+
 ### MqttConnect
 
 ```vb
@@ -1549,7 +1564,7 @@ Sends an MQTT CONNECT packet over the established WebSocket connection.
 #### Example
 
 ```vb
-WebSocketConnect "wss://broker.emqx.io:8084/mqtt", h
+WebSocketConnect "wss://broker.emqx.io:8084/mqtt", h, False, True, "mqtt"
 MqttConnect "wasabi-client", h
 ```
 
@@ -1559,7 +1574,7 @@ MqttConnect "wasabi-client", h
 Public Function MqttPublish(ByVal topic As String, ByVal message As String, Optional ByVal qos As Byte = 0, Optional ByVal retained As Boolean = False, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
 ```
 
-Publishes a text message to the given topic.
+Publishes a text message to the given topic. When using QoS 1, Wasabi automatically generates a Packet ID and queues the message until a `PUBACK` is received.
 
 ### MqttSubscribe
 
@@ -1599,7 +1614,9 @@ Sends an MQTT PINGREQ keep-alive packet.
 Public Function MqttReceive(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
 ```
 
-Polls for incoming MQTT messages. Returns a string in the format `topic|payload` when a PUBLISH packet is received, or an empty string when no message is available.
+Polls for incoming MQTT messages. Returns a string in the format `topic|payload` when a PUBLISH packet is received, or an empty string when no message is available. 
+
+Additionally, returns connection control strings like `[CONNACK]`, `[SUBACK]`, or `[UNSUBACK]` when the respective acknowledgment packets are parsed.
 
 Internally uses `WebSocketReceiveBinaryCheck` and a state-machine parser to decode MQTT packets.
 
@@ -1608,16 +1625,13 @@ Internally uses `WebSocketReceiveBinaryCheck` and a state-machine parser to deco
 ```vb
 Dim msg As String
 msg = MqttReceive(h)
-If msg <> "" Then
+If msg <> "" And Left(msg, 1) <> "[" Then
     Dim parts() As String
     parts = Split(msg, "|", 2)
     Debug.Print "Topic:", parts(0)
     Debug.Print "Payload:", parts(1)
 End If
 ```
-
-> [!NOTE]
-> The MQTT client supports QoS 0 (at most once) for publish. QoS 1 and 2 are not yet implemented.
 
 ## Compression (permessage-deflate)
 
@@ -1646,7 +1660,7 @@ change applies on the next reconnect.
 ```vb
 ' Enable compression before connecting
 WebSocketSetDeflate True, True, h
-WebSocketConnect "wss://example.com/ws", h
+WebSocketConnect "wss://[example.com/ws](https://example.com/ws)", h
 ```
 
 ```vb
@@ -1795,11 +1809,11 @@ Dim g_EventHandle As Long
 
 Sub OpenConnections()
     WebSocketAddHeader "Authorization", "Bearer token1"
-    WebSocketConnect "wss://market.example.com/stream", g_MarketHandle
+    WebSocketConnect "wss://[market.example.com/stream](https://market.example.com/stream)", g_MarketHandle
     WebSocketClearHeaders
 
     WebSocketAddHeader "Authorization", "Bearer token2"
-    WebSocketConnect "wss://events.example.com/ws", g_EventHandle
+    WebSocketConnect "wss://[events.example.com/ws](https://events.example.com/ws)", g_EventHandle
     WebSocketClearHeaders
 
     WebSocketSetPingInterval 30000, g_MarketHandle
@@ -1847,10 +1861,14 @@ End Sub
 ```vb
 Sub StartMqttDashboard()
     Dim h As Long
-    If Not WebSocketConnect("wss://test.mosquitto.org:8081/mqtt", h) Then
+    
+    ' Connect directly using auto-discovery and subprotocol
+    WebSocketAutoDiscoverProxy h
+    If Not WebSocketConnect("wss://test.mosquitto.org:8081/mqtt", h, False, True, "mqtt") Then
         Debug.Print "Connection failed"
         Exit Sub
     End If
+    
     MqttConnect "wasabi-dashboard", h
     MqttSubscribe "sensors/temperature", 0, h
     MqttSubscribe "sensors/humidity", 0, h
@@ -1858,7 +1876,8 @@ Sub StartMqttDashboard()
     Do
         Dim msg As String
         msg = MqttReceive(h)
-        If msg <> "" Then
+        
+        If msg <> "" And Left(msg, 1) <> "[" Then
             Dim parts() As String
             parts = Split(msg, "|", 2)
             If parts(0) = "sensors/temperature" Then
