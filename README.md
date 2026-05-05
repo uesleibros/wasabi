@@ -4,22 +4,6 @@
 
 <h1 align="center">Wasabi</h1>
 
-<div align="center">
-
-  **Support:**
-  
-  ![](resources/svg/ms-powerpoint.svg)
-  ![](resources/svg/ms-excel.svg)
-  ![](resources/svg/ms-word.svg)
-  ![](resources/svg/ms-outlook.svg)
-  ![](resources/svg/ms-access.svg)
-
-  **Platform:**
-
-  ![](resources/svg/windows.svg)
-  
-</div>
-
 <p align="center">
   Production-ready WebSocket and WSS for VBA with native TLS, auto reconnect, proxy support, MQTT, permessage-deflate, and zero external dependencies
 </p>
@@ -41,6 +25,21 @@
   <img src="https://img.shields.io/github/stars/uesleibros/wasabi?style=flat&color=gold" alt="Stars" />
   <img src="https://img.shields.io/github/last-commit/uesleibros/wasabi?style=flat" alt="Last Commit" />
 </p>
+
+> [!NOTE]
+> **Supported Applications**
+> 
+> ![](resources/svg/ms-powerpoint.svg)
+> ![](resources/svg/ms-excel.svg)
+> ![](resources/svg/ms-word.svg)
+> ![](resources/svg/ms-outlook.svg)
+> ![](resources/svg/ms-access.svg)
+> **and** ![](resources/svg/ms-office.svg)
+
+> [!IMPORTANT]
+> **Platform**
+> 
+> ![](resources/svg/windows.svg)
 
 ## What is Wasabi
 
