@@ -4311,7 +4311,7 @@ Public Function WebSocketGetUptime(Optional ByVal handle As Long = INVALID_CONN_
     h = ResolveHandle(handle)
     If Not ValidIndex(h) Then Exit Function
     With m_Connections(h)
-        If .Connected And .Stats.ConnectedAt > 0 Then
+        If .State = STATE_OPEN And .Stats.ConnectedAt > 0 Then
             WebSocketGetUptime = TickDiff(.Stats.ConnectedAt, GetTickCount()) \ 1000
         End If
     End With
