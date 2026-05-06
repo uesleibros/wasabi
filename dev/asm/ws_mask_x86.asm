@@ -12,7 +12,7 @@ start:
     test ecx, ecx
     jz end
     xor edx, edx
-loop:
+mask_loop:
     mov al, [esi]
     mov bl, [edi + edx]
     xor al, bl
@@ -20,11 +20,12 @@ loop:
     inc esi
     inc edx
     and edx, 3
-    loop loop
+    dec ecx
+    jnz mask_loop
 end:
     pop ebx
     pop esi
     pop edi
     mov esp, ebp
     pop ebp
-    ret
+    ret 12
