@@ -1,6 +1,6 @@
 Attribute VB_Name = "Wasabi"
 ' ============================================================================
-' Wasabi v2.3.2-beta
+' Wasabi v2.3.3-beta
 ' Copyright (c) 2026 UesleiDev
 '
 ' Permission is hereby granted, free of charge, to any person obtaining a
@@ -82,8 +82,16 @@ Option Private Module
     Private Declare PtrSafe Function MultiByteToWideChar Lib "kernel32" (ByVal CodePage As Long, ByVal dwFlags As Long, ByRef lpMultiByteStr As Byte, ByVal cchMultiByte As Long, ByVal lpWideCharStr As LongPtr, ByVal cchWideChar As Long) As Long
     Private Declare PtrSafe Function WideCharToMultiByte Lib "kernel32" (ByVal CodePage As Long, ByVal dwFlags As Long, ByVal lpWideCharStr As LongPtr, ByVal cchWideChar As Long, ByRef lpMultiByteStr As Byte, ByVal cchMultiByte As Long, ByVal lpDefaultChar As LongPtr, ByVal lpUsedDefaultChar As LongPtr) As Long
     Private Declare PtrSafe Function GetTickCount Lib "kernel32" () As Long
-    Private Declare PtrSafe Function CryptGenRandom Lib "advapi32.dll" (ByVal hProv As LongPtr, ByVal dwLen As Long, ByRef pbBuffer As Byte) As Long
+    Private Declare PtrSafe Function RtlGenRandom Lib "advapi32.dll" Alias "SystemFunction036" (ByVal RandomBuffer As LongPtr, ByVal RandomBufferLength As Long) As Long
     Private Declare PtrSafe Function VarPtrArray Lib "VBE7" Alias "VarPtr" (ByRef arr() As Byte) As LongPtr
+    Private Declare PtrSafe Function VirtualAlloc Lib "kernel32" (ByVal lpAddress As LongPtr, ByVal dwSize As LongPtr, ByVal flAllocationType As Long, ByVal flProtect As Long) As LongPtr
+    Private Declare PtrSafe Function VirtualFree Lib "kernel32" (ByVal lpAddress As LongPtr, ByVal dwSize As LongPtr, ByVal dwFreeType As Long) As Long
+    Private Declare PtrSafe Function CallWindowProcW Lib "user32" (ByVal lpPrevWndFunc As LongPtr, ByVal P1 As LongPtr, ByVal P2 As LongPtr, ByVal P3 As LongPtr, ByVal P4 As LongPtr) As LongPtr
+    
+    Private m_ptrWsMask As LongPtr
+    Private m_ptrMemZero As LongPtr
+    Private m_ptrMemFind As LongPtr
+    
     Private Const NULL_PTR As LongPtr = 0
 #Else
     Private Declare Function WinHttpGetIEProxyConfigForCurrentUser Lib "winhttp.dll" (ByRef pProxyConfig As WINHTTP_CURRENT_USER_IE_PROXY_CONFIG) As Long
@@ -142,8 +150,16 @@ Option Private Module
     Private Declare Function MultiByteToWideChar Lib "kernel32" (ByVal CodePage As Long, ByVal dwFlags As Long, ByRef lpMultiByteStr As Byte, ByVal cchMultiByte As Long, ByVal lpWideCharStr As Long, ByVal cchWideChar As Long) As Long
     Private Declare Function WideCharToMultiByte Lib "kernel32" (ByVal CodePage As Long, ByVal dwFlags As Long, ByVal lpWideCharStr As Long, ByVal cchWideChar As Long, ByRef lpMultiByteStr As Byte, ByVal cchMultiByte As Long, ByVal lpDefaultChar As Long, ByVal lpUsedDefaultChar As Long) As Long
     Private Declare Function GetTickCount Lib "kernel32" () As Long
-    Private Declare Function CryptGenRandom Lib "advapi32.dll" (ByVal hProv As Long, ByVal dwLen As Long, ByRef pbBuffer As Byte) As Long
+    Private Declare Function RtlGenRandom Lib "advapi32.dll" Alias "SystemFunction036" (ByVal RandomBuffer As Long, ByVal RandomBufferLength As Long) As Long
     Private Declare Function VarPtrArray Lib "VBE6" Alias "VarPtr" (ByRef arr() As Byte) As Long
+    Private Declare Function VirtualAlloc Lib "kernel32" (ByVal lpAddress As Long, ByVal dwSize As Long, ByVal flAllocationType As Long, ByVal flProtect As Long) As Long
+    Private Declare Function VirtualFree Lib "kernel32" (ByVal lpAddress As Long, ByVal dwSize As Long, ByVal dwFreeType As Long) As Long
+    Private Declare Function CallWindowProcW Lib "user32" (ByVal lpPrevWndFunc As Long, ByVal P1 As Long, ByVal P2 As Long, ByVal P3 As Long, ByVal P4 As Long) As Long
+    
+    Private m_ptrWsMask As Long
+    Private m_ptrMemZero As Long
+    Private m_ptrMemFind As Long
+    
     Private Const NULL_PTR As Long = 0
 #End If
 
@@ -690,6 +706,11 @@ Private Const CRYPT_VERIFYCONTEXT As Long = &HF0000000
 Private Const SECPKG_CRED_OUTBOUND_NTLM As Long = &H2
 Private Const SEC_I_COMPLETE_NEEDED As Long = &H90313
 
+Private Const MEM_COMMIT As Long = &H1000
+Private Const MEM_RESERVE As Long = &H2000
+Private Const PAGE_EXECUTE_READWRITE As Long = &H40
+Private Const MEM_RELEASE As Long = &H8000&
+
 Private Enum MqttPacketType
     MQTT_CONNECT = 1
     MQTT_CONNACK = 2
@@ -725,9 +746,166 @@ Private m_ZeroCopyBinary() As Byte
 #End If
 Public EnableErrorDialog As Boolean
 
+Private Sub InitWasabiThunks()
+    If m_ptrWsMask <> 0 Then Exit Sub
+    
+    #If Win64 Then
+        m_ptrWsMask = LoadThunk(GetWsMaskOpcodes_x64())
+        m_ptrMemZero = LoadThunk(GetMemZeroOpcodes_x64())
+        m_ptrMemFind = LoadThunk(GetMemFindOpcodes_x64())
+    #Else
+        m_ptrWsMask = LoadThunk(GetWsMaskOpcodes_x86())
+        m_ptrMemZero = LoadThunk(GetMemZeroOpcodes_x86())
+        m_ptrMemFind = LoadThunk(GetMemFindOpcodes_x86())
+    #End If
+End Sub
+
+Private Sub ShutdownWasabiThunks()
+    If m_ptrWsMask <> 0 Then VirtualFree m_ptrWsMask, 0, MEM_RELEASE: m_ptrWsMask = 0
+    If m_ptrMemZero <> 0 Then VirtualFree m_ptrMemZero, 0, MEM_RELEASE: m_ptrMemZero = 0
+    If m_ptrMemFind <> 0 Then VirtualFree m_ptrMemFind, 0, MEM_RELEASE: m_ptrMemFind = 0
+End Sub
+
+#If VBA7 Then
+Private Sub WasabiMemZero(ByVal ptr As LongPtr, ByVal length As Long)
+#Else
+Private Sub WasabiMemZero(ByVal ptr As Long, ByVal length As Long)
+#End If
+    If ptr = 0 Or length <= 0 Then Exit Sub
+    
+    If m_ptrMemZero <> 0 Then
+        CallWindowProcW m_ptrMemZero, ptr, length, 0, 0
+    Else
+        Dim i As Long
+        Dim zero As Byte: zero = 0
+        For i = 0 To length - 1
+            CopyMemoryFromPtr ByVal (ptr + i), VarPtr(zero), 1
+        Next i
+    End If
+End Sub
+
+#If VBA7 Then
+Private Function WasabiMemFind(ByVal haystackPtr As LongPtr, ByVal hayLen As Long, ByVal needlePtr As LongPtr, ByVal needleLen As Long) As Long
+#Else
+Private Function WasabiMemFind(ByVal haystackPtr As Long, ByVal hayLen As Long, ByVal needlePtr As Long, ByVal needleLen As Long) As Long
+#End If
+    If m_ptrMemFind <> 0 Then
+        #If VBA7 Then
+            WasabiMemFind = CLng(CallWindowProcW(m_ptrMemFind, haystackPtr, hayLen, needlePtr, needleLen))
+        #Else
+            WasabiMemFind = CallWindowProcW(m_ptrMemFind, haystackPtr, hayLen, needlePtr, needleLen)
+        #End If
+    Else
+        If hayLen < needleLen Or needleLen <= 0 Then
+            WasabiMemFind = -1
+            Exit Function
+        End If
+        
+        Dim i As Long, j As Long
+        Dim found As Boolean
+        Dim hByte As Byte, nByte As Byte
+        
+        For i = 0 To hayLen - needleLen
+            found = True
+            For j = 0 To needleLen - 1
+                CopyMemoryFromPtr hByte, haystackPtr + i + j, 1
+                CopyMemoryFromPtr nByte, needlePtr + j, 1
+                If hByte <> nByte Then
+                    found = False
+                    Exit For
+                End If
+            Next j
+            If found Then
+                WasabiMemFind = i
+                Exit Function
+            End If
+        Next i
+        WasabiMemFind = -1
+    End If
+End Function
+
+#If Win64 Then
+
+' x64: void ws_mask(byte* payload [RCX], uint len [RDX], uint32* mask [R8])
+Private Function GetWsMaskOpcodes_x64() As Byte()
+    Dim opcodes(0 To 21) As Byte
+    ' test rdx,rdx | jz +16 | mov eax,[r8] | loop: xor [rcx],al | inc rcx | ror eax,8 | dec rdx | jnz -13 | ret
+    Dim HexStr As Variant: HexStr = Array(&H48, &H85, &HD2, &H74, &H10, &H41, &H8B, &H0, &H30, &H1, &H48, &HFF, &HC1, &HC1, &HC8, &H8, &H48, &HFF, &HCA, &H75, &HF3, &HC3)
+    Dim i As Long: For i = 0 To 21: opcodes(i) = CByte(HexStr(i)): Next i
+    GetWsMaskOpcodes_x64 = opcodes
+End Function
+
+' x64: void mem_zero(byte* ptr [RCX], uint len [RDX])
+Private Function GetMemZeroOpcodes_x64() As Byte()
+    Dim opcodes(0 To 12) As Byte
+    ' push rdi | mov rdi,rcx | mov rcx,rdx | xor eax,eax | rep stosb | pop rdi | ret
+    Dim HexStr As Variant: HexStr = Array(&H57, &H48, &H89, &HCF, &H48, &H89, &HD1, &H31, &HC0, &HF3, &HAA, &H5F, &HC3)
+    Dim i As Long: For i = 0 To 12: opcodes(i) = CByte(HexStr(i)): Next i
+    GetMemZeroOpcodes_x64 = opcodes
+End Function
+
+' x64: long mem_find(byte* hay [RCX], uint hayLen [RDX], byte* needle [R8], uint needleLen [R9])
+Private Function GetMemFindOpcodes_x64() As Byte()
+    Dim opcodes(0 To 59) As Byte
+    Dim HexStr As Variant: HexStr = Array(&H56, &H57, &H53, &H4C, &H39, &HCA, &H72, &H29, &H4D, &H85, &HC9, &H74, &H24, &H4C, &H29, &HCA, &H48, &HFF, &HC2, &H48, &H31, &HC0, &H48, &H89, &HCB, &H4C, &H89, &HC9, &H48, &H89, &HDF, &H4C, &H89, &HC6, &HF3, &HA6, &H74, &H12, &H48, &HFF, &HC3, &H48, &HFF, &HC0, &H48, &HFF, &HCA, &H75, &HE8, &H48, &HC7, &HC0, &HFF, &HFF, &HFF, &HFF, &H5B, &H5F, &H5E, &HC3)
+    Dim i As Long: For i = 0 To 59: opcodes(i) = CByte(HexStr(i)): Next i
+    GetMemFindOpcodes_x64 = opcodes
+End Function
+
+#Else
+
+' x86 stdcall: void ws_mask(byte* payload [ebp+8], uint len [ebp+12], uint32* mask [ebp+16])
+Private Function GetWsMaskOpcodes_x86() As Byte()
+    Dim opcodes(0 To 34) As Byte
+    Dim HexStr As Variant: HexStr = Array(&H55, &H89, &HE5, &H53, &H8B, &H4D, &HC, &H85, &HC9, &H74, &H13, &H8B, &H55, &H8, &H8B, &H45, &H10, &H8B, &H18, &H88, &HD8, &H30, &H2, &H42, &HC1, &HCB, &H8, &H49, &H75, &HF5, &H5B, &H5D, &HC2, &H10, &H0)
+    Dim i As Long: For i = 0 To 34: opcodes(i) = CByte(HexStr(i)): Next i
+    GetWsMaskOpcodes_x86 = opcodes
+End Function
+
+' x86 stdcall: void mem_zero(byte* ptr [ebp+8], uint len [ebp+12])
+Private Function GetMemZeroOpcodes_x86() As Byte()
+    Dim opcodes(0 To 18) As Byte
+    Dim HexStr As Variant: HexStr = Array(&H55, &H89, &HE5, &H57, &H8B, &H7D, &H8, &H8B, &H4D, &HC, &H31, &HC0, &HF3, &HAA, &H5F, &H5D, &HC2, &H10, &H0)
+    Dim i As Long: For i = 0 To 18: opcodes(i) = CByte(HexStr(i)): Next i
+    GetMemZeroOpcodes_x86 = opcodes
+End Function
+
+' x86 stdcall: long mem_find(byte* hay [ebp+8], uint hayLen [ebp+12], byte* needle [ebp+16], uint needleLen [ebp+20])
+Private Function GetMemFindOpcodes_x86() As Byte()
+    Dim opcodes(0 To 60) As Byte
+    Dim HexStr As Variant: HexStr = Array(&H55, &H89, &HE5, &H53, &H56, &H57, &H8B, &H55, &HC, &H8B, &H4D, &H14, &H39, &HCA, &H72, &H21, &H85, &HC9, &H74, &H1D, &H29, &HCA, &H42, &H31, &HC0, &H8B, &H5D, &H8, &H51, &H53, &H8B, &H4D, &H14, &H89, &HDF, &H8B, &H75, &H10, &HF3, &HA6, &H5B, &H59, &H74, &HA, &H43, &H40, &H4A, &H75, &HEB, &HB8, &HFF, &HFF, &HFF, &HFF, &H5F, &H5E, &H5B, &H5D, &HC2, &H10, &H0)
+    Dim i As Long: For i = 0 To 60: opcodes(i) = CByte(HexStr(i)): Next i
+    GetMemFindOpcodes_x86 = opcodes
+End Function
+
+#End If
+
+#If VBA7 Then
+Private Function LoadThunk(ByRef opcodes() As Byte) As LongPtr
+    Dim pMem As LongPtr
+#Else
+Private Function LoadThunk(ByRef opcodes() As Byte) As Long
+    Dim pMem As Long
+#End If
+    Dim size As Long
+    
+    If (Not Not opcodes) = 0 Then Exit Function
+    size = UBound(opcodes) - LBound(opcodes) + 1
+    
+    pMem = VirtualAlloc(0, size, MEM_COMMIT Or MEM_RESERVE, PAGE_EXECUTE_READWRITE)
+    
+    If pMem <> 0 Then
+        CopyMemoryFromPtr ByVal pMem, VarPtr(opcodes(LBound(opcodes))), size
+    End If
+    
+    LoadThunk = pMem
+End Function
+
 Private Sub FillRandomBytes(ByRef buf() As Byte, ByVal count As Long)
-    Dim i As Long
-    If CryptGenRandom(0, count, buf(0)) = 0 Then
+    If count <= 0 Then Exit Sub
+    
+    If RtlGenRandom(VarPtr(buf(LBound(buf))), count) = 0 Then
+        Dim i As Long
         For i = 0 To count - 1
             buf(i) = CByte(Int(Rnd * 256))
         Next i
@@ -831,7 +1009,7 @@ Private Sub SetError(ByVal errType As WasabiError, ByVal techMsg As String, ByVa
     m_LastErrorCode = errCode
     m_TechnicalDetails = techMsg
     WasabiLog handle, "ERR " & errType & " | " & techMsg
-    If errCode <> 0 Then WasabiLog handle, "SysCode: " & errCode & " (0x" & Hex(errCode) & ")"
+    If errCode <> 0 Then WasabiLog handle, "SysCode: " & errCode & " (0x" & hex(errCode) & ")"
     If ValidIndex(handle) Then
         m_Connections(handle).LastError = errType
         m_Connections(handle).LastErrorCode = errCode
@@ -911,6 +1089,7 @@ Private Sub InitConnectionPool()
     Dim i As Long
     If m_ConnectionCount > 0 Then Exit Sub
     Randomize
+    InitWasabiThunks
     ReDim m_Connections(0 To MAX_CONNECTIONS - 1)
     For i = 0 To MAX_CONNECTIONS - 1
         m_Connections(i).Socket = INVALID_SOCKET
@@ -1075,12 +1254,21 @@ End Sub
 
 Private Sub CleanupHandle(ByVal handle As Long)
     If Not ValidIndex(handle) Then Exit Sub
+    
     With m_Connections(handle)
         If .Socket <> INVALID_SOCKET Then
             sock_closesocket .Socket
             .Socket = INVALID_SOCKET
         End If
+        
+        If .recvLen > 0 Or .DecryptLen > 0 Or .TcpRecvLen > 0 Then
+            WasabiMemZero VarPtr(.recvBuffer(0)), UBound(.recvBuffer) + 1
+            WasabiMemZero VarPtr(.DecryptBuffer(0)), UBound(.DecryptBuffer) + 1
+            WasabiMemZero VarPtr(.TcpRecvBuffer(0)), UBound(.TcpRecvBuffer) + 1
+            WasabiMemZero VarPtr(.FragmentBuffer(0)), UBound(.FragmentBuffer) + 1
+        End If
     End With
+    
     FreeSecurityHandles handle
     If handle >= 0 And handle < MAX_CONNECTIONS Then
         m_ClientCertContextPtrs(handle) = 0
@@ -1251,9 +1439,15 @@ Private Function BuildWSFrame(ByRef payload() As Byte, ByVal payloadLen As Long,
         frame(12) = mask(2)
         frame(13) = mask(3)
     End If
-    For i = 0 To payloadLen - 1
-        frame(headerLen + i) = payload(LBound(payload) + i) Xor mask(i Mod 4)
-    Next i
+    If m_ptrWsMask <> 0 And payloadLen > 0 Then
+        CopyMemory frame(headerLen), payload(LBound(payload)), payloadLen
+        CallWindowProcW m_ptrWsMask, VarPtr(frame(headerLen)), payloadLen, VarPtr(mask(0)), 0
+    Else
+        For i = 0 To payloadLen - 1
+            frame(headerLen + i) = payload(LBound(payload) + i) Xor mask(i Mod 4)
+        Next i
+    End If
+    
     BuildWSFrame = frame
 End Function
 
@@ -1388,7 +1582,7 @@ Private Function ParseURL(ByVal url As String, ByRef outHost As String, ByRef ou
             c = Mid(portStr, i, 1)
             If c < "0" Or c > "9" Then Exit Function
         Next i
-        portVal = Val(portStr)
+        portVal = val(portStr)
         If portVal <= 0 Or portVal > 65535 Then Exit Function
         outPort = portVal
     Else
@@ -1951,7 +2145,7 @@ Private Function LoadClientCert(ByVal handle As Long) As Boolean
             pwPtr = IIf(Len(.ClientCertPfxPass) > 0, StrPtr(.ClientCertPfxPass), NULL_PTR)
             outStore = PFXImportCertStore(blob, pwPtr, CRYPT_EXPORTABLE Or PKCS12_ALLOW_OVERWRITE_KEY)
             If outStore = 0 Then
-                SetError ERR_CERT_LOAD_FAILED, "PFXImportCertStore failed: 0x" & Hex(Err.LastDllError), "Failed to import client certificate PFX.", handle, Err.LastDllError
+                SetError ERR_CERT_LOAD_FAILED, "PFXImportCertStore failed: 0x" & hex(Err.LastDllError), "Failed to import client certificate PFX.", handle, Err.LastDllError
                 Exit Function
             End If
             outCtx = CertFindCertificateInStore(outStore, X509_ASN_ENCODING Or PKCS_7_ASN_ENCODING, 0, CERT_FIND_ANY, ByVal NULL_PTR, 0)
@@ -1963,7 +2157,7 @@ Private Function LoadClientCert(ByVal handle As Long) As Boolean
         ElseIf .ClientCertThumb <> "" Then
             outStore = CertOpenStore(CERT_STORE_PROV_SYSTEM, 0, NULL_PTR, CERT_SYSTEM_STORE_CURRENT_USER, StrPtr("MY"))
             If outStore = 0 Then
-                SetError ERR_CERT_LOAD_FAILED, "CertOpenStore (MY) failed: 0x" & Hex(Err.LastDllError), "Cannot open Windows certificate store.", handle, Err.LastDllError
+                SetError ERR_CERT_LOAD_FAILED, "CertOpenStore (MY) failed: 0x" & hex(Err.LastDllError), "Cannot open Windows certificate store.", handle, Err.LastDllError
                 Exit Function
             End If
             outCtx = CertFindCertificateInStore(outStore, X509_ASN_ENCODING Or PKCS_7_ASN_ENCODING, 0, CERT_FIND_SUBJECT_STR_A, ByVal StrPtr(.ClientCertThumb), 0)
@@ -2000,7 +2194,7 @@ Private Function ValidateServerCert(ByVal handle As Long) As Boolean
         pRemoteCert = 0
         result = QueryContextAttributes(.hContext, SECPKG_ATTR_REMOTE_CERT_CONTEXT, pRemoteCert)
         If result <> 0 Or pRemoteCert = 0 Then
-            SetError ERR_CERT_VALIDATE_FAILED, "QueryContextAttributes(REMOTE_CERT) failed: 0x" & Hex(result), "Cannot retrieve server certificate.", handle, result
+            SetError ERR_CERT_VALIDATE_FAILED, "QueryContextAttributes(REMOTE_CERT) failed: 0x" & hex(result), "Cannot retrieve server certificate.", handle, result
             Exit Function
         End If
         chainPara.cbSize = LenB(chainPara)
@@ -2011,7 +2205,7 @@ Private Function ValidateServerCert(ByVal handle As Long) As Boolean
         End If
         result = CertGetCertificateChain(NULL_PTR, pRemoteCert, 0, 0, chainPara, chainFlags, NULL_PTR, pChainCtx)
         If result = 0 Or pChainCtx = 0 Then
-            SetError ERR_CERT_VALIDATE_FAILED, "CertGetCertificateChain failed: 0x" & Hex(Err.LastDllError), "Cannot build certificate chain.", handle
+            SetError ERR_CERT_VALIDATE_FAILED, "CertGetCertificateChain failed: 0x" & hex(Err.LastDllError), "Cannot build certificate chain.", handle
             CertFreeCertificateContext pRemoteCert
             Exit Function
         End If
@@ -2027,11 +2221,11 @@ Private Function ValidateServerCert(ByVal handle As Long) As Boolean
         CertFreeCertificateChain pChainCtx
         CertFreeCertificateContext pRemoteCert
         If result = 0 Then
-            SetError ERR_CERT_VALIDATE_FAILED, "CertVerifyCertificateChainPolicy failed: 0x" & Hex(Err.LastDllError), "Certificate policy check failed.", handle
+            SetError ERR_CERT_VALIDATE_FAILED, "CertVerifyCertificateChainPolicy failed: 0x" & hex(Err.LastDllError), "Certificate policy check failed.", handle
             Exit Function
         End If
         If policyStatus.dwError <> 0 Then
-            SetError ERR_CERT_VALIDATE_FAILED, "Cert validation error 0x" & Hex(policyStatus.dwError) & " chain=" & policyStatus.lChainIndex & " elem=" & policyStatus.lElementIndex, "Server certificate is not trusted (0x" & Hex(policyStatus.dwError) & ").", handle, policyStatus.dwError
+            SetError ERR_CERT_VALIDATE_FAILED, "Cert validation error 0x" & hex(policyStatus.dwError) & " chain=" & policyStatus.lChainIndex & " elem=" & policyStatus.lElementIndex, "Server certificate is not trusted (0x" & hex(policyStatus.dwError) & ").", handle, policyStatus.dwError
             Exit Function
         End If
     End With
@@ -2193,7 +2387,7 @@ Private Function TLSSend(ByVal handle As Long, ByRef data() As Byte) As Boolean
             bufferDesc.pBuffers = VarPtr(buffers(0))
             result = EncryptMessage(.hContext, 0, bufferDesc, 0)
             If result <> 0 Then
-                SetError ERR_TLS_ENCRYPT_FAILED, "EncryptMessage failed: 0x" & Hex(result), "TLS encryption error.", handle, result
+                SetError ERR_TLS_ENCRYPT_FAILED, "EncryptMessage failed: 0x" & hex(result), "TLS encryption error.", handle, result
                 Exit Function
             End If
             toSend = buffers(0).cbBuffer + buffers(1).cbBuffer + buffers(2).cbBuffer
@@ -2248,7 +2442,7 @@ Private Sub TLSDecrypt(ByVal handle As Long)
                 Exit Sub
             End If
             If result <> SEC_E_OK Then
-                SetError ERR_TLS_DECRYPT_FAILED, "DecryptMessage failed: 0x" & Hex(result), "TLS decryption error.", handle, result
+                SetError ERR_TLS_DECRYPT_FAILED, "DecryptMessage failed: 0x" & hex(result), "TLS decryption error.", handle, result
                 Exit Sub
             End If
             For i = 0 To 3
@@ -2327,59 +2521,6 @@ Private Function ReceiveHTTPResponse(ByVal handle As Long) As String
             .DecryptLen = 0
         End If
     End With
-End Function
-
-Private Function U32Shl1(ByVal v As Long) As Long
-    U32Shl1 = (v And &H3FFFFFFF) * 2
-    If v And &H40000000 Then U32Shl1 = U32Shl1 Or &H80000000
-End Function
-
-Private Function SHR32(ByVal v As Long, ByVal n As Long) As Long
-    Dim i As Long
-    Dim result As Long
-    result = v
-    For i = 1 To n
-        If result And &H80000000 Then
-            result = (result And &H7FFFFFFF) \ 2 Or &H40000000
-        Else
-            result = result \ 2
-        End If
-    Next i
-    SHR32 = result
-End Function
-
-Private Function ROTL32(ByVal v As Long, ByVal n As Long) As Long
-    Dim hi As Long
-    Dim i As Long
-    n = n Mod 32
-    If n = 0 Then
-        ROTL32 = v
-        Exit Function
-    End If
-    hi = U32Shl1(v)
-    For i = 2 To n
-        hi = U32Shl1(hi)
-    Next i
-    ROTL32 = hi Or SHR32(v, 32 - n)
-End Function
-
-Private Function ADD32(ByVal a As Long, ByVal b As Long) As Long
-    Dim aLo As Long
-    Dim bLo As Long
-    Dim aHi As Long
-    Dim bHi As Long
-    Dim sLo As Long
-    Dim sHi As Long
-    aLo = a And &HFFFF&
-    bLo = b And &HFFFF&
-    aHi = (a And &H7FFF0000) \ &H10000
-    bHi = (b And &H7FFF0000) \ &H10000
-    sLo = aLo + bLo
-    sHi = aHi + bHi + (sLo \ &H10000)
-    If a And &H80000000 Then sHi = sHi + &H8000&
-    If b And &H80000000 Then sHi = sHi + &H8000&
-    ADD32 = (sLo And &HFFFF&) Or ((sHi And &H7FFF&) * &H10000)
-    If sHi And &H8000& Then ADD32 = ADD32 Or &H80000000
 End Function
 
 Private Function SHA1(ByRef data() As Byte) As Byte()
@@ -2470,7 +2611,7 @@ Private Sub ParseDeflateResponse(ByVal handle As Long, ByVal response As String)
         
         swbPos = InStr(LCase(extLine), "server_max_window_bits=")
         If swbPos > 0 Then
-            swbVal = Val(Mid(extLine, swbPos + 22))
+            swbVal = val(Mid(extLine, swbPos + 22))
             If swbVal >= 8 And swbVal <= 15 Then
                 .DeflateWindowBits = -swbVal
                 .ServerMaxWindowBits = swbVal
@@ -2479,7 +2620,7 @@ Private Sub ParseDeflateResponse(ByVal handle As Long, ByVal response As String)
         
         cwbPos = InStr(LCase(extLine), "client_max_window_bits=")
         If cwbPos > 0 Then
-            cwbVal = Val(Mid(extLine, cwbPos + 22))
+            cwbVal = val(Mid(extLine, cwbPos + 22))
             If cwbVal >= 8 And cwbVal <= 15 Then
                 .InflateWindowBits = -cwbVal
                 .ClientMaxWindowBits = cwbVal
@@ -3276,7 +3417,7 @@ Private Function TcpConnectInternal(ByVal handle As Long, ByVal HOST As String, 
 
             acquireResult = AcquireCredentialsHandle(NULL_PTR, "Microsoft Unified Security Protocol Provider", SECPKG_CRED_OUTBOUND, NULL_PTR, schannelCred, NULL_PTR, NULL_PTR, .hCred, tsExpiry)
             If acquireResult <> 0 Then
-                SetError ERR_TLS_ACQUIRE_CREDS_FAILED, "AcquireCredentialsHandle failed: 0x" & Hex(acquireResult), "TLS initialization failed.", handle, acquireResult
+                SetError ERR_TLS_ACQUIRE_CREDS_FAILED, "AcquireCredentialsHandle failed: 0x" & hex(acquireResult), "TLS initialization failed.", handle, acquireResult
                 GoTo Fail
             End If
 
@@ -3285,7 +3426,7 @@ Private Function TcpConnectInternal(ByVal handle As Long, ByVal HOST As String, 
                 If tlsResult = -1 Then
                     SetError ERR_TLS_HANDSHAKE_TIMEOUT, "TLS handshake timed out with " & HOST, "TLS handshake timed out.", handle
                 Else
-                    SetError ERR_TLS_HANDSHAKE_FAILED, "TLS handshake failed: 0x" & Hex(tlsResult), "TLS handshake failed.", handle, tlsResult
+                    SetError ERR_TLS_HANDSHAKE_FAILED, "TLS handshake failed: 0x" & hex(tlsResult), "TLS handshake failed.", handle, tlsResult
                 End If
                 GoTo Fail
             End If
@@ -3847,13 +3988,12 @@ Public Function TcpReceiveUntil(ByVal delimiter As String, Optional ByVal timeou
     Dim h As Long
     Dim accumulated() As Byte
     Dim accLen As Long
-    Dim chunk() As Byte
-    Dim chunkLen As Long
     Dim delimBytes() As Byte
     Dim delimLen As Long
     Dim startTick As Long
-    Dim i As Long
-    Dim found As Boolean
+    Dim foundIndex As Long
+    Dim resultBytes() As Byte
+    Dim remaining As Long
 
     h = ResolveHandle(handle)
     If Not ValidIndex(h) Then Exit Function
@@ -3877,29 +4017,20 @@ Public Function TcpReceiveUntil(ByVal delimiter As String, Optional ByVal timeou
         End With
 
         If accLen >= delimLen Then
-            For i = 0 To accLen - delimLen
-                found = True
-                Dim j As Long
-                For j = 0 To delimLen - 1
-                    If accumulated(i + j) <> delimBytes(j) Then
-                        found = False
-                        Exit For
-                    End If
-                Next j
-                If found Then
-                    Dim resultBytes() As Byte
-                    ReDim resultBytes(0 To i + delimLen - 1)
-                    CopyMemory resultBytes(0), accumulated(0), i + delimLen
-                    TcpReceiveUntil = Utf8ToString(resultBytes, i + delimLen)
-                    Dim remaining As Long
-                    remaining = accLen - (i + delimLen)
-                    If remaining > 0 Then
-                        CopyMemory m_Connections(h).TcpRecvBuffer(0), accumulated(i + delimLen), remaining
-                        m_Connections(h).TcpRecvLen = remaining
-                    End If
-                    Exit Function
+            foundIndex = WasabiMemFind(VarPtr(accumulated(0)), accLen, VarPtr(delimBytes(0)), delimLen)
+            
+            If foundIndex >= 0 Then
+                ReDim resultBytes(0 To foundIndex + delimLen - 1)
+                CopyMemory resultBytes(0), accumulated(0), foundIndex + delimLen
+                TcpReceiveUntil = Utf8ToString(resultBytes, foundIndex + delimLen)
+                
+                remaining = accLen - (foundIndex + delimLen)
+                If remaining > 0 Then
+                    CopyMemory m_Connections(h).TcpRecvBuffer(0), accumulated(foundIndex + delimLen), remaining
+                    m_Connections(h).TcpRecvLen = remaining
                 End If
-            Next i
+                Exit Function
+            End If
         End If
 
         If TickDiff(startTick, GetTickCount()) >= timeoutMs Then Exit Do
@@ -4047,6 +4178,7 @@ Public Sub WebSocketDisconnect(Optional ByVal handle As Long = INVALID_CONN_HAND
 
     If Not anyActive And m_WSAInitialized Then
         WSACleanup
+        ShutdownWasabiThunks
         m_WSAInitialized = False
     End If
 End Sub
@@ -4750,7 +4882,7 @@ Public Function WebSocketGetErrorDescription(Optional ByVal handle As Long = INV
         Case ERR_TLS_RENEGOTIATE: desc = "TLS renegotiation not supported"
         Case Else: desc = "Unknown error (" & errType & ")"
     End Select
-    If errCode <> 0 Then desc = desc & " [0x" & Hex(errCode) & "]"
+    If errCode <> 0 Then desc = desc & " [0x" & hex(errCode) & "]"
     If Len(tech) > 0 Then desc = desc & " - " & tech
     WebSocketGetErrorDescription = desc
 End Function
@@ -5138,7 +5270,7 @@ Public Sub TcpAutoDiscoverProxy(Optional ByVal handle As Long = INVALID_CONN_HAN
             If InStr(proxyHost, ":") > 0 Then
                 hostPort = Split(proxyHost, ":")
                 proxyHost = hostPort(0)
-                proxyPort = Val(hostPort(1))
+                proxyPort = val(hostPort(1))
             Else
                 proxyPort = 80
             End If
@@ -5367,7 +5499,7 @@ Public Sub WebSocketAutoDiscoverProxy(Optional ByVal handle As Long = INVALID_CO
             If InStr(proxyHost, ":") > 0 Then
                 hostPort = Split(proxyHost, ":")
                 proxyHost = hostPort(0)
-                proxyPort = Val(hostPort(1))
+                proxyPort = val(hostPort(1))
             Else
                 proxyPort = 80
             End If
@@ -6065,7 +6197,6 @@ Private Function InflatePayload(ByVal handle As Long, ByRef data() As Byte, ByVa
     ReDim Preserve outBuf(0 To outLen - 1)
     InflatePayload = outBuf
 End Function
-
 
 Private Sub FreeDeflateStreams(ByVal handle As Long)
     With m_Connections(handle)
