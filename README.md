@@ -52,7 +52,7 @@ Beyond basic WebSocket messaging, Wasabi bundles an MQTT 3.1.1 client, NTLM/Kerb
 
 ## Roadmap
 
-### Completed Base (Core & Transport)
+### ![](resources/svg/completed.svg) Completed Base (Core & Transport)
 - [x] IPv6 and SNI support
 - [x] Mutual TLS (mTLS) for client certificate authentication
 - [x] SOCKS5 proxy support
