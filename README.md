@@ -494,10 +494,6 @@ No messages are lost.
 - **Connection doesn't drop.** The socket stays active regardless of polling frequency.
 - **No infinite loop required.** Simple send/receive/disconnect workflows work fine.
 
-## Research & Architecture
-
-The [`research/`](research) directory contains detailed design notes, investigation logs, and reference materials for every major subsystem in Wasabi. It is intended for maintainers and advanced users who want to understand *why* certain decisions were made, not just *what* the code does. Topics include TLS verification, pointer fixes, `permessage-deflate` negotiations, Happy Eyeballs, MTU discovery, MQTT state logic, zero-copy buffer management, fragmentation, and VBA6 compatibility.
-
 ## Acknowledgements
 
 Wasabi was built on years of community efforts to bring real-time networking
