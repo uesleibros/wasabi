@@ -52,6 +52,7 @@ Beyond basic WebSocket messaging, Wasabi bundles an MQTT 3.1.1 client, NTLM/Kerb
 
 ## Roadmap
 
+### Completed Base (Core & Transport)
 - [x] IPv6 and SNI support
 - [x] Mutual TLS (mTLS) for client certificate authentication
 - [x] SOCKS5 proxy support
@@ -72,8 +73,17 @@ Beyond basic WebSocket messaging, Wasabi bundles an MQTT 3.1.1 client, NTLM/Kerb
 - [x] **Ping Jitter** to prevent strict gateway timeouts
 - [x] **Native TCP Client** with plain and TLS modes
 - [x] **TCP MTU Discovery**, NoDelay, inactivity timeout, and proxy support
-- [ ] `WSAAsyncSelect` event-driven socket notifications
+
+### Next Steps (DX & Asynchronicity)
 - [ ] `WebSocketStartListening` helper for one-line polling loops
+- [ ] `WSAAsyncSelect` event-driven socket notifications (Eliminating polling blocks)
+
+### The Future: "Framework Era" (Scalability & Extensions)
+- [ ] **Core Refactoring:** Isolate the raw TCP/Schannel engine (the "Dumb Pipe") from high-level protocol logic.
+- [ ] **Middleware Pipeline:** Implement an injection system via Late Binding (`Object`) for network interceptors (`OnBeforeSend` / `OnAfterReceive`).
+- [ ] **Modular Compression:** Decouple the `zlib1.dll` dependency from the main module into an official extension (`ExtWasabiZlib.cls`).
+- [ ] **Pluggable Protocols:** Add a dedicated slot in the engine for application protocol injection (enabling the community to plug in MQTT 5.0, AMQP, or custom enterprise parsers).
+- [ ] **Security Interceptors:** Create a plugin architecture for autonomous injection of authentication headers (OAuth, JWT, AWS Signature V4) and custom E2E encryption (e.g., AES-256).
 
 ## Examples
 
