@@ -421,11 +421,11 @@ Every API declaration uses `#If VBA7` to switch between `Long` (32-bit) and
 
 | Library | Role in Wasabi | Optional |
 |---|---|:---:|
-| <img src="resources/ms-vba.png" width="20" /> `ws2_32.dll` | TCP socket creation, DNS, send/recv | No |
-| <img src="resources/ms-vba.png" width="20" /> `secur32.dll` | TLS 1.2/1.3 via Schannel SSPI | No |
-| <img src="resources/ms-vba.png" width="20" /> `kernel32.dll` | Memory operations, UTF-8, tick count | No |
-| <img src="resources/ms-vba.png" width="20" /> `advapi32.dll` | Cryptographic random numbers (`CryptGenRandom`) | No |
-| <img src="resources/ms-vba.png" width="20" /> `crypt32.dll` | Certificate store, chain validation | No |
+| <img src="resources/ms-vba.png" width="18" /> `ws2_32.dll` | TCP socket creation, DNS, send/recv | No |
+| <img src="resources/ms-vba.png" width="18" /> `secur32.dll` | TLS 1.2/1.3 via Schannel SSPI | No |
+| <img src="resources/ms-vba.png" width="18" /> `kernel32.dll` | Memory operations, UTF-8, tick count | No |
+| <img src="resources/ms-vba.png" width="18" /> `advapi32.dll` | Cryptographic random numbers (`CryptGenRandom`) | No |
+| <img src="resources/ms-vba.png" width="18" /> `crypt32.dll` | Certificate store, chain validation | No |
 | ![](resources/svg/dependence.svg) `zlib1.dll` | Compression for `permessage-deflate` | **Yes** |
 
 **What does "zero external dependencies" mean in practice?**
@@ -486,12 +486,12 @@ The [`research/`](research) directory contains detailed design notes, investigat
 Wasabi was built on years of community efforts to bring real-time networking
 to the Office ecosystem.
 
-- [**WinHttpWebSocket**](https://github.com/EagleAglow/vba-websocket): First serious WebSocket attempt in VBA using native APIs.
-- [**VbAsyncSocket**](https://github.com/wqweto/VbAsyncSocket): The most sophisticated VB6/VBA networking library, with native Schannel.
-- [**VBA-Web**](https://github.com/VBA-tools/VBA-Web): Standard for HTTP/REST communication in VBA.
-- [**TlsSocketWSS**](https://github.com/Maatooh/TlsSocketWSS-vb6): TLS WebSocket server for VB6.
-- [**VB6-WebSocket-Server-SSL**](https://github.com/JoshyFrancis/vb6-websocket-server-ssl): Pure VB6 secure WebSocket server.
-- [**VBA_WinSockAPI**](https://github.com/papanda925/VBA_WinsockAPI_TCP_Sample): Educational Winsock TCP client/server in VBA.
+- ![](resources/svg/github.svg) [**WinHttpWebSocket**](https://github.com/EagleAglow/vba-websocket): First serious WebSocket attempt in VBA using native APIs.
+- ![](resources/svg/github.svg) [**VbAsyncSocket**](https://github.com/wqweto/VbAsyncSocket): The most sophisticated VB6/VBA networking library, with native Schannel.
+- ![](resources/svg/github.svg) [**VBA-Web**](https://github.com/VBA-tools/VBA-Web): Standard for HTTP/REST communication in VBA.
+- ![](resources/svg/github.svg) [**TlsSocketWSS**](https://github.com/Maatooh/TlsSocketWSS-vb6): TLS WebSocket server for VB6.
+- ![](resources/svg/github.svg) [**VB6-WebSocket-Server-SSL**](https://github.com/JoshyFrancis/vb6-websocket-server-ssl): Pure VB6 secure WebSocket server.
+- ![](resources/svg/github.svg) [**VBA_WinSockAPI**](https://github.com/papanda925/VBA_WinsockAPI_TCP_Sample): Educational Winsock TCP client/server in VBA.
 
 These projects shaped every architectural decision in Wasabi: the non-blocking I/O model, manual Schannel handling, ring buffers, and auto-reconnect flows.
 
