@@ -26,6 +26,8 @@
   <img src="https://img.shields.io/badge/TCP-Native%20Client-blue" alt="TCP" />
   <img src="https://img.shields.io/github/stars/uesleibros/wasabi?style=flat&color=gold" alt="Stars" />
   <img src="https://img.shields.io/github/last-commit/uesleibros/wasabi?style=flat" alt="Last Commit" />
+  <img src="https://img.shields.io/github/downloads/uesleibros/wasabi/total.svg?style=flat" alt="Downloads" />
+  
 </p>
 
 > [!NOTE]
