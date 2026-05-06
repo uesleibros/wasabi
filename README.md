@@ -2,7 +2,7 @@
   <img src="resources/logo.png" width="150" />
 </div>
 
-<h1 align="center">Wasabi</h1>
+<h1 align="center">Wasabi: VBA WebSocket</h1>
 
 <p align="center">
   Production-ready WebSocket and WSS for VBA with native TLS, auto reconnect, proxy support, MQTT, permessage-deflate, and zero external dependencies
