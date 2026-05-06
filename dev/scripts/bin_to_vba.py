@@ -17,10 +17,9 @@ def generate_vba_hex(filepath):
     }
 
 binaries = [
-    "safe_thunk_x64.bin", "safe_thunk_x86.bin",
-    "swap_32_x64.bin", "swap_32_x86.bin",
     "ws_mask_x64.bin", "ws_mask_x86.bin",
-    "mem_zero_x64.bin", "mem_zero_x86.bin"
+    "mem_zero_x64.bin", "mem_zero_x86.bin",
+    "mem_find_x64.bin", "mem_find_x86.bin"
 ]
 
 asm_dir = "../asm/"
