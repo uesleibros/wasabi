@@ -1,6 +1,6 @@
 Attribute VB_Name = "Wasabi"
 ' ============================================================================
-' Wasabi v2.3.1-beta
+' Wasabi v2.3.2-beta
 ' Copyright (c) 2026 UesleiDev
 '
 ' Permission is hereby granted, free of charge, to any person obtaining a
@@ -75,7 +75,7 @@ Option Private Module
     Private Declare PtrSafe Function sock_gethostbyname Lib "ws2_32.dll" Alias "gethostbyname" (ByVal hostname As String) As LongPtr
     Private Declare PtrSafe Function sock_inet_addr Lib "ws2_32.dll" Alias "inet_addr" (ByVal cp As String) As Long
     Private Declare PtrSafe Function sock_ioctlsocket Lib "ws2_32.dll" Alias "ioctlsocket" (ByVal s As LongPtr, ByVal cmd As Long, ByRef argp As Long) As Long
-    Private Declare PtrSafe Function sock_select Lib "ws2_32.dll" Alias "select" (ByVal nfds As Long, ByRef readfds As Any, ByRef writefds As Any, ByRef exceptfds As Any, ByRef timeout As TIMEVAL) As Long
+    Private Declare PtrSafe Function sock_select Lib "ws2_32.dll" Alias "select" (ByVal nfds As Long, ByRef readfds As Any, ByRef writefds As Any, ByRef exceptfds As Any, ByRef TIMEOUT As TIMEVAL) As Long
     Private Declare PtrSafe Function sock_setsockopt Lib "ws2_32.dll" Alias "setsockopt" (ByVal s As LongPtr, ByVal level As Long, ByVal optname As Long, ByRef optVal As Long, ByVal optlen As Long) As Long
     Private Declare PtrSafe Sub CopyMemory Lib "kernel32" Alias "RtlMoveMemory" (ByRef dest As Any, ByRef src As Any, ByVal size As Long)
     Private Declare PtrSafe Sub CopyMemoryFromPtr Lib "kernel32" Alias "RtlMoveMemory" (ByRef dest As Any, ByVal src As LongPtr, ByVal size As Long)
@@ -83,6 +83,7 @@ Option Private Module
     Private Declare PtrSafe Function WideCharToMultiByte Lib "kernel32" (ByVal CodePage As Long, ByVal dwFlags As Long, ByVal lpWideCharStr As LongPtr, ByVal cchWideChar As Long, ByRef lpMultiByteStr As Byte, ByVal cchMultiByte As Long, ByVal lpDefaultChar As LongPtr, ByVal lpUsedDefaultChar As LongPtr) As Long
     Private Declare PtrSafe Function GetTickCount Lib "kernel32" () As Long
     Private Declare PtrSafe Function CryptGenRandom Lib "advapi32.dll" (ByVal hProv As LongPtr, ByVal dwLen As Long, ByRef pbBuffer As Byte) As Long
+    Private Declare PtrSafe Function VarPtrArray Lib "VBE7" Alias "VarPtr" (ByRef arr() As Byte) As LongPtr
     Private Const NULL_PTR As LongPtr = 0
 #Else
     Private Declare Function WinHttpGetIEProxyConfigForCurrentUser Lib "winhttp.dll" (ByRef pProxyConfig As WINHTTP_CURRENT_USER_IE_PROXY_CONFIG) As Long
@@ -142,6 +143,7 @@ Option Private Module
     Private Declare Function WideCharToMultiByte Lib "kernel32" (ByVal CodePage As Long, ByVal dwFlags As Long, ByVal lpWideCharStr As Long, ByVal cchWideChar As Long, ByRef lpMultiByteStr As Byte, ByVal cchMultiByte As Long, ByVal lpDefaultChar As Long, ByVal lpUsedDefaultChar As Long) As Long
     Private Declare Function GetTickCount Lib "kernel32" () As Long
     Private Declare Function CryptGenRandom Lib "advapi32.dll" (ByVal hProv As Long, ByVal dwLen As Long, ByRef pbBuffer As Byte) As Long
+    Private Declare Function VarPtrArray Lib "VBE6" Alias "VarPtr" (ByRef arr() As Byte) As Long
     Private Const NULL_PTR As Long = 0
 #End If
 
@@ -435,6 +437,12 @@ Public Enum WasabiState
     STATE_CLOSING = 3
 End Enum
 
+Public Enum WasabiConnectionMode
+    MODE_WEBSOCKET = 0
+    MODE_TCP = 1
+    MODE_TCP_TLS = 2
+End Enum
+
 Private Type WasabiConnection
 #If VBA7 Then
     Socket As LongPtr
@@ -449,7 +457,7 @@ Private Type WasabiConnection
 #End If
     State As WasabiState
     TLS As Boolean
-    Host As String
+    HOST As String
     port As Long
     path As String
     OriginalUrl As String
@@ -486,7 +494,7 @@ Private Type WasabiConnection
     ReceiveTimeoutMs As Long
     EnableErrorDialog As Boolean
     LogCallback As String
-    Stats As WasabiStats
+    stats As WasabiStats
     NoDelay As Boolean
     proxyHost As String
     proxyPort As Long
@@ -542,6 +550,10 @@ Private Type WasabiConnection
     OfflineTextCount As Long
     OfflineBinaryQueue() As BinaryMessage
     OfflineBinaryCount As Long
+    
+    Mode As WasabiConnectionMode
+    TcpRecvBuffer() As Byte
+    TcpRecvLen As Long
     
     PingJitterMaxMs As Long
     CurrentPingIntervalMs As Long
@@ -757,14 +769,23 @@ Private Sub EnsureBufferCapacity(ByRef Buffer() As Byte, ByVal RequiredLen As Lo
 End Sub
 
 Private Function SafeArrayLen(ByRef arr() As Byte) As Long
+    #If VBA7 Then
+        Dim pSA As LongPtr
+        Dim ptr As LongPtr
+    #Else
+        Dim pSA As Long
+        Dim ptr As Long
+    #End If
     Dim lo As Long
     Dim hi As Long
+    ptr = VarPtrArray(arr)
+    If ptr = 0 Then Exit Function
+    CopyMemoryFromPtr pSA, ptr, LenB(pSA)
+    If pSA = 0 Then Exit Function
     lo = LBound(arr)
     hi = UBound(arr)
     If hi >= lo Then
         SafeArrayLen = hi - lo + 1
-    Else
-        SafeArrayLen = 0
     End If
 End Function
 
@@ -810,7 +831,7 @@ Private Sub SetError(ByVal errType As WasabiError, ByVal techMsg As String, ByVa
     m_LastErrorCode = errCode
     m_TechnicalDetails = techMsg
     WasabiLog handle, "ERR " & errType & " | " & techMsg
-    If errCode <> 0 Then WasabiLog handle, "SysCode: " & errCode & " (0x" & hex(errCode) & ")"
+    If errCode <> 0 Then WasabiLog handle, "SysCode: " & errCode & " (0x" & Hex(errCode) & ")"
     If ValidIndex(handle) Then
         m_Connections(handle).LastError = errType
         m_Connections(handle).LastErrorCode = errCode
@@ -918,6 +939,7 @@ Private Function AllocConnection() As Long
             ReDim m_Connections(i).MqttBuffer(0 To 4095)
             ReDim m_Connections(i).OfflineTextQueue(0 To MSG_QUEUE_SIZE - 1)
             ReDim m_Connections(i).OfflineBinaryQueue(0 To MSG_QUEUE_SIZE - 1)
+            ReDim m_Connections(i).TcpRecvBuffer(0 To bufSize - 1)
             ResetConnectionState i
             InitializeMTU i
             AllocConnection = i
@@ -929,9 +951,11 @@ End Function
 
 Private Sub ResetConnectionState(ByVal handle As Long)
     With m_Connections(handle)
+        .Mode = MODE_WEBSOCKET
+        .TcpRecvLen = 0
         .State = STATE_CLOSED
         .TLS = False
-        .Host = ""
+        .HOST = ""
         .port = 0
         .path = ""
         .OriginalUrl = ""
@@ -993,7 +1017,7 @@ Private Sub ResetConnectionState(ByVal handle As Long)
         .MqttNextPacketId = 0
         .MqttInFlightCount = 0
         ReDim .MqttInFlight(0 To 0)
-        With .Stats
+        With .stats
             .BytesSent = 0
             .BytesReceived = 0
             .MessagesSent = 0
@@ -1142,7 +1166,7 @@ End Sub
 
 Private Function WaitForDataOn(ByVal handle As Long, ByVal timeoutMs As Long) As Boolean
     Dim readSet As FD_SET
-    Dim timeout As TIMEVAL
+    Dim TIMEOUT As TIMEVAL
     Dim effective As Long
     effective = timeoutMs
     If effective = 0 And ValidIndex(handle) Then
@@ -1152,9 +1176,9 @@ Private Function WaitForDataOn(ByVal handle As Long, ByVal timeoutMs As Long) As
     End If
     readSet.fd_count = 1
     readSet.fd_array(0) = m_Connections(handle).Socket
-    timeout.tv_sec = effective \ 1000
-    timeout.tv_usec = (effective Mod 1000) * 1000
-    WaitForDataOn = (sock_select(0, readSet, ByVal 0&, ByVal 0&, timeout) > 0)
+    TIMEOUT.tv_sec = effective \ 1000
+    TIMEOUT.tv_usec = (effective Mod 1000) * 1000
+    WaitForDataOn = (sock_select(0, readSet, ByVal 0&, ByVal 0&, TIMEOUT) > 0)
 End Function
 
 Private Function RawSendFor(ByVal handle As Long, ByRef frame() As Byte) As Boolean
@@ -1364,7 +1388,7 @@ Private Function ParseURL(ByVal url As String, ByRef outHost As String, ByRef ou
             c = Mid(portStr, i, 1)
             If c < "0" Or c > "9" Then Exit Function
         Next i
-        portVal = val(portStr)
+        portVal = Val(portStr)
         If portVal <= 0 Or portVal > 65535 Then Exit Function
         outPort = portVal
     Else
@@ -1636,8 +1660,8 @@ Private Function DoProxyHTTP(ByVal handle As Long) As Boolean
     Dim sendResult As Long
     Dim wsaErr As Long
     With m_Connections(handle)
-        req = "CONNECT " & .Host & ":" & .port & " HTTP/1.1" & vbCrLf
-        req = req & "Host: " & .Host & ":" & .port & vbCrLf
+        req = "CONNECT " & .HOST & ":" & .port & " HTTP/1.1" & vbCrLf
+        req = req & "Host: " & .HOST & ":" & .port & vbCrLf
         If .proxyUser <> "" And Not .ProxyUseNtlm Then
             req = req & "Proxy-Authorization: Basic " & Base64Encode(StrConv(.proxyUser & ":" & .proxyPass, vbFromUnicode)) & vbCrLf
         End If
@@ -1677,8 +1701,8 @@ Private Function DoProxyHTTP(ByVal handle As Long) As Boolean
                     If lf > 0 Then ntlmHeader = Left(ntlmHeader, lf - 1)
                     ntlmToken = GenerateNtlmToken(handle, ntlmHeader, .proxyHost)
                     If ntlmToken <> "" Then
-                        req = "CONNECT " & .Host & ":" & .port & " HTTP/1.1" & vbCrLf
-                        req = req & "Host: " & .Host & ":" & .port & vbCrLf
+                        req = "CONNECT " & .HOST & ":" & .port & " HTTP/1.1" & vbCrLf
+                        req = req & "Host: " & .HOST & ":" & .port & vbCrLf
                         req = req & "Proxy-Authorization: " & ntlmToken & vbCrLf
                         req = req & vbCrLf
                         sendBuf = StrConv(req, vbFromUnicode)
@@ -1704,7 +1728,7 @@ Private Function DoProxyHTTP(ByVal handle As Long) As Boolean
             Else
                 statusLine = Left(response, 50)
             End If
-            SetError ERR_PROXY_TUNNEL_FAILED, "Proxy CONNECT rejected: " & statusLine, "Proxy refused the tunnel connection." & vbCrLf & "Server: " & .Host & ":" & .port, handle
+            SetError ERR_PROXY_TUNNEL_FAILED, "Proxy CONNECT rejected: " & statusLine, "Proxy refused the tunnel connection." & vbCrLf & "Server: " & .HOST & ":" & .port, handle
             Exit Function
         End If
     End With
@@ -1784,9 +1808,9 @@ Private Function DoProxySOCKS5(ByVal handle As Long) As Boolean
                 Exit Function
             End If
         End If
-        hostBytes = StrConv(.Host, vbFromUnicode)
+        hostBytes = StrConv(.HOST, vbFromUnicode)
         If UBound(hostBytes) + 1 > 255 Then
-            SetError ERR_PROXY_CONNECT_FAILED, "Hostname too long for SOCKS5: " & Len(.Host) & " chars", "Proxy hostname exceeds SOCKS5 limit.", handle
+            SetError ERR_PROXY_CONNECT_FAILED, "Hostname too long for SOCKS5: " & Len(.HOST) & " chars", "Proxy hostname exceeds SOCKS5 limit.", handle
             Exit Function
         End If
         hostLen = CByte(UBound(hostBytes) + 1)
@@ -1927,7 +1951,7 @@ Private Function LoadClientCert(ByVal handle As Long) As Boolean
             pwPtr = IIf(Len(.ClientCertPfxPass) > 0, StrPtr(.ClientCertPfxPass), NULL_PTR)
             outStore = PFXImportCertStore(blob, pwPtr, CRYPT_EXPORTABLE Or PKCS12_ALLOW_OVERWRITE_KEY)
             If outStore = 0 Then
-                SetError ERR_CERT_LOAD_FAILED, "PFXImportCertStore failed: 0x" & hex(Err.LastDllError), "Failed to import client certificate PFX.", handle, Err.LastDllError
+                SetError ERR_CERT_LOAD_FAILED, "PFXImportCertStore failed: 0x" & Hex(Err.LastDllError), "Failed to import client certificate PFX.", handle, Err.LastDllError
                 Exit Function
             End If
             outCtx = CertFindCertificateInStore(outStore, X509_ASN_ENCODING Or PKCS_7_ASN_ENCODING, 0, CERT_FIND_ANY, ByVal NULL_PTR, 0)
@@ -1939,7 +1963,7 @@ Private Function LoadClientCert(ByVal handle As Long) As Boolean
         ElseIf .ClientCertThumb <> "" Then
             outStore = CertOpenStore(CERT_STORE_PROV_SYSTEM, 0, NULL_PTR, CERT_SYSTEM_STORE_CURRENT_USER, StrPtr("MY"))
             If outStore = 0 Then
-                SetError ERR_CERT_LOAD_FAILED, "CertOpenStore (MY) failed: 0x" & hex(Err.LastDllError), "Cannot open Windows certificate store.", handle, Err.LastDllError
+                SetError ERR_CERT_LOAD_FAILED, "CertOpenStore (MY) failed: 0x" & Hex(Err.LastDllError), "Cannot open Windows certificate store.", handle, Err.LastDllError
                 Exit Function
             End If
             outCtx = CertFindCertificateInStore(outStore, X509_ASN_ENCODING Or PKCS_7_ASN_ENCODING, 0, CERT_FIND_SUBJECT_STR_A, ByVal StrPtr(.ClientCertThumb), 0)
@@ -1976,7 +2000,7 @@ Private Function ValidateServerCert(ByVal handle As Long) As Boolean
         pRemoteCert = 0
         result = QueryContextAttributes(.hContext, SECPKG_ATTR_REMOTE_CERT_CONTEXT, pRemoteCert)
         If result <> 0 Or pRemoteCert = 0 Then
-            SetError ERR_CERT_VALIDATE_FAILED, "QueryContextAttributes(REMOTE_CERT) failed: 0x" & hex(result), "Cannot retrieve server certificate.", handle, result
+            SetError ERR_CERT_VALIDATE_FAILED, "QueryContextAttributes(REMOTE_CERT) failed: 0x" & Hex(result), "Cannot retrieve server certificate.", handle, result
             Exit Function
         End If
         chainPara.cbSize = LenB(chainPara)
@@ -1987,14 +2011,14 @@ Private Function ValidateServerCert(ByVal handle As Long) As Boolean
         End If
         result = CertGetCertificateChain(NULL_PTR, pRemoteCert, 0, 0, chainPara, chainFlags, NULL_PTR, pChainCtx)
         If result = 0 Or pChainCtx = 0 Then
-            SetError ERR_CERT_VALIDATE_FAILED, "CertGetCertificateChain failed: 0x" & hex(Err.LastDllError), "Cannot build certificate chain.", handle
+            SetError ERR_CERT_VALIDATE_FAILED, "CertGetCertificateChain failed: 0x" & Hex(Err.LastDllError), "Cannot build certificate chain.", handle
             CertFreeCertificateContext pRemoteCert
             Exit Function
         End If
         sslExtra.cbSize = LenB(sslExtra)
         sslExtra.dwAuthType = AUTHTYPE_SERVER
         sslExtra.fdwChecks = 0
-        sslExtra.pwszServerName = StrPtr(.Host)
+        sslExtra.pwszServerName = StrPtr(.HOST)
         policyPara.cbSize = LenB(policyPara)
         policyPara.dwFlags = 0
         policyPara.pvExtraPolicyPara = VarPtr(sslExtra)
@@ -2003,11 +2027,11 @@ Private Function ValidateServerCert(ByVal handle As Long) As Boolean
         CertFreeCertificateChain pChainCtx
         CertFreeCertificateContext pRemoteCert
         If result = 0 Then
-            SetError ERR_CERT_VALIDATE_FAILED, "CertVerifyCertificateChainPolicy failed: 0x" & hex(Err.LastDllError), "Certificate policy check failed.", handle
+            SetError ERR_CERT_VALIDATE_FAILED, "CertVerifyCertificateChainPolicy failed: 0x" & Hex(Err.LastDllError), "Certificate policy check failed.", handle
             Exit Function
         End If
         If policyStatus.dwError <> 0 Then
-            SetError ERR_CERT_VALIDATE_FAILED, "Cert validation error 0x" & hex(policyStatus.dwError) & " chain=" & policyStatus.lChainIndex & " elem=" & policyStatus.lElementIndex, "Server certificate is not trusted (0x" & hex(policyStatus.dwError) & ").", handle, policyStatus.dwError
+            SetError ERR_CERT_VALIDATE_FAILED, "Cert validation error 0x" & Hex(policyStatus.dwError) & " chain=" & policyStatus.lChainIndex & " elem=" & policyStatus.lElementIndex, "Server certificate is not trusted (0x" & Hex(policyStatus.dwError) & ").", handle, policyStatus.dwError
             Exit Function
         End If
     End With
@@ -2046,7 +2070,7 @@ Private Function DoTLSHandshake(ByVal handle As Long) As Long
                 outBuf.cbBuffer = 0
                 outBuf.BufferType = SECBUFFER_TOKEN
                 outBuf.pvBuffer = 0
-                result = InitializeSecurityContext(.hCred, NULL_PTR, .Host, contextFlags, 0, 0, NULL_PTR, 0, .hContext, outBufDesc, contextAttr, tsExpiry)
+                result = InitializeSecurityContext(.hCred, NULL_PTR, .HOST, contextFlags, 0, 0, NULL_PTR, 0, .hContext, outBufDesc, contextAttr, tsExpiry)
                 firstCall = False
             Else
                 inBufDesc.ulVersion = SECBUFFER_VERSION
@@ -2064,7 +2088,7 @@ Private Function DoTLSHandshake(ByVal handle As Long) As Long
                 outBuf.cbBuffer = 0
                 outBuf.BufferType = SECBUFFER_TOKEN
                 outBuf.pvBuffer = 0
-                result = InitializeSecurityContextContinue(.hCred, .hContext, .Host, contextFlags, 0, 0, inBufDesc, 0, .hContext, outBufDesc, contextAttr, tsExpiry)
+                result = InitializeSecurityContextContinue(.hCred, .hContext, .HOST, contextFlags, 0, 0, inBufDesc, 0, .hContext, outBufDesc, contextAttr, tsExpiry)
                 extraData = 0
                 For i = 0 To 1
                     If inBuf(i).BufferType = SECBUFFER_EXTRA And inBuf(i).cbBuffer > 0 Then
@@ -2169,7 +2193,7 @@ Private Function TLSSend(ByVal handle As Long, ByRef data() As Byte) As Boolean
             bufferDesc.pBuffers = VarPtr(buffers(0))
             result = EncryptMessage(.hContext, 0, bufferDesc, 0)
             If result <> 0 Then
-                SetError ERR_TLS_ENCRYPT_FAILED, "EncryptMessage failed: 0x" & hex(result), "TLS encryption error.", handle, result
+                SetError ERR_TLS_ENCRYPT_FAILED, "EncryptMessage failed: 0x" & Hex(result), "TLS encryption error.", handle, result
                 Exit Function
             End If
             toSend = buffers(0).cbBuffer + buffers(1).cbBuffer + buffers(2).cbBuffer
@@ -2224,7 +2248,7 @@ Private Sub TLSDecrypt(ByVal handle As Long)
                 Exit Sub
             End If
             If result <> SEC_E_OK Then
-                SetError ERR_TLS_DECRYPT_FAILED, "DecryptMessage failed: 0x" & hex(result), "TLS decryption error.", handle, result
+                SetError ERR_TLS_DECRYPT_FAILED, "DecryptMessage failed: 0x" & Hex(result), "TLS decryption error.", handle, result
                 Exit Sub
             End If
             For i = 0 To 3
@@ -2446,7 +2470,7 @@ Private Sub ParseDeflateResponse(ByVal handle As Long, ByVal response As String)
         
         swbPos = InStr(LCase(extLine), "server_max_window_bits=")
         If swbPos > 0 Then
-            swbVal = val(Mid(extLine, swbPos + 22))
+            swbVal = Val(Mid(extLine, swbPos + 22))
             If swbVal >= 8 And swbVal <= 15 Then
                 .DeflateWindowBits = -swbVal
                 .ServerMaxWindowBits = swbVal
@@ -2455,7 +2479,7 @@ Private Sub ParseDeflateResponse(ByVal handle As Long, ByVal response As String)
         
         cwbPos = InStr(LCase(extLine), "client_max_window_bits=")
         If cwbPos > 0 Then
-            cwbVal = val(Mid(extLine, cwbPos + 22))
+            cwbVal = Val(Mid(extLine, cwbPos + 22))
             If cwbVal >= 8 And cwbVal <= 15 Then
                 .InflateWindowBits = -cwbVal
                 .ClientMaxWindowBits = cwbVal
@@ -2484,11 +2508,11 @@ Private Function DoWebSocketHandshake(ByVal handle As Long) As Boolean
     wsKey = GenerateWSKey()
     
     With m_Connections(handle)
-        hostHeader = IIf((.TLS And .port <> 443) Or (Not .TLS And .port <> 80), .Host & ":" & .port, .Host)
+        hostHeader = IIf((.TLS And .port <> 443) Or (Not .TLS And .port <> 80), .HOST & ":" & .port, .HOST)
         If .TLS Then
-            originHeader = "https://" & IIf(.port <> 443, .Host & ":" & .port, .Host)
+            originHeader = "https://" & IIf(.port <> 443, .HOST & ":" & .port, .HOST)
         Else
-            originHeader = "http://" & IIf(.port <> 80, .Host & ":" & .port, .Host)
+            originHeader = "http://" & IIf(.port <> 80, .HOST & ":" & .port, .HOST)
         End If
         handshake = "GET " & .path & " HTTP/1.1" & vbCrLf
         handshake = handshake & "Host: " & hostHeader & vbCrLf
@@ -2691,7 +2715,7 @@ Private Sub ProcessFrames(ByVal handle As Long)
                             .MsgQueue(.MsgTail) = textMsg
                             .MsgTail = (.MsgTail + 1) Mod MSG_QUEUE_SIZE
                             .MsgCount = .MsgCount + 1
-                            .Stats.MessagesReceived = .Stats.MessagesReceived + 1
+                            .stats.MessagesReceived = .stats.MessagesReceived + 1
                         Else
                             WasabiLog handle, "Warning: message queue full, dropping message (handle=" & handle & ")"
                         End If
@@ -2758,7 +2782,7 @@ Private Sub ProcessFrames(ByVal handle As Long)
                             .BinaryQueue(.BinaryTail).data = binaryData
                             .BinaryTail = (.BinaryTail + 1) Mod MSG_QUEUE_SIZE
                             .BinaryCount = .BinaryCount + 1
-                            .Stats.MessagesReceived = .Stats.MessagesReceived + 1
+                            .stats.MessagesReceived = .stats.MessagesReceived + 1
                         Else
                             WasabiLog handle, "Warning: binary queue full, dropping message (handle=" & handle & ")"
                         End If
@@ -2801,7 +2825,7 @@ Private Sub ProcessFrames(ByVal handle As Long)
                                     .MsgQueue(.MsgTail) = textMsg
                                     .MsgTail = (.MsgTail + 1) Mod MSG_QUEUE_SIZE
                                     .MsgCount = .MsgCount + 1
-                                    .Stats.MessagesReceived = .Stats.MessagesReceived + 1
+                                    .stats.MessagesReceived = .stats.MessagesReceived + 1
                                 End If
                             ElseIf .FragmentOpcode = WS_OPCODE_BINARY Then
                                 ReDim binaryData(0 To contPayloadLen - 1)
@@ -2810,7 +2834,7 @@ Private Sub ProcessFrames(ByVal handle As Long)
                                     .BinaryQueue(.BinaryTail).data = binaryData
                                     .BinaryTail = (.BinaryTail + 1) Mod MSG_QUEUE_SIZE
                                     .BinaryCount = .BinaryCount + 1
-                                    .Stats.MessagesReceived = .Stats.MessagesReceived + 1
+                                    .stats.MessagesReceived = .stats.MessagesReceived + 1
                                 End If
                             End If
                             .Fragmenting = False
@@ -2951,50 +2975,85 @@ Private Sub FeedBuffer(ByVal handle As Long)
     Dim received As Long
     Dim wsaErr As Long
     Dim copyLen As Long
+
     With m_Connections(handle)
         If sock_ioctlsocket(.Socket, FIONREAD, available) <> 0 Then
             wsaErr = WSAGetLastError()
             SetError ERR_CONNECTION_LOST, "ioctlsocket(FIONREAD) failed: " & WSAErrDesc(wsaErr), "Connection lost.", handle, wsaErr
             .State = STATE_CLOSED
-            If .AutoReconnect Then TryReconnect handle
+            If .AutoReconnect And .Mode = MODE_WEBSOCKET Then TryReconnect handle
             Exit Sub
         End If
+
         If available <= 0 Then Exit Sub
         If available > BUFFER_SIZE \ 2 Then available = BUFFER_SIZE \ 2
+
         ReDim tempBuf(0 To available - 1)
         received = sock_recv(.Socket, tempBuf(0), available, 0)
+
         If received > 0 Then
-            .Stats.BytesReceived = .Stats.BytesReceived + received
+            .stats.BytesReceived = .stats.BytesReceived + received
             .LastActivityAt = GetTickCount()
-            If .TLS Then
-                copyLen = received
-                If .recvLen + copyLen > BUFFER_SIZE Then copyLen = BUFFER_SIZE - .recvLen
-                If copyLen > 0 Then
-                    EnsureBufferCapacity .recvBuffer, .recvLen + copyLen
-                    CopyMemory .recvBuffer(.recvLen), tempBuf(0), copyLen
-                    .recvLen = .recvLen + copyLen
-                End If
-                TLSDecrypt handle
-            Else
-                copyLen = received
-                If .DecryptLen + copyLen > BUFFER_SIZE Then copyLen = BUFFER_SIZE - .DecryptLen
-                If copyLen > 0 Then
-                    EnsureBufferCapacity .DecryptBuffer, .DecryptLen + copyLen
-                    CopyMemory .DecryptBuffer(.DecryptLen), tempBuf(0), copyLen
-                    .DecryptLen = .DecryptLen + copyLen
-                End If
-            End If
-            ProcessFrames handle
+
+            Select Case .Mode
+                Case MODE_WEBSOCKET
+                    If .TLS Then
+                        copyLen = received
+                        If .recvLen + copyLen > BUFFER_SIZE Then copyLen = BUFFER_SIZE - .recvLen
+                        If copyLen > 0 Then
+                            EnsureBufferCapacity .recvBuffer, .recvLen + copyLen
+                            CopyMemory .recvBuffer(.recvLen), tempBuf(0), copyLen
+                            .recvLen = .recvLen + copyLen
+                        End If
+                        TLSDecrypt handle
+                    Else
+                        copyLen = received
+                        If .DecryptLen + copyLen > BUFFER_SIZE Then copyLen = BUFFER_SIZE - .DecryptLen
+                        If copyLen > 0 Then
+                            EnsureBufferCapacity .DecryptBuffer, .DecryptLen + copyLen
+                            CopyMemory .DecryptBuffer(.DecryptLen), tempBuf(0), copyLen
+                            .DecryptLen = .DecryptLen + copyLen
+                        End If
+                    End If
+                    ProcessFrames handle
+
+                Case MODE_TCP, MODE_TCP_TLS
+                    If .TLS Then
+                        copyLen = received
+                        If .recvLen + copyLen > BUFFER_SIZE Then copyLen = BUFFER_SIZE - .recvLen
+                        If copyLen > 0 Then
+                            EnsureBufferCapacity .recvBuffer, .recvLen + copyLen
+                            CopyMemory .recvBuffer(.recvLen), tempBuf(0), copyLen
+                            .recvLen = .recvLen + copyLen
+                        End If
+                        TLSDecrypt handle
+                        If .DecryptLen > 0 Then
+                            EnsureBufferCapacity .TcpRecvBuffer, .TcpRecvLen + .DecryptLen
+                            CopyMemory .TcpRecvBuffer(.TcpRecvLen), .DecryptBuffer(0), .DecryptLen
+                            .TcpRecvLen = .TcpRecvLen + .DecryptLen
+                            .DecryptLen = 0
+                        End If
+                    Else
+                        copyLen = received
+                        If .TcpRecvLen + copyLen > BUFFER_SIZE Then copyLen = BUFFER_SIZE - .TcpRecvLen
+                        If copyLen > 0 Then
+                            EnsureBufferCapacity .TcpRecvBuffer, .TcpRecvLen + copyLen
+                            CopyMemory .TcpRecvBuffer(.TcpRecvLen), tempBuf(0), copyLen
+                            .TcpRecvLen = .TcpRecvLen + copyLen
+                        End If
+                    End If
+            End Select
+
         ElseIf received = 0 Then
             SetError ERR_CONNECTION_LOST, "recv() returned 0 - server closed connection", "Server closed the connection.", handle
             .State = STATE_CLOSED
-            If .AutoReconnect Then TryReconnect handle
+            If .AutoReconnect And .Mode = MODE_WEBSOCKET Then TryReconnect handle
         Else
             wsaErr = WSAGetLastError()
             If wsaErr <> 10035 Then
                 SetError ERR_RECV_FAILED, "recv() failed: " & WSAErrDesc(wsaErr), "Failed to receive data.", handle, wsaErr
                 .State = STATE_CLOSED
-                If .AutoReconnect Then TryReconnect handle
+                If .AutoReconnect And .Mode = MODE_WEBSOCKET Then TryReconnect handle
             End If
         End If
     End With
@@ -3005,17 +3064,19 @@ Private Sub TickMaintenance(ByVal handle As Long)
     With m_Connections(handle)
         If .State <> STATE_OPEN Then Exit Sub
         now = GetTickCount()
-        If .PingIntervalMs > 0 Then
-            If TickDiff(.LastPingSentAt, now) >= .CurrentPingIntervalMs Then
-                WebSocketSendPing "", handle
-                CalculateNextPing handle
+        If .Mode = MODE_WEBSOCKET Then
+            If .PingIntervalMs > 0 Then
+                If TickDiff(.LastPingSentAt, now) >= .CurrentPingIntervalMs Then
+                    WebSocketSendPing "", handle
+                    CalculateNextPing handle
+                End If
             End If
         End If
         If .InactivityTimeoutMs > 0 And .LastActivityAt > 0 Then
             If TickDiff(.LastActivityAt, now) >= .InactivityTimeoutMs Then
-                SetError ERR_INACTIVITY_TIMEOUT, "Inactivity timeout after " & .InactivityTimeoutMs & "ms", "Connection timed out (inactivity).", handle
+                SetError ERR_INACTIVITY_TIMEOUT, "Inactivity timeout after " & .InactivityTimeoutMs & "ms", "Connection timed out.", handle
                 .State = STATE_CLOSED
-                If .AutoReconnect Then TryReconnect handle
+                If .AutoReconnect And .Mode = MODE_WEBSOCKET Then TryReconnect handle
                 Exit Sub
             End If
         End If
@@ -3164,30 +3225,32 @@ Private Sub TryReconnect(ByVal handle As Long)
     End If
 End Sub
 
-Private Function ConnectHandle(ByVal handle As Long, ByVal url As String) As Boolean
+Private Function TcpConnectInternal(ByVal handle As Long, ByVal HOST As String, ByVal port As Long, ByVal useTLS As Boolean) As Boolean
     Dim schannelCred As SCHANNEL_CRED
     Dim tsExpiry As SECURITY_INTEGER
-    Dim connectHost As String
-    Dim connectPort As Long
     Dim zeroBytes() As Byte
     Dim acquireResult As Long
     Dim tlsResult As Long
+    Dim connectHost As String
+    Dim connectPort As Long
+
     With m_Connections(handle)
+        .HOST = HOST
+        .port = port
+        .TLS = useTLS
         .State = STATE_CONNECTING
         .LastError = ERR_NONE
         .LastErrorCode = 0
         .TechnicalDetails = ""
-        .OriginalUrl = url
-        If Not ParseURL(url, .Host, .port, .path, .TLS) Then
-            SetError ERR_INVALID_URL, "Invalid URL: " & url, "Invalid WebSocket URL. Use ws:// or wss://", handle
-            GoTo Fail
-        End If
-        connectHost = IIf(.ProxyEnabled And .proxyHost <> "", .proxyHost, .Host)
-        connectPort = IIf(.ProxyEnabled And .proxyPort > 0, .proxyPort, .port)
+
+        connectHost = IIf(.ProxyEnabled And .proxyHost <> "", .proxyHost, HOST)
+        connectPort = IIf(.ProxyEnabled And .proxyPort > 0, .proxyPort, port)
+
         If Not ResolveAndConnect(handle, connectHost, connectPort) Then GoTo Fail
         InitializeMTU handle
         If .AutoMTU Then probeMTU handle
         ApplySocketOptions handle
+
         If .ProxyEnabled Then
             If .proxyType = PROXY_TYPE_SOCKS5 Then
                 If Not DoProxySOCKS5(handle) Then GoTo Fail
@@ -3195,57 +3258,89 @@ Private Function ConnectHandle(ByVal handle As Long, ByVal url As String) As Boo
                 If Not DoProxyHTTP(handle) Then GoTo Fail
             End If
         End If
-        If .TLS Then
+
+        If useTLS Then
             ReDim zeroBytes(0 To LenB(schannelCred) - 1)
             CopyMemory schannelCred, zeroBytes(0), LenB(schannelCred)
             schannelCred.dwVersion = SCHANNEL_CRED_VERSION
             schannelCred.grbitEnabledProtocols = SP_PROT_TLS1_2_CLIENT Or SP_PROT_TLS1_3_CLIENT
             schannelCred.dwFlags = SCH_CRED_NO_DEFAULT_CREDS Or SCH_CRED_MANUAL_CRED_VALIDATION Or SCH_CRED_IGNORE_NO_REVOCATION_CHECK Or SCH_CRED_IGNORE_REVOCATION_OFFLINE
+
             If .ClientCertThumb <> "" Or .ClientCertPfxPath <> "" Then
                 If LoadClientCert(handle) Then
                     m_ClientCertContextPtrs(handle) = .pClientCertCtx
                     schannelCred.cCreds = 1
                     schannelCred.paCred = VarPtr(m_ClientCertContextPtrs(handle))
-                Else
-                    WasabiLog handle, "WARNING: client cert load failed, proceeding without it (handle=" & handle & ")"
                 End If
             End If
+
             acquireResult = AcquireCredentialsHandle(NULL_PTR, "Microsoft Unified Security Protocol Provider", SECPKG_CRED_OUTBOUND, NULL_PTR, schannelCred, NULL_PTR, NULL_PTR, .hCred, tsExpiry)
             If acquireResult <> 0 Then
-                SetError ERR_TLS_ACQUIRE_CREDS_FAILED, "AcquireCredentialsHandle failed: 0x" & hex(acquireResult), "TLS initialization failed (0x" & hex(acquireResult) & ").", handle, acquireResult
+                SetError ERR_TLS_ACQUIRE_CREDS_FAILED, "AcquireCredentialsHandle failed: 0x" & Hex(acquireResult), "TLS initialization failed.", handle, acquireResult
                 GoTo Fail
             End If
+
             tlsResult = DoTLSHandshake(handle)
             If tlsResult <> 0 Then
                 If tlsResult = -1 Then
-                    SetError ERR_TLS_HANDSHAKE_TIMEOUT, "TLS handshake timed out with " & .Host, "TLS handshake timed out.", handle
+                    SetError ERR_TLS_HANDSHAKE_TIMEOUT, "TLS handshake timed out with " & HOST, "TLS handshake timed out.", handle
                 Else
-                    SetError ERR_TLS_HANDSHAKE_FAILED, "TLS handshake failed: 0x" & hex(tlsResult), "TLS handshake failed (0x" & hex(tlsResult) & ").", handle, tlsResult
+                    SetError ERR_TLS_HANDSHAKE_FAILED, "TLS handshake failed: 0x" & Hex(tlsResult), "TLS handshake failed.", handle, tlsResult
                 End If
                 GoTo Fail
             End If
+
             QueryContextAttributes .hContext, SECPKG_ATTR_STREAM_SIZES, .sizes
             CalculateOptimalFrameSize handle
+
             If .ValidateServerCert Then
                 If Not ValidateServerCert(handle) Then GoTo Fail
             End If
         End If
-        If Not DoWebSocketHandshake(handle) Then GoTo Fail
-        .State = STATE_OPEN
-        .Stats.ConnectedAt = GetTickCount()
-        .Stats.BytesSent = 0
-        .Stats.BytesReceived = 0
-        .Stats.MessagesSent = 0
-        .Stats.MessagesReceived = 0
-        .LastPingSentAt = GetTickCount()
-        .LastActivityAt = GetTickCount()
-        
-        If .OfflineQueueEnabled Then FlushOfflineQueues handle
     End With
-    ConnectHandle = True
+
+    TcpConnectInternal = True
     Exit Function
 Fail:
     CleanupHandle handle
+End Function
+
+Private Function ConnectHandle(ByVal handle As Long, ByVal url As String) As Boolean
+    Dim HOST As String
+    Dim port As Long
+    Dim path As String
+    Dim useTLS As Boolean
+
+    With m_Connections(handle)
+        .OriginalUrl = url
+        If Not ParseURL(url, HOST, port, path, useTLS) Then
+            SetError ERR_INVALID_URL, "Invalid URL: " & url, "Invalid WebSocket URL. Use ws:// or wss://", handle
+            Exit Function
+        End If
+        .path = path
+        .Mode = MODE_WEBSOCKET
+    End With
+
+    If Not TcpConnectInternal(handle, HOST, port, useTLS) Then Exit Function
+
+    If Not DoWebSocketHandshake(handle) Then
+        CleanupHandle handle
+        Exit Function
+    End If
+
+    With m_Connections(handle)
+        .State = STATE_OPEN
+        .stats.ConnectedAt = GetTickCount()
+        .stats.BytesSent = 0
+        .stats.BytesReceived = 0
+        .stats.MessagesSent = 0
+        .stats.MessagesReceived = 0
+        .LastPingSentAt = GetTickCount()
+        .LastActivityAt = GetTickCount()
+        If .OfflineQueueEnabled Then FlushOfflineQueues handle
+    End With
+
+    ConnectHandle = True
 End Function
 
 Private Function SendFrameFor(ByVal handle As Long, ByRef frame() As Byte) As Boolean
@@ -3551,6 +3646,302 @@ Private Sub FlushOfflineQueues(ByVal handle As Long)
     End If
 End Sub
 
+Public Function TcpConnect(ByVal HOST As String, ByVal port As Long, ByRef outHandle As Long) As Boolean
+    Dim wsa As WSADATA
+    Dim wsaErr As Long
+    Dim handle As Long
+
+    m_LastError = ERR_NONE
+    m_LastErrorCode = 0
+    m_TechnicalDetails = ""
+    InitConnectionPool
+
+    If Not m_WSAInitialized Then
+        wsaErr = WSAStartup(&H202, wsa)
+        If wsaErr <> 0 Then
+            SetError ERR_WSA_STARTUP_FAILED, "WSAStartup failed: " & wsaErr, "Network initialization failed.", INVALID_CONN_HANDLE, wsaErr
+            outHandle = INVALID_CONN_HANDLE
+            Exit Function
+        End If
+        m_WSAInitialized = True
+    End If
+
+    handle = AllocConnection()
+    If handle = INVALID_CONN_HANDLE Then
+        SetError ERR_MAX_CONNECTIONS, "Max connections reached", "Too many simultaneous connections.", INVALID_CONN_HANDLE
+        outHandle = INVALID_CONN_HANDLE
+        Exit Function
+    End If
+
+    m_Connections(handle).Mode = MODE_TCP
+
+    If Not TcpConnectInternal(handle, HOST, port, False) Then
+        outHandle = INVALID_CONN_HANDLE
+        Exit Function
+    End If
+
+    With m_Connections(handle)
+        .State = STATE_OPEN
+        .stats.ConnectedAt = GetTickCount()
+        .stats.BytesSent = 0
+        .stats.BytesReceived = 0
+        .stats.MessagesSent = 0
+        .stats.MessagesReceived = 0
+        .LastActivityAt = GetTickCount()
+    End With
+
+    m_DefaultHandle = handle
+    outHandle = handle
+    TcpConnect = True
+    WasabiLog handle, "TCP connected to " & HOST & ":" & port & " (handle=" & handle & ")"
+End Function
+
+Public Function TcpConnectTLS(ByVal HOST As String, ByVal port As Long, ByRef outHandle As Long) As Boolean
+    Dim wsa As WSADATA
+    Dim wsaErr As Long
+    Dim handle As Long
+
+    m_LastError = ERR_NONE
+    m_LastErrorCode = 0
+    m_TechnicalDetails = ""
+    InitConnectionPool
+
+    If Not m_WSAInitialized Then
+        wsaErr = WSAStartup(&H202, wsa)
+        If wsaErr <> 0 Then
+            SetError ERR_WSA_STARTUP_FAILED, "WSAStartup failed: " & wsaErr, "Network initialization failed.", INVALID_CONN_HANDLE, wsaErr
+            outHandle = INVALID_CONN_HANDLE
+            Exit Function
+        End If
+        m_WSAInitialized = True
+    End If
+
+    handle = AllocConnection()
+    If handle = INVALID_CONN_HANDLE Then
+        SetError ERR_MAX_CONNECTIONS, "Max connections reached", "Too many simultaneous connections.", INVALID_CONN_HANDLE
+        outHandle = INVALID_CONN_HANDLE
+        Exit Function
+    End If
+
+    m_Connections(handle).Mode = MODE_TCP_TLS
+
+    If Not TcpConnectInternal(handle, HOST, port, True) Then
+        outHandle = INVALID_CONN_HANDLE
+        Exit Function
+    End If
+
+    With m_Connections(handle)
+        .State = STATE_OPEN
+        .stats.ConnectedAt = GetTickCount()
+        .stats.BytesSent = 0
+        .stats.BytesReceived = 0
+        .stats.MessagesSent = 0
+        .stats.MessagesReceived = 0
+        .LastActivityAt = GetTickCount()
+    End With
+
+    m_DefaultHandle = handle
+    outHandle = handle
+    TcpConnectTLS = True
+    WasabiLog handle, "TCP+TLS connected to " & HOST & ":" & port & " (handle=" & handle & ")"
+End Function
+
+Public Function TcpSend(ByRef data() As Byte, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
+    Dim h As Long
+    Dim dataLen As Long
+
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Function
+
+    With m_Connections(h)
+        If .State <> STATE_OPEN Then
+            SetError ERR_NOT_CONNECTED, "TcpSend on disconnected handle=" & h, "Not connected.", h
+            Exit Function
+        End If
+        If .Mode = MODE_WEBSOCKET Then
+            SetError ERR_NOT_CONNECTED, "TcpSend called on WebSocket handle=" & h, "Use WebSocketSend for WebSocket connections.", h
+            Exit Function
+        End If
+
+        dataLen = SafeArrayLen(data)
+        If dataLen = 0 Then
+            TcpSend = True
+            Exit Function
+        End If
+
+        If .TLS Then
+            TcpSend = TLSSend(h, data)
+        Else
+            TcpSend = RawSendFor(h, data)
+        End If
+
+        If TcpSend Then
+            .stats.BytesSent = .stats.BytesSent + dataLen
+            .stats.MessagesSent = .stats.MessagesSent + 1
+        End If
+    End With
+End Function
+
+Public Function TcpSendText(ByVal text As String, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
+    Dim h As Long
+    Dim data() As Byte
+
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Function
+
+    data = StringToUtf8(text)
+    TcpSendText = TcpSend(data, h)
+End Function
+
+Public Function TcpReceive(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Byte()
+    Dim h As Long
+    Dim result() As Byte
+
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then
+        TcpReceive = result
+        Exit Function
+    End If
+
+    With m_Connections(h)
+        If .State <> STATE_OPEN Then
+            TcpReceive = result
+            Exit Function
+        End If
+        If .Mode = MODE_WEBSOCKET Then
+            TcpReceive = result
+            Exit Function
+        End If
+
+        TickMaintenance h
+        FeedBuffer h
+
+        If .TcpRecvLen > 0 Then
+            ReDim result(0 To .TcpRecvLen - 1)
+            CopyMemory result(0), .TcpRecvBuffer(0), .TcpRecvLen
+            .TcpRecvLen = 0
+            .stats.MessagesReceived = .stats.MessagesReceived + 1
+            TcpReceive = result
+        Else
+            TcpReceive = result
+        End If
+    End With
+End Function
+
+Public Function TcpReceiveText(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
+    Dim h As Long
+    Dim data() As Byte
+    Dim dataLen As Long
+
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Function
+
+    data = TcpReceive(h)
+    dataLen = SafeArrayLen(data)
+    If dataLen > 0 Then
+        TcpReceiveText = Utf8ToString(data, dataLen)
+    End If
+End Function
+
+Public Function TcpReceiveUntil(ByVal delimiter As String, Optional ByVal timeoutMs As Long = 5000, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
+    Dim h As Long
+    Dim accumulated() As Byte
+    Dim accLen As Long
+    Dim chunk() As Byte
+    Dim chunkLen As Long
+    Dim delimBytes() As Byte
+    Dim delimLen As Long
+    Dim startTick As Long
+    Dim i As Long
+    Dim found As Boolean
+
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Function
+
+    delimBytes = StringToUtf8(delimiter)
+    delimLen = SafeArrayLen(delimBytes)
+    ReDim accumulated(0 To BUFFER_SIZE - 1)
+    accLen = 0
+    startTick = GetTickCount()
+
+    Do
+        FeedBuffer h
+
+        With m_Connections(h)
+            If .TcpRecvLen > 0 Then
+                EnsureBufferCapacity accumulated, accLen + .TcpRecvLen
+                CopyMemory accumulated(accLen), .TcpRecvBuffer(0), .TcpRecvLen
+                accLen = accLen + .TcpRecvLen
+                .TcpRecvLen = 0
+            End If
+        End With
+
+        If accLen >= delimLen Then
+            For i = 0 To accLen - delimLen
+                found = True
+                Dim j As Long
+                For j = 0 To delimLen - 1
+                    If accumulated(i + j) <> delimBytes(j) Then
+                        found = False
+                        Exit For
+                    End If
+                Next j
+                If found Then
+                    Dim resultBytes() As Byte
+                    ReDim resultBytes(0 To i + delimLen - 1)
+                    CopyMemory resultBytes(0), accumulated(0), i + delimLen
+                    TcpReceiveUntil = Utf8ToString(resultBytes, i + delimLen)
+                    Dim remaining As Long
+                    remaining = accLen - (i + delimLen)
+                    If remaining > 0 Then
+                        CopyMemory m_Connections(h).TcpRecvBuffer(0), accumulated(i + delimLen), remaining
+                        m_Connections(h).TcpRecvLen = remaining
+                    End If
+                    Exit Function
+                End If
+            Next i
+        End If
+
+        If TickDiff(startTick, GetTickCount()) >= timeoutMs Then Exit Do
+        DoEvents
+    Loop
+
+    If accLen > 0 Then
+        TcpReceiveUntil = Utf8ToString(accumulated, accLen)
+    End If
+End Function
+
+Public Function TcpIsConnected(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Function
+    TcpIsConnected = (m_Connections(h).State = STATE_OPEN And m_Connections(h).Mode <> MODE_WEBSOCKET)
+End Function
+
+Public Function TcpGetPendingBytes(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Long
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Function
+    TcpGetPendingBytes = m_Connections(h).TcpRecvLen
+End Function
+
+Public Sub TcpFlushBuffer(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Sub
+    m_Connections(h).TcpRecvLen = 0
+End Sub
+
+Public Sub TcpDisconnect(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Sub
+    If m_Connections(h).Mode = MODE_WEBSOCKET Then Exit Sub
+    m_Connections(h).AutoReconnect = False
+    CleanupHandle h
+    WasabiLog h, "TCP disconnected (handle=" & h & ")"
+End Sub
+
 Public Function WebSocketConnect(ByVal url As String, Optional ByRef outHandle As Long = -1, Optional ByVal DeflateEnabled As Boolean = False, Optional ByVal DeflateContextTakeover As Boolean = True, Optional ByVal SubProtocol As String = "") As Boolean
     Dim wsa As WSADATA
     Dim wsaErr As Long
@@ -3627,11 +4018,15 @@ Public Sub WebSocketDisconnect(Optional ByVal handle As Long = INVALID_CONN_HAND
     Dim h As Long
     Dim i As Long
     Dim anyActive As Boolean
+
     h = ResolveHandle(handle)
     If Not ValidIndex(h) Then Exit Sub
+    If m_Connections(h).Mode <> MODE_WEBSOCKET Then Exit Sub
+
     m_Connections(h).AutoReconnect = False
     If m_Connections(h).State = STATE_OPEN Then WebSocketSendClose 1000, "", h
     CleanupHandle h
+
     If h = m_DefaultHandle Then
         m_DefaultHandle = 0
         For i = 0 To MAX_CONNECTIONS - 1
@@ -3641,6 +4036,7 @@ Public Sub WebSocketDisconnect(Optional ByVal handle As Long = INVALID_CONN_HAND
             End If
         Next i
     End If
+
     anyActive = False
     For i = 0 To MAX_CONNECTIONS - 1
         If m_Connections(i).State <> STATE_CLOSED Or m_Connections(i).Socket <> INVALID_SOCKET Then
@@ -3648,6 +4044,7 @@ Public Sub WebSocketDisconnect(Optional ByVal handle As Long = INVALID_CONN_HAND
             Exit For
         End If
     Next i
+
     If Not anyActive And m_WSAInitialized Then
         WSACleanup
         m_WSAInitialized = False
@@ -3659,7 +4056,12 @@ Public Sub WebSocketDisconnectAll()
     InitConnectionPool
     For i = 0 To MAX_CONNECTIONS - 1
         If m_Connections(i).State <> STATE_CLOSED Or m_Connections(i).Socket <> INVALID_SOCKET Then
-            WebSocketDisconnect i
+            Select Case m_Connections(i).Mode
+                Case MODE_WEBSOCKET
+                    WebSocketDisconnect i
+                Case MODE_TCP, MODE_TCP_TLS
+                    TcpDisconnect i
+            End Select
         End If
     Next i
 End Sub
@@ -3703,8 +4105,8 @@ Public Function WebSocketSend(ByVal message As String, Optional ByVal handle As 
         End If
         frame = BuildWSFrame(msgBytes, msgLen, WS_OPCODE_TEXT, True, useDeflate)
         If SendFrameFor(h, frame) Then
-            .Stats.BytesSent = .Stats.BytesSent + (UBound(frame) + 1)
-            .Stats.MessagesSent = .Stats.MessagesSent + 1
+            .stats.BytesSent = .stats.BytesSent + (UBound(frame) + 1)
+            .stats.MessagesSent = .stats.MessagesSent + 1
             WebSocketSend = True
         End If
     End With
@@ -3750,8 +4152,8 @@ Public Function WebSocketSendBinary(ByRef data() As Byte, Optional ByVal handle 
         End If
         frame = BuildWSFrame(sendData, dataLen, WS_OPCODE_BINARY, True, useDeflate)
         If SendFrameFor(h, frame) Then
-            .Stats.BytesSent = .Stats.BytesSent + (UBound(frame) + 1)
-            .Stats.MessagesSent = .Stats.MessagesSent + 1
+            .stats.BytesSent = .stats.BytesSent + (UBound(frame) + 1)
+            .stats.MessagesSent = .stats.MessagesSent + 1
             WebSocketSendBinary = True
         End If
     End With
@@ -3794,11 +4196,11 @@ Public Function WebSocketSendMTUAware(ByVal message As String, Optional ByVal ha
             CopyMemory chunkBytes(0), msgBytes(offset), chunkSize
             frame = BuildWSFrame(chunkBytes, chunkSize, opcode, isLast)
             If Not SendFrameFor(h, frame) Then Exit Function
-            .Stats.BytesSent = .Stats.BytesSent + (UBound(frame) + 1)
+            .stats.BytesSent = .stats.BytesSent + (UBound(frame) + 1)
             offset = offset + chunkSize
             opcode = WS_OPCODE_CONTINUATION
         Loop
-        .Stats.MessagesSent = .Stats.MessagesSent + 1
+        .stats.MessagesSent = .stats.MessagesSent + 1
     End With
     WebSocketSendMTUAware = True
 End Function
@@ -3838,11 +4240,11 @@ Public Function WebSocketSendBinaryMTUAware(ByRef data() As Byte, Optional ByVal
             CopyMemory chunkBytes(0), data(offset), chunkSize
             frame = BuildWSFrame(chunkBytes, chunkSize, opcode, isLast)
             If Not SendFrameFor(h, frame) Then Exit Function
-            .Stats.BytesSent = .Stats.BytesSent + (UBound(frame) + 1)
+            .stats.BytesSent = .stats.BytesSent + (UBound(frame) + 1)
             offset = offset + chunkSize
             opcode = WS_OPCODE_CONTINUATION
         Loop
-        .Stats.MessagesSent = .Stats.MessagesSent + 1
+        .stats.MessagesSent = .stats.MessagesSent + 1
     End With
     WebSocketSendBinaryMTUAware = True
 End Function
@@ -3879,8 +4281,8 @@ Public Function WebSocketSendBatch(ByRef messages() As String, Optional ByVal ha
                 Else
                     If Not RawSendFor(h, flushBuf) Then Exit Function
                 End If
-                .Stats.BytesSent = .Stats.BytesSent + batchLen
-                .Stats.MessagesSent = .Stats.MessagesSent + batchCount
+                .stats.BytesSent = .stats.BytesSent + batchLen
+                .stats.MessagesSent = .stats.MessagesSent + batchCount
                 batchLen = 0
                 batchCount = 0
             End If
@@ -3897,8 +4299,8 @@ NextMsg:
             Else
                 If Not RawSendFor(h, flushBuf) Then Exit Function
             End If
-            .Stats.BytesSent = .Stats.BytesSent + batchLen
-            .Stats.MessagesSent = .Stats.MessagesSent + batchCount
+            .stats.BytesSent = .stats.BytesSent + batchLen
+            .stats.MessagesSent = .stats.MessagesSent + batchCount
         End If
     End With
     WebSocketSendBatch = True
@@ -3937,8 +4339,8 @@ Public Function WebSocketSendBatchBinary(ByRef messages() As Variant, Optional B
                     Else
                         If Not RawSendFor(h, flushBuf) Then Exit Function
                     End If
-                    .Stats.BytesSent = .Stats.BytesSent + batchLen
-                    .Stats.MessagesSent = .Stats.MessagesSent + batchCount
+                    .stats.BytesSent = .stats.BytesSent + batchLen
+                    .stats.MessagesSent = .stats.MessagesSent + batchCount
                     batchLen = 0
                     batchCount = 0
                 End If
@@ -3956,8 +4358,8 @@ NextMsgBin:
             Else
                 If Not RawSendFor(h, flushBuf) Then Exit Function
             End If
-            .Stats.BytesSent = .Stats.BytesSent + batchLen
-            .Stats.MessagesSent = .Stats.MessagesSent + batchCount
+            .stats.BytesSent = .stats.BytesSent + batchLen
+            .stats.MessagesSent = .stats.MessagesSent + batchCount
         End If
     End With
     WebSocketSendBatchBinary = True
@@ -4348,7 +4750,7 @@ Public Function WebSocketGetErrorDescription(Optional ByVal handle As Long = INV
         Case ERR_TLS_RENEGOTIATE: desc = "TLS renegotiation not supported"
         Case Else: desc = "Unknown error (" & errType & ")"
     End Select
-    If errCode <> 0 Then desc = desc & " [0x" & hex(errCode) & "]"
+    If errCode <> 0 Then desc = desc & " [0x" & Hex(errCode) & "]"
     If Len(tech) > 0 Then desc = desc & " - " & tech
     WebSocketGetErrorDescription = desc
 End Function
@@ -4379,27 +4781,385 @@ Public Function WebSocketGetStats(Optional ByVal handle As Long = INVALID_CONN_H
     Dim uptime As Long
     h = ResolveHandle(handle)
     If Not ValidIndex(h) Then Exit Function
+    If m_Connections(h).Mode <> MODE_WEBSOCKET Then Exit Function
     With m_Connections(h)
-        If .Stats.ConnectedAt > 0 Then uptime = TickDiff(.Stats.ConnectedAt, GetTickCount()) \ 1000
-        WebSocketGetStats = "BytesSent=" & Format(.Stats.BytesSent, "0") & _
-            "|BytesReceived=" & Format(.Stats.BytesReceived, "0") & _
-            "|MessagesSent=" & .Stats.MessagesSent & _
-            "|MessagesReceived=" & .Stats.MessagesReceived & _
+        If .stats.ConnectedAt > 0 Then uptime = TickDiff(.stats.ConnectedAt, GetTickCount()) \ 1000
+        WebSocketGetStats = "BytesSent=" & Format(.stats.BytesSent, "0") & _
+            "|BytesReceived=" & Format(.stats.BytesReceived, "0") & _
+            "|MessagesSent=" & .stats.MessagesSent & _
+            "|MessagesReceived=" & .stats.MessagesReceived & _
             "|UptimeSeconds=" & uptime & _
             "|Queued=" & .MsgCount & _
             "|BinaryQueued=" & .BinaryCount & _
             "|NoDelay=" & IIf(.NoDelay, "1", "0") & _
-            "|Proxy=" & IIf(.ProxyEnabled, .proxyHost & ":" & .proxyPort, "none")
+            "|Proxy=" & IIf(.ProxyEnabled, .proxyHost & ":" & .proxyPort, "none") & _
+            "|Mode=WebSocket"
     End With
 End Function
+
+Public Function TcpGetStats(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
+    Dim h As Long
+    Dim uptime As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Function
+    If m_Connections(h).Mode = MODE_WEBSOCKET Then Exit Function
+    With m_Connections(h)
+        If .stats.ConnectedAt > 0 Then uptime = TickDiff(.stats.ConnectedAt, GetTickCount()) \ 1000
+        TcpGetStats = "BytesSent=" & Format(.stats.BytesSent, "0") & _
+            "|BytesReceived=" & Format(.stats.BytesReceived, "0") & _
+            "|MessagesSent=" & .stats.MessagesSent & _
+            "|MessagesReceived=" & .stats.MessagesReceived & _
+            "|UptimeSeconds=" & uptime & _
+            "|PendingBytes=" & .TcpRecvLen & _
+            "|NoDelay=" & IIf(.NoDelay, "1", "0") & _
+            "|Proxy=" & IIf(.ProxyEnabled, .proxyHost & ":" & .proxyPort, "none") & _
+            "|Mode=" & IIf(.Mode = MODE_TCP_TLS, "TCP_TLS", "TCP") & _
+            "|Host=" & .HOST & _
+            "|Port=" & .port
+    End With
+End Function
+
+Public Function TcpBroadcast(ByRef data() As Byte) As Long
+    Dim i As Long
+    Dim count As Long
+    InitConnectionPool
+    For i = 0 To MAX_CONNECTIONS - 1
+        If m_Connections(i).State = STATE_OPEN And m_Connections(i).Mode <> MODE_WEBSOCKET Then
+            If TcpSend(data, i) Then count = count + 1
+        End If
+    Next i
+    TcpBroadcast = count
+End Function
+
+Public Function TcpBroadcastText(ByVal text As String) As Long
+    Dim i As Long
+    Dim count As Long
+    Dim data() As Byte
+    data = StringToUtf8(text)
+    InitConnectionPool
+    For i = 0 To MAX_CONNECTIONS - 1
+        If m_Connections(i).State = STATE_OPEN And m_Connections(i).Mode <> MODE_WEBSOCKET Then
+            If TcpSend(data, i) Then count = count + 1
+        End If
+    Next i
+    TcpBroadcastText = count
+End Function
+
+Public Function TcpSetNoDelay(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
+    Dim h As Long
+    Dim optVal As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Function
+    If m_Connections(h).Mode = MODE_WEBSOCKET Then Exit Function
+    m_Connections(h).NoDelay = enabled
+    If m_Connections(h).Socket <> INVALID_SOCKET Then
+        optVal = IIf(enabled, 1, 0)
+        TcpSetNoDelay = (sock_setsockopt(m_Connections(h).Socket, IPPROTO_TCP_SOL, TCP_NODELAY, optVal, 4) = 0)
+    Else
+        TcpSetNoDelay = True
+    End If
+End Function
+
+Public Sub TcpSetInactivityTimeout(ByVal timeoutMs As Long, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Sub
+    If m_Connections(h).Mode = MODE_WEBSOCKET Then Exit Sub
+    m_Connections(h).InactivityTimeoutMs = timeoutMs
+    m_Connections(h).LastActivityAt = GetTickCount()
+End Sub
+
+Public Sub TcpSetReceiveTimeout(ByVal timeoutMs As Long, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Sub
+    If m_Connections(h).Mode = MODE_WEBSOCKET Then Exit Sub
+    m_Connections(h).ReceiveTimeoutMs = timeoutMs
+End Sub
+
+Public Sub TcpSetLogCallback(ByVal callbackName As String, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Sub
+    If m_Connections(h).Mode = MODE_WEBSOCKET Then Exit Sub
+    m_Connections(h).LogCallback = callbackName
+End Sub
+
+Public Sub TcpSetProxy(ByVal proxyHost As String, ByVal proxyPort As Long, Optional ByVal proxyUser As String = "", Optional ByVal proxyPass As String = "", Optional ByVal proxyType As Long = PROXY_TYPE_HTTP, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Sub
+    If m_Connections(h).Mode = MODE_WEBSOCKET Then Exit Sub
+    With m_Connections(h)
+        .proxyHost = proxyHost
+        .proxyPort = proxyPort
+        .proxyUser = proxyUser
+        .proxyPass = proxyPass
+        .proxyType = proxyType
+        .ProxyEnabled = (Len(proxyHost) > 0 And proxyPort > 0)
+    End With
+End Sub
+
+Public Sub TcpClearProxy(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Sub
+    If m_Connections(h).Mode = MODE_WEBSOCKET Then Exit Sub
+    With m_Connections(h)
+        .proxyHost = ""
+        .proxyPort = 0
+        .proxyUser = ""
+        .proxyPass = ""
+        .ProxyEnabled = False
+    End With
+End Sub
+
+Public Sub TcpSetCertValidation(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Sub
+    If m_Connections(h).Mode = MODE_WEBSOCKET Then Exit Sub
+    m_Connections(h).ValidateServerCert = enabled
+End Sub
+
+Public Sub TcpSetRevocationCheck(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Sub
+    If m_Connections(h).Mode = MODE_WEBSOCKET Then Exit Sub
+    m_Connections(h).EnableRevocationCheck = enabled
+End Sub
+
+Public Sub TcpSetClientCert(ByVal thumbprintOrSubject As String, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Sub
+    If m_Connections(h).Mode = MODE_WEBSOCKET Then Exit Sub
+    m_Connections(h).ClientCertThumb = thumbprintOrSubject
+    m_Connections(h).ClientCertPfxPath = ""
+End Sub
+
+Public Sub TcpSetClientCertPfx(ByVal pfxPath As String, ByVal pfxPassword As String, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Sub
+    If m_Connections(h).Mode = MODE_WEBSOCKET Then Exit Sub
+    m_Connections(h).ClientCertPfxPath = pfxPath
+    m_Connections(h).ClientCertPfxPass = pfxPassword
+    m_Connections(h).ClientCertThumb = ""
+End Sub
+
+Public Sub TcpSetBufferSize(ByVal bufferSize As Long, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Sub
+    If m_Connections(h).Mode = MODE_WEBSOCKET Then Exit Sub
+    With m_Connections(h)
+        If .State = STATE_OPEN Then
+            WasabiLog h, "Cannot change buffer size while connected (handle=" & h & ")"
+            Exit Sub
+        End If
+        If bufferSize >= 8192 And bufferSize <= 16777216 Then
+            .CustomBufferSize = bufferSize
+        End If
+    End With
+End Sub
+
+Public Function TcpGetHost(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Function
+    If m_Connections(h).Mode = MODE_WEBSOCKET Then Exit Function
+    TcpGetHost = m_Connections(h).HOST
+End Function
+
+Public Function TcpGetPort(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Long
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Function
+    If m_Connections(h).Mode = MODE_WEBSOCKET Then Exit Function
+    TcpGetPort = m_Connections(h).port
+End Function
+
+Public Function TcpGetMode(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As WasabiConnectionMode
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Function
+    TcpGetMode = m_Connections(h).Mode
+End Function
+
+Public Function TcpGetUptime(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Long
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Function
+    If m_Connections(h).Mode = MODE_WEBSOCKET Then Exit Function
+    With m_Connections(h)
+        If .State = STATE_OPEN And .stats.ConnectedAt > 0 Then
+            TcpGetUptime = TickDiff(.stats.ConnectedAt, GetTickCount()) \ 1000
+        End If
+    End With
+End Function
+
+Public Function TcpGetLastError(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As WasabiError
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If ValidIndex(h) Then
+        TcpGetLastError = m_Connections(h).LastError
+    Else
+        TcpGetLastError = m_LastError
+    End If
+End Function
+
+Public Function TcpGetLastErrorCode(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Long
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If ValidIndex(h) Then
+        TcpGetLastErrorCode = m_Connections(h).LastErrorCode
+    Else
+        TcpGetLastErrorCode = m_LastErrorCode
+    End If
+End Function
+
+Public Function TcpGetTechnicalDetails(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If ValidIndex(h) Then
+        TcpGetTechnicalDetails = m_Connections(h).TechnicalDetails
+    Else
+        TcpGetTechnicalDetails = m_TechnicalDetails
+    End If
+End Function
+
+Public Sub TcpResetStats(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Sub
+    If m_Connections(h).Mode = MODE_WEBSOCKET Then Exit Sub
+    With m_Connections(h).stats
+        .BytesSent = 0
+        .BytesReceived = 0
+        .MessagesSent = 0
+        .MessagesReceived = 0
+        .ConnectedAt = GetTickCount()
+    End With
+End Sub
+
+Public Sub TcpSetPreferIPv6(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Sub
+    If m_Connections(h).Mode = MODE_WEBSOCKET Then Exit Sub
+    m_Connections(h).PreferIPv6 = enabled
+End Sub
+
+Public Sub TcpSetErrorDialog(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Sub
+    If m_Connections(h).Mode = MODE_WEBSOCKET Then Exit Sub
+    m_Connections(h).EnableErrorDialog = enabled
+End Sub
+
+Public Function TcpGetProxyInfo(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Function
+    If m_Connections(h).Mode = MODE_WEBSOCKET Then Exit Function
+    With m_Connections(h)
+        If .ProxyEnabled Then
+            TcpGetProxyInfo = "Type=" & IIf(.proxyType = PROXY_TYPE_SOCKS5, "SOCKS5", "HTTP") & _
+                "|Host=" & .proxyHost & _
+                "|Port=" & .proxyPort & _
+                "|Auth=" & IIf(.proxyUser <> "", "Yes", "No")
+        Else
+            TcpGetProxyInfo = "Disabled"
+        End If
+    End With
+End Function
+
+Public Function TcpGetMTUInfo(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Function
+    If m_Connections(h).Mode = MODE_WEBSOCKET Then Exit Function
+    With m_Connections(h)
+        TcpGetMTUInfo = "MTU=" & .mtu.CurrentMTU & _
+            "|MSS=" & .mtu.MaxSegmentSize & _
+            "|OptimalFrame=" & .mtu.OptimalFrameSize & _
+            "|AutoMTU=" & IIf(.AutoMTU, "Yes", "No")
+    End With
+End Function
+
+Public Sub TcpSetMTU(ByVal mtu As Long, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Sub
+    If m_Connections(h).Mode = MODE_WEBSOCKET Then Exit Sub
+    If mtu < 576 Or mtu > 9000 Then mtu = DEFAULT_MTU
+    m_Connections(h).mtu.CurrentMTU = mtu
+    CalculateOptimalFrameSize h
+End Sub
+
+Public Sub TcpSetAutoMTU(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Sub
+    If m_Connections(h).Mode = MODE_WEBSOCKET Then Exit Sub
+    m_Connections(h).AutoMTU = enabled
+End Sub
+
+Public Function TcpGetLatency(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Long
+    Dim h As Long
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Function
+    If m_Connections(h).Mode = MODE_WEBSOCKET Then Exit Function
+    TcpGetLatency = m_Connections(h).LastRttMs
+End Function
+
+Public Sub TcpAutoDiscoverProxy(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+    Dim proxyConfig As WINHTTP_CURRENT_USER_IE_PROXY_CONFIG
+    Dim proxyRaw As String
+    Dim proxyHost As String
+    Dim proxyPort As Long
+    Dim parts() As String
+    Dim hostPort() As String
+    Dim h As Long
+
+    h = ResolveHandle(handle)
+    If Not ValidIndex(h) Then Exit Sub
+    If m_Connections(h).Mode = MODE_WEBSOCKET Then Exit Sub
+
+    If WinHttpGetIEProxyConfigForCurrentUser(proxyConfig) <> 0 Then
+        If proxyConfig.lpszProxy <> 0 Then
+            proxyRaw = PtrToStrW(proxyConfig.lpszProxy)
+            parts = Split(proxyRaw, ";")
+            proxyHost = parts(0)
+            If InStr(proxyHost, "=") > 0 Then proxyHost = Split(proxyHost, "=")(1)
+            If InStr(proxyHost, ":") > 0 Then
+                hostPort = Split(proxyHost, ":")
+                proxyHost = hostPort(0)
+                proxyPort = Val(hostPort(1))
+            Else
+                proxyPort = 80
+            End If
+            TcpSetProxy proxyHost, proxyPort, , , PROXY_TYPE_HTTP, h
+            WasabiLog h, "TCP auto-discovered proxy: " & proxyHost & ":" & proxyPort
+        End If
+        If proxyConfig.lpszAutoConfigUrl <> 0 Then GlobalFree proxyConfig.lpszAutoConfigUrl
+        If proxyConfig.lpszProxy <> 0 Then GlobalFree proxyConfig.lpszProxy
+        If proxyConfig.lpszProxyBypass <> 0 Then GlobalFree proxyConfig.lpszProxyBypass
+    Else
+        WasabiLog h, "TCP auto proxy: No proxy configuration found."
+    End If
+End Sub
 
 Public Function WebSocketGetUptime(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Long
     Dim h As Long
     h = ResolveHandle(handle)
     If Not ValidIndex(h) Then Exit Function
     With m_Connections(h)
-        If .State = STATE_OPEN And .Stats.ConnectedAt > 0 Then
-            WebSocketGetUptime = TickDiff(.Stats.ConnectedAt, GetTickCount()) \ 1000
+        If .State = STATE_OPEN And .stats.ConnectedAt > 0 Then
+            WebSocketGetUptime = TickDiff(.stats.ConnectedAt, GetTickCount()) \ 1000
         End If
     End With
 End Function
@@ -4408,7 +5168,7 @@ Public Sub WebSocketResetStats(Optional ByVal handle As Long = INVALID_CONN_HAND
     Dim h As Long
     h = ResolveHandle(handle)
     If Not ValidIndex(h) Then Exit Sub
-    With m_Connections(h).Stats
+    With m_Connections(h).stats
         .BytesSent = 0
         .BytesReceived = 0
         .MessagesSent = 0
@@ -4453,6 +5213,18 @@ Public Function WebSocketGetConnectionCount() As Long
     WebSocketGetConnectionCount = count
 End Function
 
+Public Function TcpGetConnectionCount() As Long
+    Dim i As Long
+    Dim count As Long
+    InitConnectionPool
+    For i = 0 To MAX_CONNECTIONS - 1
+        If m_Connections(i).State = STATE_OPEN And m_Connections(i).Mode <> MODE_WEBSOCKET Then
+            count = count + 1
+        End If
+    Next i
+    TcpGetConnectionCount = count
+End Function
+
 Public Function WebSocketGetAllHandles() As Long()
     Dim result() As Long
     Dim i As Long
@@ -4460,7 +5232,7 @@ Public Function WebSocketGetAllHandles() As Long()
     Dim count As Long
     InitConnectionPool
     For i = 0 To MAX_CONNECTIONS - 1
-        If m_Connections(i).State = STATE_OPEN Then count = count + 1
+        If m_Connections(i).State = STATE_OPEN And m_Connections(i).Mode = MODE_WEBSOCKET Then count = count + 1
     Next i
     If count = 0 Then
         WebSocketGetAllHandles = result
@@ -4468,12 +5240,35 @@ Public Function WebSocketGetAllHandles() As Long()
     End If
     ReDim result(0 To count - 1)
     For i = 0 To MAX_CONNECTIONS - 1
-        If m_Connections(i).State = STATE_OPEN Then
+        If m_Connections(i).State = STATE_OPEN And m_Connections(i).Mode = MODE_WEBSOCKET Then
             result(idx) = i
             idx = idx + 1
         End If
     Next i
     WebSocketGetAllHandles = result
+End Function
+
+Public Function TcpGetAllHandles() As Long()
+    Dim result() As Long
+    Dim i As Long
+    Dim idx As Long
+    Dim count As Long
+    InitConnectionPool
+    For i = 0 To MAX_CONNECTIONS - 1
+        If m_Connections(i).State = STATE_OPEN And m_Connections(i).Mode <> MODE_WEBSOCKET Then count = count + 1
+    Next i
+    If count = 0 Then
+        TcpGetAllHandles = result
+        Exit Function
+    End If
+    ReDim result(0 To count - 1)
+    For i = 0 To MAX_CONNECTIONS - 1
+        If m_Connections(i).State = STATE_OPEN And m_Connections(i).Mode <> MODE_WEBSOCKET Then
+            result(idx) = i
+            idx = idx + 1
+        End If
+    Next i
+    TcpGetAllHandles = result
 End Function
 
 Public Function WebSocketSetDefaultHandle(ByVal handle As Long) As Boolean
@@ -4572,7 +5367,7 @@ Public Sub WebSocketAutoDiscoverProxy(Optional ByVal handle As Long = INVALID_CO
             If InStr(proxyHost, ":") > 0 Then
                 hostPort = Split(proxyHost, ":")
                 proxyHost = hostPort(0)
-                proxyPort = val(hostPort(1))
+                proxyPort = Val(hostPort(1))
             Else
                 proxyPort = 80
             End If
@@ -4820,7 +5615,7 @@ Public Function WebSocketGetHost(Optional ByVal handle As Long = INVALID_CONN_HA
     Dim h As Long
     h = ResolveHandle(handle)
     If Not ValidIndex(h) Then Exit Function
-    WebSocketGetHost = m_Connections(h).Host
+    WebSocketGetHost = m_Connections(h).HOST
 End Function
 
 Public Function WebSocketGetPort(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Long
