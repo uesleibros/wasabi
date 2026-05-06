@@ -22,20 +22,34 @@ The files in this directory contain the **Assembly (x86/x64)** source for a "Saf
    * **If Flag = 1:** The VBA project is active; the Thunk forwards the message to `Wasabi_WndProc`.
    * **If Flag = 0:** The user clicked Reset; the Thunk ignores the VBA code and safely redirects the message to the default Windows handler (`DefWindowProcW`).
 
+### Utility Thunks
+
+Beyond stability, the Wasabi project utilizes specialized thunks to handle data processing tasks that are inefficient in native VBA:
+
+*   **Endianness Swap**: Provides rapid conversion between Big-Endian (Network) and Little-Endian (Intel) formats for 32-bit integers.
+*   **WebSocket Masking**: Implements the high-speed XOR bitwise operations required by the WebSocket protocol for all client-to-server data frames.
+*   **Fast Memory Zero**: A lightweight alternative to `RtlZeroMemory` for clearing buffers or network structures with minimal overhead.
+
 ### Files in this Directory
 
 | File | Architecture | Description |
 | :--- | :--- | :--- |
-| `safe_thunk_x64.asm` | **64-bit** | Uses `RAX` registers and `FastCall` convention for modern Office versions. |
-| `safe_thunk_x86.asm` | **32-bit** | Uses stack-based arguments and `EAX` for legacy Office versions. |
+| `safe_thunk_x64.asm` | 64-bit | Core Reset protection using RAX and FastCall convention. |
+| `safe_thunk_x86.asm` | 32-bit | Core Reset protection using stack-based arguments and EAX. |
+| `swap_32_x64.asm` | 64-bit | Fast 32-bit Endianness swap (Big-Endian to Little-Endian). |
+| `swap_32_x86.asm` | 32-bit | Fast 32-bit Endianness swap (Big-Endian to Little-Endian). |
+| `ws_mask_x64.asm` | 64-bit | High-speed XOR masking for WebSocket protocol frames. |
+| `ws_mask_x86.asm` | 32-bit | High-speed XOR masking for WebSocket protocol frames. |
+| `mem_zero_x64.asm` | 64-bit | Optimized memory zeroing for buffers. |
+| `mem_zero_x86.asm` | 32-bit | Optimized memory zeroing for buffers. |
 
 ### Implementation Details
 
 These thunks are injected into executable memory at runtime using the `VirtualAlloc` API with `PAGE_EXECUTE_READWRITE` permissions. 
 
-#### **Memory Lifecycle Management**
+#### Memory Lifecycle Management
 
-To prevent memory leaks (Zombies) after a Reset, Wasabi uses **Window Properties (`SetProp`)** to tag the allocated memory addresses on the invisible event window. Upon the next initialization, Wasabi:
+To prevent memory leaks (Zombies) after a Reset, Wasabi uses **Window Properties (`SetProp`)** to tag the allocated memory addresses on the invisible event window. Upon the next initialization, the system:
 1. Scans for existing windows named `WasabiEvents`.
 2. Recovers the memory addresses from the previous session.
 3. Frees the "Zombie" memory before allocating a fresh Thunk.
@@ -46,7 +60,7 @@ The Thunk adds approximately **5-10 CPU cycles** of overhead per network event. 
 
 ## Compilation and Verification
 
-To test and verify the Assembly thunks, you need to assemble the `.asm` source files into raw machine code (binary format). This process allows you to extract the exact opcodes used in the `RtlMoveMemory` operations within the VBA module.
+To test and verify the Assembly thunks, you need to assemble the `.asm` source files into raw machine code (binary format). This allows you to extract the exact opcodes used in the `RtlMoveMemory` operations within the VBA module.
 
 ### 1. Required Tooling: NASM
 
@@ -60,13 +74,11 @@ The Netwide Assembler (NASM) is the industry standard for this task. It is light
 You must compile these files using the `-f bin` flag. This ensures the output is a pure stream of processor instructions.
 
 #### For the 64-bit Thunk
-Open your terminal and run:
 ```bash
 nasm -f bin safe_thunk_x64.asm -o safe_thunk_x64.bin
 ```
 
 #### For the 32-bit Thunk
-Open your terminal and run:
 ```bash
 nasm -f bin safe_thunk_x86.asm -o safe_thunk_x86.bin
 ```
@@ -76,13 +88,11 @@ nasm -f bin safe_thunk_x86.asm -o safe_thunk_x86.bin
 Once you have the `.bin` files, you need to convert the binary data into a format VBA can read (Hexadecimal or Byte Arrays).
 
 #### Method A: Using Windows CertUtil (Built-in)
-You can use the native Windows utility to dump the hex codes:
 ```bash
 certutil -dump safe_thunk_x64.bin
 ```
 
 #### Method B: Using PowerShell
-To get a comma-separated list of bytes for your `asm()` array:
 ```powershell
 [System.IO.File]::ReadAllBytes("safe_thunk_x64.bin") | ForEach-Object { "0x{0:X2}" -f $_ } | Join-String -Separator ", "
 ```
@@ -95,12 +105,12 @@ To ensure the thunk was compiled correctly before deploying it to `VirtualAlloc`
    * The `safe_thunk_x64.bin` should be exactly 42 bytes.
    * The `safe_thunk_x86.bin` should be exactly 21 bytes.
 2. **Compare Placeholders**: 
-   * In the x64 binary, look for the sequence `88 77 66 55 44 33 22 11`. This confirms where the `m_pFlag` address will be injected by your VBA code.
+   * In the x64 binary, look for the sequence `88 77 66 55 44 33 22 11`. This confirms where the `m_pFlag` address will be injected.
    * In the x86 binary, look for `44 33 22 11`.
 
 ### 5. Integration Test
 
-Once compiled and verified, update the `asm()` initialization in your `Wasabi` module:
+Once compiled and verified, update the `asm()` initialization in your module:
 
 1. Copy the hex sequence from your verification tool.
 2. Paste it into the `ReDim asm(...)` block.
