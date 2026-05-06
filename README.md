@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="resources/logo-experimental.png" width="350" />
+  <img src="resources/logo.png" width="150" />
 </div>
 
 <h1 align="center">Wasabi: VBA WebSocket</h1>
