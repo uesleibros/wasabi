@@ -2,7 +2,11 @@
   <img src="resources/logo-experimental.png" width="350" />
 </div>
 
-<h1 align="center">VBA WebSocket</h1>
+<h1 align="center">Wasabi: VBA WebSocket</h1>
+
+<p align="center">
+  <b>Turn Excel and Office into a real-time client for WebSockets, MQTT, and raw TCP, no dependencies, no COM, no installs.</b>
+</p>
 
 <p align="center">
   Production-ready WebSocket and WSS for VBA with native TLS, auto reconnect, proxy support, MQTT, permessage-deflate, and zero external dependencies
