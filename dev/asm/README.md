@@ -34,14 +34,14 @@ Beyond stability, the Wasabi project utilizes specialized thunks to handle data 
 
 | File | Architecture | Description |
 | :--- | :--- | :--- |
-| `safe_thunk_x64.asm` | 64-bit | Core Reset protection using RAX and FastCall convention. |
-| `safe_thunk_x86.asm` | 32-bit | Core Reset protection using stack-based arguments and EAX. |
-| `swap_32_x64.asm` | 64-bit | Fast 32-bit Endianness swap (Big-Endian to Little-Endian). |
-| `swap_32_x86.asm` | 32-bit | Fast 32-bit Endianness swap (Big-Endian to Little-Endian). |
-| `ws_mask_x64.asm` | 64-bit | High-speed XOR masking for WebSocket protocol frames. |
-| `ws_mask_x86.asm` | 32-bit | High-speed XOR masking for WebSocket protocol frames. |
-| `mem_zero_x64.asm` | 64-bit | Optimized memory zeroing for buffers. |
-| `mem_zero_x86.asm` | 32-bit | Optimized memory zeroing for buffers. |
+| ![](../../resources/svg/assembly.svg) `safe_thunk_x64.asm` | 64-bit | Core Reset protection using RAX and FastCall convention. |
+| ![](../../resources/svg/assembly.svg) `safe_thunk_x86.asm` | 32-bit | Core Reset protection using stack-based arguments and EAX. |
+| ![](../../resources/svg/assembly.svg) `swap_32_x64.asm` | 64-bit | Fast 32-bit Endianness swap (Big-Endian to Little-Endian). |
+| ![](../../resources/svg/assembly.svg) `swap_32_x86.asm` | 32-bit | Fast 32-bit Endianness swap (Big-Endian to Little-Endian). |
+| ![](../../resources/svg/assembly.svg) `ws_mask_x64.asm` | 64-bit | High-speed XOR masking for WebSocket protocol frames. |
+| ![](../../resources/svg/assembly.svg) `ws_mask_x86.asm` | 32-bit | High-speed XOR masking for WebSocket protocol frames. |
+| ![](../../resources/svg/assembly.svg) `mem_zero_x64.asm` | 64-bit | Optimized memory zeroing for buffers. |
+| ![](../../resources/svg/assembly.svg) `mem_zero_x86.asm` | 32-bit | Optimized memory zeroing for buffers. |
 
 ### Implementation Details
 
