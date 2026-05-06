@@ -14,10 +14,10 @@ This folder contains a curated collection of production-ready examples demonstra
 |:---|:---|
 | ![](../resources/svg/ms-excel.svg) **`Ex01_Binance_Live_Ticker.xlsm`** | Connects to a public crypto stream and updates a spreadsheet cell in real-time. Demonstrates string extraction without freezing the UI. |
 | ![](../resources/svg/ms-excel.svg) **`Ex02_MQTT_QoS2_Dashboard.xlsm`** | Transforms Excel into a full-duplex MQTT dashboard. Subscribes to topics and guarantees delivery using QoS 2, Ping Jitter, and Offline Queueing. |
-| ![](../resources/svg/ms-excel.svg) **`Ex03_NonBlocking_UI_OnTime.xlsm`** | The most important architectural pattern. Uses `Application.OnTime` to create a background Event Loop, keeping the Excel UI 100% interactive while listening. |
-| ![](../resources/svg/ms-excel.svg) **`Ex04_Bot_Command_Interface.xlsm`** | Synchronous Request-Response (RPC) pattern. Sends a command to a server and waits for the exact response before continuing execution. |
-| ![](../resources/svg/ms-excel.svg) **`Ex05_High_Speed_Batching.xlsm`** | Telemetry and high-throughput logging. Disables Nagle's algorithm (`TCP_NODELAY`) and sends massive arrays of data in a single network burst. |
-| ![](../resources/svg/ms-excel.svg) **`Ex06_Corporate_Auth_Connection.xlsm`** | Enterprise integration template. Shows strict TLS validation, Custom HTTP Headers (Bearer tokens), subprotocols, and system proxy auto-discovery. |
+| ![](../resources/svg/ms-excel.svg) **`Ex03_NonBlocking_UI.xlsm`** | The most important architectural pattern. Uses `Application.OnTime` to create a background Event Loop, keeping the Excel UI 100% interactive while listening. |
+| ![](../resources/svg/ms-excel.svg) **`Ex04_Bot_Command.xlsm`** | Synchronous Request-Response (RPC) pattern. Sends a command to a server and waits for the exact response before continuing execution. |
+| ![](../resources/svg/ms-excel.svg) **`Ex05_HighSpeedBatch.xlsm`** | Telemetry and high-throughput logging. Disables Nagle's algorithm (`TCP_NODELAY`) and sends massive arrays of data in a single network burst. |
+| ![](../resources/svg/ms-excel.svg) **`Ex06_CorporateAuth.xlsm`** | Enterprise integration template. Shows strict TLS validation, Custom HTTP Headers (Bearer tokens), subprotocols, and system proxy auto-discovery. |
 
 > [!WARNING]
 > If testing `Ex02`, ensure your network allows outbound traffic on port `8084`.
