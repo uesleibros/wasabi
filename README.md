@@ -23,6 +23,7 @@
   <img src="https://img.shields.io/badge/Proxy%20Auth-NTLM%2FKerberos-red" alt="NTLM" />
   <img src="https://img.shields.io/badge/RTT-latency%20measurement-orange" alt="RTT" />
   <img src="https://img.shields.io/badge/Deflate-permessage--deflate-success" alt="Deflate" />
+  <img src="https://img.shields.io/badge/TCP-Native%20Client-blue" alt="TCP" />
   <img src="https://img.shields.io/github/stars/uesleibros/wasabi?style=flat&color=gold" alt="Stars" />
   <img src="https://img.shields.io/github/last-commit/uesleibros/wasabi?style=flat" alt="Last Commit" />
 </p>
@@ -45,7 +46,7 @@
 
 ## What is Wasabi
 
-Wasabi is a VBA module designed to make WebSocket communication simple, predictable, and practical, bringing an experience similar to [socket.io](https://socket.io) in Node.js entirely within the Office ecosystem. It is a single, self-contained `.bas` file that compiles seamlessly on 32-bit and 64-bit Office hosts, from Windows XP to Windows 11.
+Wasabi is a VBA module designed to make WebSocket and TCP communication simple, predictable, and practical, bringing an experience similar to [socket.io](https://socket.io) in Node.js entirely within the Office ecosystem. It is a single, self-contained `.bas` file that compiles seamlessly on 32-bit and 64-bit Office hosts, from Windows XP to Windows 11.
 
 Beyond basic WebSocket messaging, Wasabi bundles an MQTT 3.1.1 client, NTLM/Kerberos proxy authentication, RTT latency measurement, fine-grained TLS certificate control, and `permessage-deflate` compression (RFC 7692), all without mandatory external dependencies.
 
@@ -69,6 +70,8 @@ Beyond basic WebSocket messaging, Wasabi bundles an MQTT 3.1.1 client, NTLM/Kerb
 - [x] **Strict State Machine Control** (Connecting/Open/Closing/Closed)
 - [x] **Offline Queueing** to retain and flush messages during network drops
 - [x] **Ping Jitter** to prevent strict gateway timeouts
+- [x] **Native TCP Client** with plain and TLS modes
+- [x] **TCP MTU Discovery**, NoDelay, inactivity timeout, and proxy support
 - [ ] `WSAAsyncSelect` event-driven socket notifications
 - [ ] `WebSocketStartListening` helper for one-line polling loops
 
@@ -166,6 +169,10 @@ Working with networking in VBA often becomes a project of its own. Wasabi addres
 - **QoS 1 & 2 MQTT:** Implements a real In-Flight queue with Packet ID tracking, ensuring messages are acknowledged and delivered Exactly Once (PUBREC/PUBREL/PUBCOMP).
 - **MTU Discovery:** Dynamically tunes frame sizes to match network segments, preventing IP fragmentation.
 
+**Raw TCP beyond HTTP and WebSocket**
+- Most VBA networking solutions are locked to HTTP or WebSocket. Wasabi now includes a full native TCP client that shares the same handle pool, TLS stack, proxy infrastructure, and MTU discovery engine.
+- `TcpConnect` and `TcpConnectTLS` let you talk to any TCP server — SMTP, custom binary protocols, industrial equipment, or internal APIs — with the same one-liner ergonomics as WebSocket.
+
 ## Use Cases
 
 - **Bots and Chat Integrations:** Connect to Discord, Slack, or Telegram gateways and handle real-time events directly from Excel or Word.
@@ -174,6 +181,7 @@ Working with networking in VBA often becomes a project of its own. Wasabi addres
 - **IoT and Industrial SCADA:** Receive sensor data from ESP32, Raspberry Pi, or PLC systems via WebSocket or MQTT natively into Office.
 - **Games and Interactive Tools:** Build reliable client/server communication for VBA-based multiplayer games or collaborative tools.
 - **Corporate Automation:** Connect Office to internal WebSocket APIs behind firewalls and proxies without requiring IT to install third-party software.
+- **Raw TCP Automation:** Communicate directly with TCP servers, legacy PLC systems, industrial equipment, or custom protocols that don't speak WebSocket or HTTP.
 
 ## Quick Start
 
@@ -283,6 +291,64 @@ If WebSocketConnect("wss://example.com/ws", h) Then
         If msg <> "" Then Debug.Print "Received: " & msg
         DoEvents
     Loop
+End If
+```
+
+### Connect via Raw TCP
+
+```vb
+Dim h As Long
+
+If TcpConnect("tcpbin.com", 4242, h) Then
+    TcpSendText "hello" & vbCrLf, h
+
+    Dim msg As String
+    Dim t As Long
+    t = GetTickCount()
+    Do While TickDiff(t, GetTickCount()) < 3000
+        msg = TcpReceiveText(h)
+        If Len(msg) > 0 Then Exit Do
+        DoEvents
+    Loop
+
+    Debug.Print "Echo: " & msg
+    TcpDisconnect h
+End If
+```
+
+### Connect via TCP with TLS
+
+```vb
+Dim h As Long
+
+If TcpConnectTLS("example.com", 443, h) Then
+    TcpSendText "GET / HTTP/1.0" & vbCrLf & "Host: example.com" & vbCrLf & vbCrLf, h
+
+    Dim msg As String
+    Dim t As Long
+    t = GetTickCount()
+    Do While TickDiff(t, GetTickCount()) < 5000
+        msg = TcpReceiveText(h)
+        If Len(msg) > 0 Then Exit Do
+        DoEvents
+    Loop
+
+    Debug.Print Left(msg, 200)
+    TcpDisconnect h
+End If
+```
+
+### Read Until Delimiter
+
+```vb
+Dim h As Long
+
+If TcpConnect("tcpbin.com", 4242, h) Then
+    TcpSendText "hello" & vbCrLf, h
+    Dim line As String
+    line = TcpReceiveUntil(vbCrLf, 3000, h)
+    Debug.Print "Line: " & line
+    TcpDisconnect h
 End If
 ```
 
