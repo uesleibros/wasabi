@@ -74,7 +74,7 @@ Beyond basic WebSocket messaging, Wasabi bundles an MQTT 3.1.1 client, NTLM/Kerb
 - [x] **Native TCP Client** with plain and TLS modes
 - [x] **TCP MTU Discovery**, NoDelay, inactivity timeout, and proxy support
 
-### Next Steps (DX & Asynchronicity)
+### ![](resources/svg/looking.svg) Next Steps (DX & Asynchronicity)
 - [ ] `WebSocketStartListening` helper for one-line polling loops
 - [ ] `WSAAsyncSelect` event-driven socket notifications (Eliminating polling blocks)
 
