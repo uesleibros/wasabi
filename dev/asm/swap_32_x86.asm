@@ -3,4 +3,4 @@
 start:
     mov eax, [esp + 4]
     bswap eax
-    ret
+    ret 4
