@@ -4,8 +4,8 @@
 
 | Version | Supported |
 |---|---|
-| Latest release | ✅ |
-| Older releases | ❌ |
+| Latest release | ![](resources/svg/thumbsup.svg) |
+| Older releases | ![](resources/svg/thumbsdown.svg) |
 
 Only the latest version of Wasabi receives security updates. If you are using
 an older version, please update to the latest release before reporting an issue.
