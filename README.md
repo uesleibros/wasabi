@@ -431,12 +431,12 @@ Every API declaration uses `#If VBA7` to switch between `Long` (32-bit) and
 
 | Library | Role in Wasabi | Optional |
 |---|---|:---:|
-| <img src="resources/ms-vba.png" width="18" /> `ws2_32.dll` | TCP socket creation, DNS, send/recv | No |
-| <img src="resources/ms-vba.png" width="18" /> `secur32.dll` | TLS 1.2/1.3 via Schannel SSPI | No |
-| <img src="resources/ms-vba.png" width="18" /> `kernel32.dll` | Memory operations, UTF-8, tick count | No |
-| <img src="resources/ms-vba.png" width="18" /> `advapi32.dll` | Cryptographic random numbers (`CryptGenRandom`) | No |
-| <img src="resources/ms-vba.png" width="18" /> `crypt32.dll` | Certificate store, chain validation | No |
-| ![](resources/svg/dependence.svg) `zlib1.dll` | Compression for `permessage-deflate` | **Yes** |
+| <img src="resources/ms-vba.png" width="18" /> `ws2_32.dll` | TCP socket creation, DNS, send/recv | ![](resources/svg/thumbsdown.svg) |
+| <img src="resources/ms-vba.png" width="18" /> `secur32.dll` | TLS 1.2/1.3 via Schannel SSPI | ![](resources/svg/thumbsdown.svg) |
+| <img src="resources/ms-vba.png" width="18" /> `kernel32.dll` | Memory operations, UTF-8, tick count | ![](resources/svg/thumbsdown.svg) |
+| <img src="resources/ms-vba.png" width="18" /> `advapi32.dll` | Cryptographic random numbers (`CryptGenRandom`) | ![](resources/svg/thumbsdown.svg) |
+| <img src="resources/ms-vba.png" width="18" /> `crypt32.dll` | Certificate store, chain validation | ![](resources/svg/thumbsdown.svg) |
+| ![](resources/svg/dependence.svg) `zlib1.dll` | Compression for `permessage-deflate` | ![](resources/svg/thumbsup.svg) |
 
 **What does "zero external dependencies" mean in practice?**
 Wasabi requires nothing beyond Windows and the standard VBA runtime. There is no installer, no COM registration, no ActiveX control, no third-party DLL, no Python runtime, no .NET package, and no `regsvr32`. 
