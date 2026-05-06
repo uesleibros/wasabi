@@ -26,7 +26,12 @@
   <img src="https://img.shields.io/badge/TCP-Native%20Client-blue" alt="TCP" />
   <img src="https://img.shields.io/github/stars/uesleibros/wasabi?style=flat&color=gold" alt="Stars" />
   <img src="https://img.shields.io/github/last-commit/uesleibros/wasabi?style=flat" alt="Last Commit" />
-  <img src="https://img.shields.io/github/downloads/uesleibros/wasabi/total.svg?style=flat" alt="Downloads" />
+  <a href="../../releases">
+    <img src="https://img.shields.io/github/downloads/uesleibros/wasabi/total.svg?style=flat" alt="Downloads" />
+  </a>
+  <a href="../../releases">
+    <img src="https://img.shields.io/github/v/release/uesleibros/wasabi?style=flat" alt="Latest Version" />
+  </a>
   
 </p>
 
