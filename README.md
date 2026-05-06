@@ -426,7 +426,7 @@ Every API declaration uses `#If VBA7` to switch between `Long` (32-bit) and
 | <img src="resources/ms-vba.png" width="30" /> `kernel32.dll` | Memory operations, UTF-8, tick count | No |
 | <img src="resources/ms-vba.png" width="30" /> `advapi32.dll` | Cryptographic random numbers (`CryptGenRandom`) | No |
 | <img src="resources/ms-vba.png" width="30" /> `crypt32.dll` | Certificate store, chain validation | No |
-| <img src="resources/ms-vba.png" width="30" /> `zlib1.dll` | Compression for `permessage-deflate` | **Yes** |
+| ![](resources/svg/installation.svg) `zlib1.dll` | Compression for `permessage-deflate` | **Yes** |
 
 **What does "zero external dependencies" mean in practice?**
 Wasabi requires nothing beyond Windows and the standard VBA runtime. There is no installer, no COM registration, no ActiveX control, no third-party DLL, no Python runtime, no .NET package, and no `regsvr32`. 
