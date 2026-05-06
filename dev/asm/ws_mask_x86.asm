@@ -1,31 +1,34 @@
-[bits 32]
+bits 32
+global ws_mask
 
-start:
+; CallWindowProcW signature (stdcall):
+; [ebp+8]  = hwnd (used as payload ptr)
+; [ebp+12] = msg  (used as length)
+; [ebp+16] = wp   (used as mask ptr)
+; [ebp+20] = lp   (reserved)
+
+ws_mask:
     push ebp
     mov ebp, esp
-    push edi
-    push esi
     push ebx
-    mov esi, [ebp + 8]
-    mov ecx, [ebp + 12]
-    mov edi, [ebp + 16]
+
+    mov ecx, [ebp+12]  ; ecx = length
     test ecx, ecx
-    jz end
-    xor edx, edx
-mask_loop:
-    mov al, [esi]
-    mov bl, [edi + edx]
-    xor al, bl
-    mov [esi], al
-    inc esi
-    inc edx
-    and edx, 3
-    dec ecx
-    jnz mask_loop
-end:
+    jz .done
+
+    mov edx, [ebp+8]   ; edx = payload ptr
+    mov eax, [ebp+16]  ; eax = mask ptr
+    mov ebx, [eax]     ; ebx = mask value (4 bytes)
+
+.loop:
+    mov al, bl         ; Move lowest mask byte into AL
+    xor [edx], al      ; Apply XOR to payload
+    inc edx            ; Advance pointer
+    ror ebx, 8         ; Rotate mask
+    dec ecx            ; Decrement counter
+    jnz .loop          ; Repeat loop
+
+.done:
     pop ebx
-    pop esi
-    pop edi
-    mov esp, ebp
     pop ebp
-    ret 12
+    ret 16             ; Clean up the 4 arguments (16 bytes) from the stack
