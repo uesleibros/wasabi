@@ -157,6 +157,46 @@ Wasabi is engineered to maximize developer productivity by leveraging the global
 > [!TIP]
 > This architecture transforms Wasabi from a simple script into a high-performance networking engine, bringing C-level memory management and stability to the VBA ecosystem.
 
+## The Assembly Engine (Thunks)
+
+<div align="center">
+  <img src="resources/using-assembly.png" alt="Wasabi Assembly Engine" />
+</div>
+
+To achieve true C-level performance in operations where native VBA traditionally struggles, Wasabi integrates a microscopic **Assembly Engine** directly into the module. 
+
+VBA is an interpreted language that excels at COM automation, but it is inherently slow at processing large byte arrays sequentially. Operations like masking payload frames or scanning massive TCP buffers for delimiters require loops (`For i = 0 To...`) with heavy overhead due to bounds-checking and variant type conversions. 
+
+To bypass this bottleneck, Wasabi uses **Safe Thunks**—compiled machine code (x86 and x64) injected directly into executable memory at runtime.
+
+### How It Works
+
+1. **Allocation:** Upon initialization, Wasabi uses the Windows API `VirtualAlloc` to request a block of memory with `PAGE_EXECUTE_READWRITE` permissions.
+2. **Injection:** The raw hexadecimal opcodes of the Assembly functions are copied into this allocated memory block using `RtlMoveMemory`.
+3. **Execution:** Whenever a heavy byte-level operation is required, Wasabi delegates the task to the processor using `CallWindowProcW`. This API acts as a bridge, tricking the OS into executing our allocated memory block as if it were a standard C function.
+
+### The High-Performance Thunks
+
+When Wasabi needs to process intense data, it routes the heavy mathematics directly to the silicon:
+
+* **`ws_mask`**: Applies the mandatory WebSocket XOR mask (RFC 6455) to outbound frames in microseconds. It completely eliminates the VBA `For` loop bottleneck, allowing the client to mask megabytes of payload instantly.
+* **`mem_zero`**: An ultra-fast hardware-level memory wipe. It utilizes the highly optimized `rep stosb` x86 instruction during connection cleanup to securely erase decrypted payloads, buffers, and proxy credentials from RAM.
+* **`mem_find`**: Hardware-accelerated byte-pattern matching (the "Needle in a Haystack" problem). It uses the `repe cmpsb` instruction to instantly locate delimiters (like `\r\n`) within massive TCP buffers, an operation that would otherwise freeze the Office UI if done in native VBA.
+
+These thunks are deeply encapsulated. As a developer, you simply call the high-level API functions, while the engine autonomously manages the execution flow.
+
+### Dive Deeper: The [`dev/asm`](dev/asm) Directory
+
+For transparency, maintainability, and community contributions, the original Assembly source code is not hidden. You can find all the raw `.asm` files in the **[`dev/asm`](dev/asm)** folder of this repository.
+
+Inside `dev/asm`, you will find:
+* **The Source Code:** Uncompiled, heavily commented NASM/FASM code for all the thunks (`ws_mask_x64.asm`, `mem_find_x86.asm`, etc.).
+* **Calling Conventions:** Documentation on how the thunks handle arguments across different architectures. 
+  * **x64:** Uses the *Microsoft x64 calling convention* (passing arguments via `RCX`, `RDX`, `R8`, `R9`).
+  * **x86:** Uses the `stdcall` convention (arguments pushed to the stack, requiring `ret 16` to clean up the stack pointer).
+* **Safe Thunk (Anti-Crash):** Additional experimental thunks designed to protect the runtime against the "VBE Reset Problem" (preventing Excel from crashing if the VBA project is stopped abruptly while a socket is listening).
+* **Compilation Guide:** Instructions on how to use `nasm -f bin` to compile modifications and generate the hexadecimal byte arrays required for the main `.bas` module.
+
 ## What VBA limitations it solves
 
 Working with networking in VBA often becomes a project of its own. Wasabi addresses typical pain points directly:
@@ -166,7 +206,7 @@ Working with networking in VBA often becomes a project of its own. Wasabi addres
 - Shields your application from API breaking changes across Windows versions.
 
 **Security & Cryptography**
-- Uses `CryptGenRandom` for RFC-compliant frame masking instead of VBA's predictable `Rnd`.
+- Uses `SystemFunction036` (`RtlGenRandom`) for RFC-compliant frame masking instead of VBA's predictable `Rnd`.
 - Handles native TLS 1.2/1.3 via Schannel SSPI without relying on outdated Internet Explorer settings or registry keys.
 
 **Corporate Environments**
@@ -217,7 +257,6 @@ Working with networking in VBA often becomes a project of its own. Wasabi addres
 No references need to be enabled in **Tools → References**.
 
 ### Connect and Send a Message
-
 ```vb
 Dim h As Long
 
@@ -243,7 +282,7 @@ Dim h As Long
 WebSocketSetCertValidation True, h
 WebSocketSetRevocationCheck True, h
 
-If WebSocketConnect("wss://example.com/ws", h) Then
+If WebSocketConnect("wss://[example.com/ws](https://example.com/ws)", h) Then
     WebSocketSend "Secure hello", h
     WebSocketDisconnect h
 End If
@@ -255,7 +294,7 @@ End If
 Dim h As Long
 
 ' Connect with MQTT subprotocol declaration
-WebSocketConnect "wss://broker.hivemq.com:8443/mqtt", h, , , "mqtt"
+WebSocketConnect "wss://[broker.hivemq.com:8443/mqtt](https://broker.hivemq.com:8443/mqtt)", h, , , "mqtt"
 
 ' Enable offline queueing so messages aren't lost if the connection drops
 WebSocketSetOfflineQueueing True, h
@@ -272,7 +311,7 @@ MqttPublish "sensors/data", "Value: 42", 2, False, h
 Dim h As Long
 
 ' Set third parameter to True to enable Deflate
-If WebSocketConnect("wss://example.com/ws", h, True) Then
+If WebSocketConnect("wss://[example.com/ws](https://example.com/ws)", h, True) Then
     Debug.Print "Compression active: " & WebSocketGetDeflateEnabled(h)
     WebSocketSend "Compressed message payload", h
     WebSocketDisconnect h
@@ -293,7 +332,7 @@ Dim h As Long
 WebSocketSetProxy "proxy.company.com", 8080, "user", "pass", 0, h
 WebSocketSetProxyNtlm True, h
 
-If WebSocketConnect("wss://example.com/ws", h) Then
+If WebSocketConnect("wss://[example.com/ws](https://example.com/ws)", h) Then
     WebSocketSend "Behind the firewall", h
     WebSocketDisconnect h
 End If
@@ -309,7 +348,7 @@ WebSocketSetAutoReconnect True, 5, 1000, h
 ' Send ping every 30s, with up to 5s of random jitter to avoid strict gateway filters
 WebSocketSetPingInterval 30000, 5000, h 
 
-If WebSocketConnect("wss://example.com/ws", h) Then
+If WebSocketConnect("wss://[example.com/ws](https://example.com/ws)", h) Then
     Do While WebSocketIsConnected(h)
         Dim msg As String
         msg = WebSocketReceive(h)
@@ -449,7 +488,7 @@ Every API declaration uses `#If VBA7` to switch between `Long` (32-bit) and
 | <img src="resources/ms-vba.png" width="18" /> `ws2_32.dll` | TCP socket creation, DNS, send/recv | ![](resources/svg/thumbsdown.svg) |
 | <img src="resources/ms-vba.png" width="18" /> `secur32.dll` | TLS 1.2/1.3 via Schannel SSPI | ![](resources/svg/thumbsdown.svg) |
 | <img src="resources/ms-vba.png" width="18" /> `kernel32.dll` | Memory operations, UTF-8, tick count | ![](resources/svg/thumbsdown.svg) |
-| <img src="resources/ms-vba.png" width="18" /> `advapi32.dll` | Cryptographic random numbers (`CryptGenRandom`) | ![](resources/svg/thumbsdown.svg) |
+| <img src="resources/ms-vba.png" width="18" /> `advapi32.dll` | Cryptographic random numbers (`SystemFunction036`) | ![](resources/svg/thumbsdown.svg) |
 | <img src="resources/ms-vba.png" width="18" /> `crypt32.dll` | Certificate store, chain validation | ![](resources/svg/thumbsdown.svg) |
 | ![](resources/svg/dependence.svg) `zlib1.dll` | Compression for `permessage-deflate` | ![](resources/svg/thumbsup.svg) |
 
@@ -470,7 +509,7 @@ compresses message payloads to reduce bandwidth usage.
 
 ```vb
 ' Connect with compression enabled
-If WebSocketConnect("wss://example.com/ws", h, True, True) Then
+If WebSocketConnect("wss://[example.com/ws](https://example.com/ws)", h, True, True) Then
     Debug.Print "Compression active:", WebSocketGetDeflateEnabled(h)
 End If
 ```
