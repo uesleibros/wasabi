@@ -2,7 +2,7 @@
 
 This document describes the complete public interface of `Wasabi.bas`.
 
-Wasabi is a native WebSocket and WSS client for VBA built on raw Winsock and Schannel. It implements the WebSocket protocol as defined by RFC 6455 and handles TLS through the Windows SSPI Schannel provider. The public API is minimal at the call site, but understanding the runtime model is essential for reliable usage.
+Wasabi is a native WebSocket, WSS, and TCP client for VBA built on raw Winsock and Schannel. It implements the WebSocket protocol as defined by RFC 6455 and handles TLS through the Windows SSPI Schannel provider. The public API is minimal at the call site, but understanding the runtime model is essential for reliable usage.
 
 ## Core Concepts
 
@@ -88,6 +88,20 @@ capacity = WebSocketGetQueueCapacity(h)
 Debug.Print "Pending text messages:", pending
 Debug.Print "Remaining capacity:", capacity
 ```
+
+### Connection Modes
+
+Every handle in the pool operates in one of three modes, represented by the `WasabiConnectionMode` enum:
+
+| Value | Constant | Description |
+|:---|:---|:---|
+| 0 | `MODE_WEBSOCKET` | Standard WebSocket or WSS connection |
+| 1 | `MODE_TCP` | Plain TCP connection |
+| 2 | `MODE_TCP_TLS` | TCP connection with TLS 1.2/1.3 |
+
+WebSocket and TCP handles share the same pool, the same proxy infrastructure, the same TLS stack, and the same MTU discovery engine. The mode is set automatically by the connect function used and cannot be changed after connection.
+
+WebSocket-specific functions (`WebSocketSend`, `WebSocketReceive`, MQTT, etc.) will silently exit if called on a TCP handle. TCP-specific functions (`TcpSend`, `TcpReceive`, etc.) will silently exit if called on a WebSocket handle.
 
 ## Connection Management
 
@@ -887,6 +901,405 @@ Public Sub WebSocketSetHttp2(ByVal enabled As Boolean, Optional ByVal handle As 
 
 Requests HTTP/2 during the TLS handshake by advertising the `h2` protocol via ALPN.
 
+## TCP Client
+
+Wasabi includes a full native TCP client that shares the same connection pool and infrastructure as WebSocket. Plain TCP and TLS TCP connections are supported, with the same proxy, MTU, certificate, and timeout configuration available on WebSocket handles.
+
+### Connection
+
+#### TcpConnect
+```vb
+Public Function TcpConnect(ByVal host As String, ByVal port As Long, ByRef outHandle As Long) As Boolean
+```
+
+Opens a plain TCP connection to the specified host and port. Uses Happy Eyeballs (RFC 6555) for IPv4/IPv6 racing, automatic MTU discovery, and applies socket options on connect.
+
+Returns `True` if connected. `False` if any step failed.
+
+```vb
+Dim h As Long
+
+If TcpConnect("tcpbin.com", 4242, h) Then
+    TcpSendText "hello" & vbCrLf, h
+    TcpDisconnect h
+End If
+```
+
+#### TcpConnectTLS
+```vb
+Public Function TcpConnectTLS(ByVal host As String, ByVal port As Long, ByRef outHandle As Long) As Boolean
+```
+
+Opens a TCP connection with TLS 1.2/1.3 via Schannel SSPI. The full TLS handshake and optional certificate validation sequence runs identically to `wss://` connections.
+
+```vb
+Dim h As Long
+
+If TcpConnectTLS("example.com", 443, h) Then
+    TcpSendText "GET / HTTP/1.0" & vbCrLf & "Host: example.com" & vbCrLf & vbCrLf, h
+    Debug.Print TcpReceiveText(h)
+    TcpDisconnect h
+End If
+```
+
+#### TcpDisconnect
+```vb
+Public Sub TcpDisconnect(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+```
+
+Closes the TCP socket and releases all resources for the handle. Disables auto reconnect.
+
+#### TcpIsConnected
+```vb
+Public Function TcpIsConnected(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
+```
+
+Returns `True` if the handle is active and in TCP or TCP_TLS mode.
+
+#### TcpGetConnectionCount
+```vb
+Public Function TcpGetConnectionCount() As Long
+```
+
+Returns the number of currently active TCP handles (both plain and TLS).
+
+#### TcpGetAllHandles
+```vb
+Public Function TcpGetAllHandles() As Long()
+```
+
+Returns an array of all currently active TCP handle indices.
+
+### Sending Data
+
+#### TcpSend
+```vb
+Public Function TcpSend(ByRef data() As Byte, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
+```
+
+Sends a raw byte array. Uses `TLSSend` internally when the handle is in `MODE_TCP_TLS`, otherwise uses `send` directly.
+
+#### TcpSendText
+```vb
+Public Function TcpSendText(ByVal text As String, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
+```
+
+Encodes the string to UTF-8 and sends it via `TcpSend`.
+
+```vb
+TcpSendText "PING" & vbCrLf, h
+```
+
+#### TcpBroadcast
+```vb
+Public Function TcpBroadcast(ByRef data() As Byte) As Long
+```
+
+Sends a byte array to all active TCP handles. Returns the count of successful sends.
+
+#### TcpBroadcastText
+```vb
+Public Function TcpBroadcastText(ByVal text As String) As Long
+```
+
+Encodes text to UTF-8 and sends it to all active TCP handles.
+
+### Receiving Data
+
+#### TcpReceive
+```vb
+Public Function TcpReceive(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Byte()
+```
+
+Reads all currently available bytes from the receive buffer and returns them as a byte array. Returns an empty array if nothing is available.
+
+Each call drives internal maintenance (inactivity timeout, MTU probe) and reads the OS socket buffer.
+
+#### TcpReceiveText
+```vb
+Public Function TcpReceiveText(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
+```
+
+Calls `TcpReceive` and decodes the result from UTF-8.
+
+```vb
+Dim msg As String
+Dim t As Long
+t = GetTickCount()
+Do While TickDiff(t, GetTickCount()) < 3000
+    msg = TcpReceiveText(h)
+    If Len(msg) > 0 Then Exit Do
+    DoEvents
+Loop
+```
+
+#### TcpReceiveUntil
+```vb
+Public Function TcpReceiveUntil(ByVal delimiter As String, Optional ByVal timeoutMs As Long = 5000, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
+```
+
+Blocks until the delimiter is found in the receive stream or the timeout expires. Returns all bytes up to and including the delimiter as a UTF-8 string. Bytes after the delimiter are preserved in the internal buffer for the next call.
+
+```vb
+TcpSendText "hello" & vbCrLf, h
+Dim line As String
+line = TcpReceiveUntil(vbCrLf, 3000, h)
+Debug.Print "Line: " & line
+```
+
+#### TcpFlushBuffer
+```vb
+Public Sub TcpFlushBuffer(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+```
+
+Discards all bytes currently in the TCP receive buffer.
+
+#### TcpGetPendingBytes
+```vb
+Public Function TcpGetPendingBytes(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Long
+```
+
+Returns the number of bytes waiting in the internal TCP receive buffer.
+
+### Configuration
+
+#### TcpSetNoDelay
+```vb
+Public Function TcpSetNoDelay(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
+```
+
+Controls `TCP_NODELAY`. Can be toggled at any time, even mid-connection.
+
+#### TcpSetInactivityTimeout
+```vb
+Public Sub TcpSetInactivityTimeout(ByVal timeoutMs As Long, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+```
+
+Closes the connection if no data is received within the specified interval.
+
+#### TcpSetReceiveTimeout
+```vb
+Public Sub TcpSetReceiveTimeout(ByVal timeoutMs As Long, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+```
+
+Sets the timeout for internal `select()` calls.
+
+#### TcpSetBufferSize
+```vb
+Public Sub TcpSetBufferSize(ByVal bufferSize As Long, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+```
+
+Overrides the receive buffer size. Must be set before connecting. Valid range: 8192 to 16777216 bytes.
+
+#### TcpSetPreferIPv6
+```vb
+Public Sub TcpSetPreferIPv6(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+```
+
+Biases Happy Eyeballs toward IPv6 when resolving hostnames.
+
+#### TcpSetMTU
+```vb
+Public Sub TcpSetMTU(ByVal mtu As Long, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+```
+
+Sets a static MTU value (576–9000). Default is 1500.
+
+#### TcpSetAutoMTU
+```vb
+Public Sub TcpSetAutoMTU(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+```
+
+Enables or disables automatic MTU discovery via `TCP_MAXSEG`.
+
+#### TcpSetErrorDialog
+```vb
+Public Sub TcpSetErrorDialog(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+```
+
+Controls whether errors trigger a `MsgBox`.
+
+#### TcpSetLogCallback
+```vb
+Public Sub TcpSetLogCallback(ByVal callbackName As String, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+```
+
+Registers a VBA macro as a log receiver for this TCP handle.
+
+### TLS Configuration
+
+#### TcpSetCertValidation
+```vb
+Public Sub TcpSetCertValidation(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+```
+
+Enables server certificate chain validation after the TLS handshake.
+
+#### TcpSetRevocationCheck
+```vb
+Public Sub TcpSetRevocationCheck(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+```
+
+Enables CRL/OCSP revocation checking.
+
+#### TcpSetClientCert
+```vb
+Public Sub TcpSetClientCert(ByVal thumbprintOrSubject As String, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+```
+
+Loads a client certificate from the Windows Personal store for mTLS.
+
+#### TcpSetClientCertPfx
+```vb
+Public Sub TcpSetClientCertPfx(ByVal pfxPath As String, ByVal pfxPassword As String, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+```
+
+Loads a client certificate from a PFX file for mTLS.
+
+### Proxy Configuration
+
+#### TcpSetProxy
+```vb
+Public Sub TcpSetProxy(ByVal proxyHost As String, ByVal proxyPort As Long, Optional ByVal proxyUser As String = "", Optional ByVal proxyPass As String = "", Optional ByVal proxyType As Long = PROXY_TYPE_HTTP, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+```
+
+Configures an HTTP CONNECT or SOCKS5 proxy.
+
+#### TcpClearProxy
+```vb
+Public Sub TcpClearProxy(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+```
+
+Removes proxy configuration from the handle.
+
+#### TcpAutoDiscoverProxy
+```vb
+Public Sub TcpAutoDiscoverProxy(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+```
+
+Auto-detects the Windows system proxy via `WinHttpGetIEProxyConfigForCurrentUser`.
+
+#### TcpGetProxyInfo
+```vb
+Public Function TcpGetProxyInfo(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
+```
+
+Returns a pipe-delimited proxy configuration summary.
+
+### Diagnostics and Stats
+
+#### TcpGetStats
+```vb
+Public Function TcpGetStats(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
+```
+
+Returns a pipe-delimited snapshot of connection metrics including bytes sent/received, messages, uptime, pending bytes, proxy, mode, host, and port.
+
+#### TcpResetStats
+```vb
+Public Sub TcpResetStats(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+```
+
+Resets all counters and updates the connected timestamp.
+
+#### TcpGetUptime
+```vb
+Public Function TcpGetUptime(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Long
+```
+
+Returns seconds since the connection was established.
+
+#### TcpGetLatency
+```vb
+Public Function TcpGetLatency(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Long
+```
+
+Returns the last measured RTT in milliseconds.
+
+#### TcpGetMTUInfo
+```vb
+Public Function TcpGetMTUInfo(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
+```
+
+Returns a pipe-delimited summary of MTU, MSS, and optimal frame size.
+
+#### TcpGetHost
+```vb
+Public Function TcpGetHost(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
+```
+
+Returns the connected hostname.
+
+#### TcpGetPort
+```vb
+Public Function TcpGetPort(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Long
+```
+
+Returns the connected port.
+
+#### TcpGetMode
+```vb
+Public Function TcpGetMode(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As WasabiConnectionMode
+```
+
+Returns `MODE_TCP` or `MODE_TCP_TLS`.
+
+#### TcpGetLastError
+```vb
+Public Function TcpGetLastError(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As WasabiError
+```
+
+Returns the most recent `WasabiError` value for the handle.
+
+#### TcpGetLastErrorCode
+```vb
+Public Function TcpGetLastErrorCode(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Long
+```
+
+Returns the most recent native system error code.
+
+#### TcpGetTechnicalDetails
+```vb
+Public Function TcpGetTechnicalDetails(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
+```
+
+Returns a human-readable description of the most recent error.
+
+### Practical Pattern
+
+```vb
+Sub TcpEchoLoop()
+    Dim h As Long
+
+    If Not TcpConnect("tcpbin.com", 4242, h) Then
+        Debug.Print "Failed: " & TcpGetTechnicalDetails(h)
+        Exit Sub
+    End If
+
+    TcpSetInactivityTimeout 30000, h
+    TcpSetNoDelay True, h
+
+    Dim i As Long
+    For i = 1 To 5
+        TcpSendText "msg_" & i & vbCrLf, h
+
+        Dim msg As String
+        Dim t As Long
+        t = GetTickCount()
+        Do While TickDiff(t, GetTickCount()) < 3000
+            msg = TcpReceiveText(h)
+            If Len(msg) > 0 Then Exit Do
+            DoEvents
+        Loop
+
+        Debug.Print "Echo " & i & ": " & Trim(msg)
+    Next i
+
+    Debug.Print TcpGetStats(h)
+    TcpDisconnect h
+End Sub
+```
+
 ## MQTT Client
 
 Wasabi includes a minimal MQTT 3.1.1 client that uses the existing WebSocket transport. This allows direct connection to MQTT brokers that support WebSocket listeners (e.g., Mosquitto, HiveMQ, AWS IoT).
@@ -1151,3 +1564,9 @@ End Sub
 
 > [!NOTE]
 > The pipe-delimited format returned by `WebSocketGetStats`, `WebSocketGetReconnectInfo`, `WebSocketGetProxyInfo`, and `WebSocketGetMTUInfo` is intended for human-readable diagnostics. Do not build parsing logic that depends on field order or format stability across future versions.
+
+> [!NOTE]
+> TCP handles do not support WebSocket-specific features such as message queuing, ping scheduling, MQTT, permessage-deflate, or offline queueing. These features are exclusive to `MODE_WEBSOCKET` handles.
+
+> [!NOTE]
+> `TcpReceive` and `TcpReceiveText` return all bytes currently available in the buffer in a single call. TCP is a stream protocol — there are no message boundaries. Use `TcpReceiveUntil` when your protocol uses delimiters, or implement framing logic in your application layer.
