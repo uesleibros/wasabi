@@ -404,7 +404,7 @@ This is a deliberate architectural choice. Many competing modules depend on the 
 | ![](resources/svg/ms-powerpoint.svg) PowerPoint 64-bit | ✅ |
 | ![](resources/svg/ms-access.svg) Access 32-bit | ✅ |
 | ![](resources/svg/ms-access.svg) Access 64-bit | ✅ |
-| <img src="resources/ms-vba.png" width="30" /> Any VBA7 host (Office 2010+) | ✅ |
+| ![](resources/svg/ms-office.svg) Any VBA7 host (Office 2010+) | ✅ |
 | ![](resources/svg/ms-office.svg) VBA6 (Office 2007 and earlier) | ✅ |
 
 The transition from 32-bit to 64-bit Office broke many VBA modules that used
@@ -421,12 +421,12 @@ Every API declaration uses `#If VBA7` to switch between `Long` (32-bit) and
 
 | Library | Role in Wasabi | Optional |
 |---|---|:---:|
-| `ws2_32.dll` | TCP socket creation, DNS, send/recv | No |
-| `secur32.dll` | TLS 1.2/1.3 via Schannel SSPI | No |
-| `kernel32.dll` | Memory operations, UTF-8, tick count | No |
-| `advapi32.dll` | Cryptographic random numbers (`CryptGenRandom`) | No |
-| `crypt32.dll` | Certificate store, chain validation | No |
-| `zlib1.dll` | Compression for `permessage-deflate` | **Yes** |
+| <img src="resources/ms-vba.png" width="30" /> `ws2_32.dll` | TCP socket creation, DNS, send/recv | No |
+| <img src="resources/ms-vba.png" width="30" /> `secur32.dll` | TLS 1.2/1.3 via Schannel SSPI | No |
+| <img src="resources/ms-vba.png" width="30" /> `kernel32.dll` | Memory operations, UTF-8, tick count | No |
+| <img src="resources/ms-vba.png" width="30" /> `advapi32.dll` | Cryptographic random numbers (`CryptGenRandom`) | No |
+| <img src="resources/ms-vba.png" width="30" /> `crypt32.dll` | Certificate store, chain validation | No |
+| <img src="resources/ms-vba.png" width="30" /> `zlib1.dll` | Compression for `permessage-deflate` | **Yes** |
 
 **What does "zero external dependencies" mean in practice?**
 Wasabi requires nothing beyond Windows and the standard VBA runtime. There is no installer, no COM registration, no ActiveX control, no third-party DLL, no Python runtime, no .NET package, and no `regsvr32`. 
