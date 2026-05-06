@@ -26,9 +26,9 @@ The files in this directory contain the **Assembly (x86/x64)** source for a "Saf
 
 Beyond stability, the Wasabi project utilizes specialized thunks to handle data processing tasks that are inefficient in native VBA:
 
-*   **Endianness Swap**: Provides rapid conversion between Big-Endian (Network) and Little-Endian (Intel) formats for 32-bit integers.
 *   **WebSocket Masking**: Implements the high-speed XOR bitwise operations required by the WebSocket protocol for all client-to-server data frames.
 *   **Fast Memory Zero**: A lightweight alternative to `RtlZeroMemory` for clearing buffers or network structures with minimal overhead.
+*   **High-Speed Memory Search**: An ultra-fast implementation using hardware-level byte comparison (`repe cmpsb`) to find byte patterns (needle in a haystack) within large TCP buffers, bypassing slow VBA loops.
 
 ### Files in this Directory
 
@@ -36,12 +36,12 @@ Beyond stability, the Wasabi project utilizes specialized thunks to handle data 
 | :--- | :--- | :--- |
 | ![](../../resources/svg/assembly.svg) `safe_thunk_x64.asm` | 64-bit | Core Reset protection using RAX and FastCall convention. |
 | ![](../../resources/svg/assembly.svg) `safe_thunk_x86.asm` | 32-bit | Core Reset protection using stack-based arguments and EAX. |
-| ![](../../resources/svg/assembly.svg) `swap_32_x64.asm` | 64-bit | Fast 32-bit Endianness swap (Big-Endian to Little-Endian). |
-| ![](../../resources/svg/assembly.svg) `swap_32_x86.asm` | 32-bit | Fast 32-bit Endianness swap (Big-Endian to Little-Endian). |
 | ![](../../resources/svg/assembly.svg) `ws_mask_x64.asm` | 64-bit | High-speed XOR masking for WebSocket protocol frames. |
 | ![](../../resources/svg/assembly.svg) `ws_mask_x86.asm` | 32-bit | High-speed XOR masking for WebSocket protocol frames. |
 | ![](../../resources/svg/assembly.svg) `mem_zero_x64.asm` | 64-bit | Optimized memory zeroing for buffers. |
 | ![](../../resources/svg/assembly.svg) `mem_zero_x86.asm` | 32-bit | Optimized memory zeroing for buffers. |
+| ![](../../resources/svg/assembly.svg) `mem_find_x64.asm` | 64-bit | High-performance memory block search (Needle in a Haystack). |
+| ![](../../resources/svg/assembly.svg) `mem_find_x86.asm` | 32-bit | High-performance memory block search (Needle in a Haystack). |
 
 ### Implementation Details
 
