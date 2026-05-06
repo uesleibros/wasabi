@@ -78,7 +78,7 @@ Beyond basic WebSocket messaging, Wasabi bundles an MQTT 3.1.1 client, NTLM/Kerb
 - [ ] `WebSocketStartListening` helper for one-line polling loops
 - [ ] `WSAAsyncSelect` event-driven socket notifications (Eliminating polling blocks)
 
-### The Future: "Framework Era" (Scalability & Extensions)
+### ![](resources/svg/planning.svg) The Future: "Framework Era" (Scalability & Extensions)
 - [ ] **Core Refactoring:** Isolate the raw TCP/Schannel engine (the "Dumb Pipe") from high-level protocol logic.
 - [ ] **Middleware Pipeline:** Implement an injection system via Late Binding (`Object`) for network interceptors (`OnBeforeSend` / `OnAfterReceive`).
 - [ ] **Modular Compression:** Decouple the `zlib1.dll` dependency from the main module into an official extension (`ExtWasabiZlib.cls`).
