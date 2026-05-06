@@ -5,7 +5,7 @@
 <h1 align="center">Wasabi: VBA WebSocket</h1>
 
 <p align="center">
-  <b>Turn Excel and Office into a real-time client for WebSockets, MQTT, and raw TCP, no dependencies, no COM, no installs.</b>
+  <b>Wasabi Turn Excel and Office into a real-time client for WebSockets, MQTT, and raw TCP, no dependencies, no COM, no installs.</b>
 </p>
 
 <p align="center">
