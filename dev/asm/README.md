@@ -18,17 +18,17 @@ In standard VBA networking, using `WSAAsyncSelect` (Event-driven IO) is dangerou
 The files in this directory contain the **Assembly (x86/x64)** source for a "Safe Thunk." This thunk acts as an intermediary between Windows and VBA.
 
 1. **Heartbeat Check:** Before forwarding a network event to the VBA code, the Thunk checks a specific memory address (the "Flag").
-2. **Safe Routing:** 
-   * **If Flag = 1:** The VBA project is active; the Thunk forwards the message to `Wasabi_WndProc`.
+2. **Safe Routing:** * **If Flag = 1:** The VBA project is active; the Thunk forwards the message to `Wasabi_WndProc`.
    * **If Flag = 0:** The user clicked Reset; the Thunk ignores the VBA code and safely redirects the message to the default Windows handler (`DefWindowProcW`).
 
 ### Utility Thunks
 
 Beyond stability, the Wasabi project utilizes specialized thunks to handle data processing tasks that are inefficient in native VBA:
 
-*   **WebSocket Masking**: Implements the high-speed XOR bitwise operations required by the WebSocket protocol for all client-to-server data frames.
-*   **Fast Memory Zero**: A lightweight alternative to `RtlZeroMemory` for clearing buffers or network structures with minimal overhead.
-*   **High-Speed Memory Search**: An ultra-fast implementation using hardware-level byte comparison (`repe cmpsb`) to find byte patterns (needle in a haystack) within large TCP buffers, bypassing slow VBA loops.
+* **WebSocket Masking**: Implements the high-speed XOR bitwise operations required by the WebSocket protocol for all client-to-server data frames.
+* **Fast Memory Zero**: A lightweight alternative to `RtlZeroMemory` for clearing buffers or network structures with minimal overhead.
+* **High-Speed Memory Search**: An ultra-fast implementation using hardware-level byte comparison (`repe cmpsb`) to find byte patterns (needle in a haystack) within large TCP buffers, bypassing slow VBA loops.
+* **Fast Tick Difference**: A micro-optimized subtraction routine that safely handles 32-bit unsigned integer wraparound for precise time calculations (e.g., ping intervals and timeouts), bypassing slow native VBA workarounds.
 
 ### Files in this Directory
 
@@ -42,6 +42,8 @@ Beyond stability, the Wasabi project utilizes specialized thunks to handle data 
 | ![](../../resources/svg/assembly.svg) `mem_zero_x86.asm` | 32-bit | Optimized memory zeroing for buffers. |
 | ![](../../resources/svg/assembly.svg) `mem_find_x64.asm` | 64-bit | High-performance memory block search (Needle in a Haystack). |
 | ![](../../resources/svg/assembly.svg) `mem_find_x86.asm` | 32-bit | High-performance memory block search (Needle in a Haystack). |
+| ![](../../resources/svg/assembly.svg) `tick_diff_x64.asm` | 64-bit | High-performance tick/time difference calculation. |
+| ![](../../resources/svg/assembly.svg) `tick_diff_x86.asm` | 32-bit | High-performance tick/time difference calculation. |
 
 ### Implementation Details
 
@@ -76,48 +78,3 @@ You must compile these files using the `-f bin` flag. This ensures the output is
 #### For the 64-bit Thunk
 ```bash
 nasm -f bin safe_thunk_x64.asm -o safe_thunk_x64.bin
-```
-
-#### For the 32-bit Thunk
-```bash
-nasm -f bin safe_thunk_x86.asm -o safe_thunk_x86.bin
-```
-
-### 3. Extracting Opcodes for VBA
-
-Once you have the `.bin` files, you need to convert the binary data into a format VBA can read (Hexadecimal or Byte Arrays).
-
-#### Method A: Using Windows CertUtil (Built-in)
-```bash
-certutil -dump safe_thunk_x64.bin
-```
-
-#### Method B: Using PowerShell
-```powershell
-[System.IO.File]::ReadAllBytes("safe_thunk_x64.bin") | ForEach-Object { "0x{0:X2}" -f $_ } | Join-String -Separator ", "
-```
-
-### 4. Verification Workflow
-
-To ensure the thunk was compiled correctly before deploying it to `VirtualAlloc`:
-
-1. **Check File Size**: 
-   * The `safe_thunk_x64.bin` should be exactly 42 bytes.
-   * The `safe_thunk_x86.bin` should be exactly 21 bytes.
-2. **Compare Placeholders**: 
-   * In the x64 binary, look for the sequence `88 77 66 55 44 33 22 11`. This confirms where the `m_pFlag` address will be injected.
-   * In the x86 binary, look for `44 33 22 11`.
-
-### 5. Integration Test
-
-Once compiled and verified, update the `asm()` initialization in your module:
-
-1. Copy the hex sequence from your verification tool.
-2. Paste it into the `ReDim asm(...)` block.
-3. Use `RtlMoveMemory` to place the compiled bytes into the memory allocated by `VirtualAlloc`.
-
-> [!CAUTION]
-> Always ensure the `VirtualAlloc` call uses the `PAGE_EXECUTE_READWRITE` (&H40) protection constant. If the memory is not marked as executable, the Windows Data Execution Prevention (DEP) will terminate Excel immediately when the first network event arrives.
-
-> [!TIP]
-> This architecture allows Wasabi to achieve **0% CPU usage** while idling, even when maintaining multiple active WebSocket or MQTT connections.
