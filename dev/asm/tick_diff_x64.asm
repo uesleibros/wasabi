@@ -6,13 +6,13 @@ global tick_diff
 ; RDX = endTick   (P2)
 ; R8  = unused    (P3)
 ; R9  = unused    (P4)
-; Returns tick difference in RAX (zero-extended from EAX)
+; Returns tick difference in RAX (Sign-extended from EAX)
 
 tick_diff:
-    ; No need to save registers (push/pop) here
-    ; because we don't alter any non-volatile registers.
+    mov eax, r8d       ; EAX = endTick (P2)
+    sub eax, edx       ; EAX = EAX - startTick (P1)
     
-    mov eax, edx       ; EAX = endTick (P2)
-    sub eax, ecx       ; EAX = EAX - startTick (P1)
+    cdqe               ; Sign-extend EAX into RAX. Prevents VBA CLng() overflow 
+                       ; if the difference is negative.
     
-    ret                ; Return EAX. CPU handles the unsigned 32-bit wraparound naturally.
+    ret                ; Return RAX.
