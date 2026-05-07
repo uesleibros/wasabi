@@ -541,7 +541,7 @@ No messages are lost.
 - **Connection doesn't drop.** The socket stays active regardless of polling frequency.
 - **No infinite loop required.** Simple send/receive/disconnect workflows work fine.
 
-## ![](resources/svg/star-rainbow.svg) Community & Acknowledgements
+## Community & Acknowledgements
 
 Wasabi builds on techniques and groundwork pioneered by these projects and their authors:
 
@@ -601,7 +601,7 @@ Wasabi builds on techniques and groundwork pioneered by these projects and their
 </p>
 
 > [!NOTE]
-> **Community Validation**: We are incredibly honored that some of these legendary developers have even starred this repository. Their work paved the way, and their recognition means the world to this project!
+> ![](resources/svg/star-rainbow.svg) **Community Validation**: We are incredibly honored that some of these legendary developers have even starred this repository. Their work paved the way, and their recognition means the world to this project!
 
 ## Contributing
 
