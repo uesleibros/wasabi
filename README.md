@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  Feature-complete WebSocket and WSS for VBA with native TLS, auto reconnect, proxy support, MQTT, permessage-deflate, and zero external dependencies
+  Feature-complete WebSocket and WSS for VBA with native TLS, auto reconnect, proxy support, MQTT, permessage-deflate, middleware pipeline, and zero external dependencies
 </p>
 
 <p align="center">
@@ -32,6 +32,7 @@
   <img src="https://img.shields.io/badge/RTT-latency%20measurement-orange" alt="RTT" />
   <img src="https://img.shields.io/badge/Deflate-permessage--deflate-success" alt="Deflate" />
   <img src="https://img.shields.io/badge/TCP-Native%20Client-blue" alt="TCP" />
+  <img src="https://img.shields.io/badge/Middleware-Pipeline-blueviolet" alt="Middleware" />
   <img src="https://img.shields.io/github/stars/uesleibros/wasabi?style=flat&color=gold" alt="Stars" />
   <img src="https://img.shields.io/github/last-commit/uesleibros/wasabi?style=flat" alt="Last Commit" />
   <a href="../../releases">
@@ -40,12 +41,11 @@
   <a href="../../releases">
     <img src="https://img.shields.io/github/v/release/uesleibros/wasabi?style=flat" alt="Latest Version" />
   </a>
-  
 </p>
 
 > [!NOTE]
 > **Supported Applications**
-> 
+>
 > ![](resources/svg/ms-powerpoint.svg)
 > ![](resources/svg/ms-excel.svg)
 > ![](resources/svg/ms-word.svg)
@@ -55,7 +55,7 @@
 
 > [!IMPORTANT]
 > **Platform**
-> 
+>
 > ![](resources/svg/windows.svg)
 > Currently available only on **Windows**, as it relies on Windows-specific APIs to function.
 
@@ -63,7 +63,7 @@
 
 Wasabi is a VBA module designed to make WebSocket and TCP communication simple, predictable, and practical, bringing an experience similar to [socket.io](https://socket.io) in Node.js entirely within the Office ecosystem. It is a single, self-contained `.bas` file that compiles seamlessly on 32-bit and 64-bit Office hosts, from Windows XP to Windows 11.
 
-Beyond basic WebSocket messaging, Wasabi bundles an MQTT 3.1.1 client, NTLM/Kerberos proxy authentication, RTT latency measurement, fine-grained TLS certificate control, and `permessage-deflate` compression (RFC 7692), all without mandatory external dependencies.
+Beyond basic WebSocket messaging, Wasabi bundles an MQTT 3.1.1 client, NTLM/Kerberos proxy authentication, RTT latency measurement, fine-grained TLS certificate control, a pluggable middleware pipeline, and `permessage-deflate` compression (RFC 7692), all without mandatory external dependencies.
 
 ## Roadmap
 
@@ -75,6 +75,7 @@ Beyond basic WebSocket messaging, Wasabi bundles an MQTT 3.1.1 client, NTLM/Kerb
 - [x] NTLM/Kerberos authentication for HTTP proxies
 - [x] **Windows System Proxy Auto-Discovery**
 - [x] MQTT 3.1.1 client with **QoS 1 & QoS 2 (Exactly Once) Support**
+- [x] MQTT User Properties (`metaKey` / `metaValue`) on publish
 - [x] RTT latency measurement (GetLatency)
 - [x] permessage-deflate compression (RFC 7692)
 - [x] Zero-copy receive buffers
@@ -88,6 +89,11 @@ Beyond basic WebSocket messaging, Wasabi bundles an MQTT 3.1.1 client, NTLM/Kerb
 - [x] **Ping Jitter** to prevent strict gateway timeouts
 - [x] **Native TCP Client** with plain and TLS modes
 - [x] **TCP MTU Discovery**, NoDelay, inactivity timeout, and proxy support
+- [x] **TCP Broadcast** to all active TCP connections simultaneously
+- [x] **`TcpReceiveUntil`** delimiter-based blocking read
+- [x] **Middleware Pipeline** (`WasabiUseMiddleware`) for intercepting inbound and outbound data
+- [x] **Protocol Handler** (`WasabiUseProtocol`) for pluggable application protocol injection
+- [x] **Compression Handler** (`WasabiUseCompression`) for decoupled compression extensions
 
 ### ![](resources/svg/looking.svg) Next Steps (DX & Asynchronicity)
 - [ ] `WebSocketStartListening` helper for one-line polling loops
@@ -95,7 +101,6 @@ Beyond basic WebSocket messaging, Wasabi bundles an MQTT 3.1.1 client, NTLM/Kerb
 
 ### ![](resources/svg/planning.svg) The Future: "Framework Era" (Scalability & Extensions)
 - [ ] **Core Refactoring:** Isolate the raw TCP/Schannel engine (the "Dumb Pipe") from high-level protocol logic.
-- [ ] **Middleware Pipeline:** Implement an injection system via Late Binding (`Object`) for network interceptors (`OnBeforeSend` / `OnAfterReceive`).
 - [ ] **Modular Compression:** Decouple the `zlib1.dll` dependency from the main module into an official extension (`ExtWasabiZlib.cls`).
 - [ ] **Pluggable Protocols:** Add a dedicated slot in the engine for application protocol injection (enabling the community to plug in MQTT 5.0, AMQP, or custom enterprise parsers).
 - [ ] **Security Interceptors:** Create a plugin architecture for autonomous injection of authentication headers (OAuth, JWT, AWS Signature V4) and custom E2E encryption (e.g., AES-256).
@@ -109,6 +114,7 @@ Highlights include:
 * **MQTT QoS 2 Dashboard**: A full-duplex IoT dashboard with guaranteed message delivery, ping jitter, and offline queueing.
 * **Non-Blocking UI (Event Loop)**: The definitive architectural pattern using `Application.OnTime` to keep your spreadsheets 100% interactive while listening to background data.
 * **High-Speed Batching & Corporate Auth**: Advanced configurations for strict TLS, system proxies, and high-throughput telemetry.
+* **Middleware Pipeline**: Examples of how to inject logging, encryption, or transformation layers into the data flow without touching core send/receive logic.
 
 [Explore the Examples Suite](examples/)
 
@@ -130,20 +136,20 @@ In VBA, every Class is technically a **COM (Component Object Model) Object**. In
 
 ### 2. Static Connection Pool & Data-Oriented Design
 
-Wasabi manages up to 64 concurrent connections using a statically allocated pool of **User-Defined Types (UDTs)**. 
+Wasabi manages up to 64 concurrent connections using a statically allocated pool of **User-Defined Types (UDTs)**.
 * **Memory Predictability:** All connection data resides in a contiguous block of memory, which is much more cache-friendly than objects scattered across the heap.
 * **No Heap Fragmentation:** Objects are frequently allocated and destroyed, which can lead to memory fragmentation in long-running Office sessions. Wasabi's static pool is allocated once at startup and recycled, ensuring long-term stability without memory leaks.
 
 ### 3. Native Win32 API Alignment
 
-Working with low-level networking requires heavy use of memory pointers (`StrPtr`, `VarPtr`) and direct memory manipulation (`RtlMoveMemory`). 
+Working with low-level networking requires heavy use of memory pointers (`StrPtr`, `VarPtr`) and direct memory manipulation (`RtlMoveMemory`).
 * Standard modules provide a flatter, more reliable memory model for passing data to Windows Kernel and Security APIs.
 * Passing class properties to Win32 APIs often requires temporary buffering or extra copies; procedural modules allow "in-place" processing, which is essential for the **Zero-Copy** receive model.
 
 ### 4. Minimal Integration Friction
 
-Using Wasabi does not require the developer to manage object lifecycles or worry about variables falling out of scope and terminating connections unexpectedly. 
-* State is managed globally through a simple integer **Handle**. 
+Using Wasabi does not require the developer to manage object lifecycles or worry about variables falling out of scope and terminating connections unexpectedly.
+* State is managed globally through a simple integer **Handle**.
 * This "Plug-and-Play" approach mimics how the Windows Kernel itself manages resources, providing a robust interface for both beginner and advanced developers.
 
 ### 5. Developer Experience: Global Typings & Enums
@@ -153,6 +159,7 @@ Wasabi is engineered to maximize developer productivity by leveraging the global
 * **Global Constants:** Access connection states (e.g., `STATE_OPEN`, `STATE_CLOSED`) and error codes anywhere in your project without instantiating objects.
 * **Strongly Typed Structures:** Use native Types like `WasabiStats` for high-performance data handling and telemetry.
 * **Zero-Friction API:** Functions like `WebSocketGetLastError` return specific Enum values, allowing for clean `Select Case` blocks and self-documenting code.
+* **Connection Modes:** The `WasabiConnectionMode` enum (`MODE_WEBSOCKET`, `MODE_TCP`, `MODE_TCP_TLS`) makes multi-protocol codebases easy to read and maintain.
 
 > [!TIP]
 > This architecture transforms Wasabi from a simple script into a high-performance networking engine, bringing C-level memory management and stability to the VBA ecosystem.
@@ -163,11 +170,11 @@ Wasabi is engineered to maximize developer productivity by leveraging the global
   <img src="resources/using-assembly.png" alt="Wasabi Assembly Engine" />
 </div>
 
-To achieve true C-level performance in operations where native VBA traditionally struggles, Wasabi integrates a microscopic **Assembly Engine** directly into the module. 
+To achieve true C-level performance in operations where native VBA traditionally struggles, Wasabi integrates a microscopic **Assembly Engine** directly into the module.
 
-VBA is an interpreted language that excels at COM automation, but it is inherently slow at processing large byte arrays sequentially. Operations like masking payload frames or scanning massive TCP buffers for delimiters require loops (`For i = 0 To...`) with heavy overhead due to bounds-checking and variant type conversions. 
+VBA is an interpreted language that excels at COM automation, but it is inherently slow at processing large byte arrays sequentially. Operations like masking payload frames or scanning massive TCP buffers for delimiters require loops (`For i = 0 To...`) with heavy overhead due to bounds-checking and variant type conversions.
 
-To bypass this bottleneck, Wasabi uses **Safe Thunks**—compiled machine code (x86 and x64) injected directly into executable memory at runtime.
+To bypass this bottleneck, Wasabi uses **Safe Thunks**, compiled machine code (x86 and x64) injected directly into executable memory at runtime.
 
 ### How It Works
 
@@ -181,7 +188,8 @@ When Wasabi needs to process intense data, it routes the heavy mathematics direc
 
 * **`ws_mask`**: Applies the mandatory WebSocket XOR mask (RFC 6455) to outbound frames in microseconds. It completely eliminates the VBA `For` loop bottleneck, allowing the client to mask megabytes of payload instantly.
 * **`mem_zero`**: An ultra-fast hardware-level memory wipe. It utilizes the highly optimized `rep stosb` x86 instruction during connection cleanup to securely erase decrypted payloads, buffers, and proxy credentials from RAM.
-* **`mem_find`**: Hardware-accelerated byte-pattern matching (the "Needle in a Haystack" problem). It uses the `repe cmpsb` instruction to instantly locate delimiters (like `\r\n`) within massive TCP buffers, an operation that would otherwise freeze the Office UI if done in native VBA.
+* **`mem_find`**: Hardware-accelerated byte-pattern matching (the "Needle in a Haystack" problem). It uses the `repe cmpsb` instruction to instantly locate delimiters (like `\r\n`) within massive TCP buffers, an operation that would otherwise freeze the Office UI if done in native VBA. This thunk is also the engine behind `TcpReceiveUntil`.
+* **`tick_diff`**: A lightweight tick counter difference helper used internally for timeout and latency calculations, ensuring correct overflow handling for `GetTickCount` wraparound.
 
 These thunks are deeply encapsulated. As a developer, you simply call the high-level API functions, while the engine autonomously manages the execution flow.
 
@@ -191,11 +199,61 @@ For transparency, maintainability, and community contributions, the original Ass
 
 Inside `dev/asm`, you will find:
 * **The Source Code:** Uncompiled, heavily commented NASM/FASM code for all the thunks (`ws_mask_x64.asm`, `mem_find_x86.asm`, etc.).
-* **Calling Conventions:** Documentation on how the thunks handle arguments across different architectures. 
+* **Calling Conventions:** Documentation on how the thunks handle arguments across different architectures.
   * **x64:** Uses the *Microsoft x64 calling convention* (passing arguments via `RCX`, `RDX`, `R8`, `R9`).
   * **x86:** Uses the `stdcall` convention (arguments pushed to the stack, requiring `ret 16` to clean up the stack pointer).
 * **Safe Thunk (Anti-Crash):** Additional experimental thunks designed to protect the runtime against the "VBE Reset Problem" (preventing Excel from crashing if the VBA project is stopped abruptly while a socket is listening).
 * **Compilation Guide:** Instructions on how to use `nasm -f bin` to compile modifications and generate the hexadecimal byte arrays required for the main `.bas` module.
+
+## The Middleware Pipeline
+
+Wasabi ships a lightweight, composable **middleware pipeline** that lets you intercept every byte flowing through the connection without modifying core module code.
+
+Any VBA class that implements two methods can be registered as middleware:
+
+```vb
+' Signature expected by Wasabi
+Public Sub OnBeforeSend(ByVal handle As Long, ByRef data() As Byte)
+Public Sub OnAfterReceive(ByVal handle As Long, ByRef data() As Byte)
+Public Sub OnConnect(ByVal handle As Long)
+Public Sub OnDisconnect(ByVal handle As Long)
+```
+
+Middleware is registered per-handle and executed in registration order for outbound data and in the same order for inbound data:
+
+```vb
+Dim logger As New MyLoggingMiddleware
+Dim encryptor As New MyEncryptionMiddleware
+
+WasabiUseMiddleware logger, h
+WasabiUseMiddleware encryptor, h
+```
+
+**Typical use cases for middleware:**
+* Transparent logging of all sent and received bytes
+* Custom payload encryption or HMAC signing before the frame leaves the socket
+* Compression schemes beyond `permessage-deflate`
+* Metrics collection (byte counters, message rates) without polluting application code
+
+## Protocol and Compression Extensions
+
+Beyond middleware, Wasabi exposes two dedicated extension slots per connection.
+
+**Protocol Handler** (`WasabiUseProtocol`): A single object that receives parsed text and binary messages after the WebSocket frame layer has processed them. This is the cleanest integration point for application-level protocols without touching the WebSocket engine.
+
+```vb
+Dim myProto As New MyMqttProtocol
+WasabiUseProtocol myProto, h
+```
+
+**Compression Handler** (`WasabiUseCompression`): An object that implements `Deflate` and `Inflate` methods. When registered, it replaces the built-in `permessage-deflate` path, allowing you to supply alternative compression algorithms (LZ4, Brotli, Zstandard) without forking the module.
+
+```vb
+Dim lz4 As New MyLZ4Compressor
+WasabiUseCompression lz4, h
+```
+
+Both extensions follow the same lifecycle as middleware, receiving `OnConnect` and `OnDisconnect` callbacks automatically.
 
 ## What VBA limitations it solves
 
@@ -232,11 +290,17 @@ Working with networking in VBA often becomes a project of its own. Wasabi addres
 **Built-in IoT and Diagnostics**
 - Provides native standard MQTT 3.1.1 protocol handling out of the box (`MqttConnect`, `MqttPublish`, `MqttSubscribe`).
 - **QoS 1 & 2 MQTT:** Implements a real In-Flight queue with Packet ID tracking, ensuring messages are acknowledged and delivered Exactly Once (PUBREC/PUBREL/PUBCOMP).
+- **MQTT User Properties:** Attach arbitrary key/value metadata to published messages (`metaKey`/`metaValue`), compatible with brokers that support MQTT 5 User Properties.
 - **MTU Discovery:** Dynamically tunes frame sizes to match network segments, preventing IP fragmentation.
 
 **Raw TCP beyond HTTP and WebSocket**
-- Most VBA networking solutions are locked to HTTP or WebSocket. Wasabi now includes a full native TCP client that shares the same handle pool, TLS stack, proxy infrastructure, and MTU discovery engine.
-- `TcpConnect` and `TcpConnectTLS` let you talk to any TCP server — SMTP, custom binary protocols, industrial equipment, or internal APIs — with the same one-liner ergonomics as WebSocket.
+- Most VBA networking solutions are locked to HTTP or WebSocket. Wasabi includes a full native TCP client that shares the same handle pool, TLS stack, proxy infrastructure, and MTU discovery engine.
+- `TcpConnect` and `TcpConnectTLS` let you talk to any TCP server, SMTP, custom binary protocols, industrial equipment, or internal APIs, with the same one-liner ergonomics as WebSocket.
+- `TcpReceiveUntil` blocks until a specific byte delimiter arrives in the stream, making line-oriented protocols trivial to implement.
+- `TcpBroadcast` and `TcpBroadcastText` send data to all active TCP connections simultaneously with a single call.
+
+**Extensibility without forking**
+- The middleware pipeline, protocol handler slot, and compression handler slot let you add new behaviors to any connection without editing the core module, keeping your upgrades clean.
 
 ## Use Cases
 
@@ -246,15 +310,16 @@ Working with networking in VBA often becomes a project of its own. Wasabi addres
 - **IoT and Industrial SCADA:** Receive sensor data from ESP32, Raspberry Pi, or PLC systems via WebSocket or MQTT natively into Office.
 - **Games and Interactive Tools:** Build reliable client/server communication for VBA-based multiplayer games or collaborative tools.
 - **Corporate Automation:** Connect Office to internal WebSocket APIs behind firewalls and proxies without requiring IT to install third-party software.
-- **Raw TCP Automation:** Communicate directly with TCP servers, legacy PLC systems, industrial equipment, or custom protocols that don't speak WebSocket or HTTP.
+- **Raw TCP Automation:** Communicate directly with TCP servers, legacy PLC systems, industrial equipment, or custom protocols that do not speak WebSocket or HTTP.
+- **Custom Protocol Engines:** Use the Protocol Handler and Middleware slots to implement proprietary binary protocols cleanly on top of the Wasabi transport layer.
 
 ## Quick Start
 
 ### Import
 
-[Download the latest version of Wasabi](../../releases) and import it into your VBA project via **File → Import File** in the VBA editor.
+[Download the latest version of Wasabi](../../releases) and import it into your VBA project via **File -> Import File** in the VBA editor.
 
-No references need to be enabled in **Tools → References**.
+No references need to be enabled in **Tools -> References**.
 
 ### Connect and Send a Message
 ```vb
@@ -288,7 +353,7 @@ If WebSocketConnect("wss://example.com/ws", h) Then
 End If
 ```
 
-### MQTT with QoS 2 (Exactly Once) and Offline Queueing
+### MQTT with QoS 2 (Exactly Once), User Properties, and Offline Queueing
 
 ```vb
 Dim h As Long
@@ -296,13 +361,13 @@ Dim h As Long
 ' Connect with MQTT subprotocol declaration
 WebSocketConnect "wss://broker.hivemq.com:8443/mqtt", h, , , "mqtt"
 
-' Enable offline queueing so messages aren't lost if the connection drops
+' Enable offline queueing so messages are not lost if the connection drops
 WebSocketSetOfflineQueueing True, h
 
 MqttConnect "WasabiClient_123", , , 60, h
 
-' Publishes and tracks delivery via internal In-Flight queue (QoS 2)
-MqttPublish "sensors/data", "Value: 42", 2, False, h
+' Publish with QoS 2 and attach a user property as metadata
+MqttPublish "sensors/data", "Value: 42", 2, False, "source", "wasabi", h
 ```
 
 ### Connect with Compression Enabled (permessage-deflate)
@@ -346,7 +411,7 @@ Dim h As Long
 ' Set max attempts to 5, base delay to 1000ms
 WebSocketSetAutoReconnect True, 5, 1000, h
 ' Send ping every 30s, with up to 5s of random jitter to avoid strict gateway filters
-WebSocketSetPingInterval 30000, 5000, h 
+WebSocketSetPingInterval 30000, 5000, h
 
 If WebSocketConnect("wss://example.com/ws", h) Then
     Do While WebSocketIsConnected(h)
@@ -355,6 +420,34 @@ If WebSocketConnect("wss://example.com/ws", h) Then
         If msg <> "" Then Debug.Print "Received: " & msg
         DoEvents
     Loop
+End If
+```
+
+### Using the Middleware Pipeline
+
+```vb
+' MyLogger.cls
+Public Sub OnBeforeSend(ByVal handle As Long, ByRef data() As Byte)
+    Debug.Print "[OUT] " & UBound(data) + 1 & " bytes"
+End Sub
+
+Public Sub OnAfterReceive(ByVal handle As Long, ByRef data() As Byte)
+    Debug.Print "[IN]  " & UBound(data) + 1 & " bytes"
+End Sub
+
+Public Sub OnConnect(ByVal handle As Long): End Sub
+Public Sub OnDisconnect(ByVal handle As Long): End Sub
+```
+
+```vb
+Dim h As Long
+Dim logger As New MyLogger
+
+WasabiUseMiddleware logger, h
+
+If WebSocketConnect("wss://example.com/ws", h) Then
+    WebSocketSend "Instrumented message", h
+    WebSocketDisconnect h
 End If
 ```
 
@@ -376,6 +469,20 @@ If TcpConnect("tcpbin.com", 4242, h) Then
     Loop
 
     Debug.Print "Echo: " & msg
+    TcpDisconnect h
+End If
+```
+
+### Read Until Delimiter
+
+```vb
+Dim h As Long
+
+If TcpConnect("tcpbin.com", 4242, h) Then
+    TcpSendText "hello" & vbCrLf, h
+    Dim line As String
+    line = TcpReceiveUntil(vbCrLf, 3000, h)
+    Debug.Print "Line: " & line
     TcpDisconnect h
 End If
 ```
@@ -402,20 +509,6 @@ If TcpConnectTLS("example.com", 443, h) Then
 End If
 ```
 
-### Read Until Delimiter
-
-```vb
-Dim h As Long
-
-If TcpConnect("tcpbin.com", 4242, h) Then
-    TcpSendText "hello" & vbCrLf, h
-    Dim line As String
-    line = TcpReceiveUntil(vbCrLf, 3000, h)
-    Debug.Print "Line: " & line
-    TcpDisconnect h
-End If
-```
-
 > For the complete reference with examples, parameters, return values, and usage notes, see the [API Reference](docs/API_REFERENCE.md).
 
 ## Performance
@@ -427,9 +520,9 @@ hardware limit, even inside the VBA runtime.
 ![Throughput Benchmark](resources/benchmark-throughput.png)
 
 > [!NOTE]
-> SHA‑1 now runs at **400 MB/s** (down from 1.8 s per 128 KB in pure VBA).
-> Base64 operations stay around **41 MB/s**, UTF‑8 conversion exceeds
-> **1 GB/s**, and WebSocket frame construction tops **25 MB/s**.
+> SHA-1 now runs at **400 MB/s** (down from 1.8 s per 128 KB in pure VBA).
+> Base64 operations stay around **41 MB/s**, UTF-8 conversion exceeds
+> **1 GB/s**, and WebSocket frame construction tops **25 MB/s**.
 >
 > The test harness and raw data are in [`benchmark/`](benchmark/).
 
@@ -437,7 +530,7 @@ hardware limit, even inside the VBA runtime.
 
 Wasabi was designed to run without any external dependencies, using exclusively
 native Windows DLLs that ship with every version of Windows. No references need
-to be enabled in **Tools → References**, no COM components need to be registered,
+to be enabled in **Tools -> References**, no COM components need to be registered,
 and no third-party installers are required. Dropping the `.bas` file into a VBA
 project is all it takes.
 
@@ -493,7 +586,7 @@ Every API declaration uses `#If VBA7` to switch between `Long` (32-bit) and
 | ![](resources/svg/dependence.svg) `zlib1.dll` | Compression for `permessage-deflate` | ![](resources/svg/thumbsup.svg) |
 
 **What does "zero external dependencies" mean in practice?**
-Wasabi requires nothing beyond Windows and the standard VBA runtime. There is no installer, no COM registration, no ActiveX control, no third-party DLL, no Python runtime, no .NET package, and no `regsvr32`. 
+Wasabi requires nothing beyond Windows and the standard VBA runtime. There is no installer, no COM registration, no ActiveX control, no third-party DLL, no Python runtime, no .NET package, and no `regsvr32`.
 
 The only optional component is `zlib1.dll`, needed strictly if you enable `permessage-deflate`. The module detects its presence automatically and works perfectly without it. This is highly beneficial in corporate environments where IT policies prevent software installation. You can distribute a workbook containing Wasabi without asking the user to install anything first.
 
@@ -502,20 +595,21 @@ The only optional component is `zlib1.dll`, needed strictly if you enable `perme
 Wasabi supports the WebSocket `permessage-deflate` extension (RFC 7692), which
 compresses message payloads to reduce bandwidth usage.
 
-- Compression is **opt-in** on a per‑connection basis
+- Compression is **opt-in** on a per-connection basis
 - Requires `zlib1.dll` (see [Native DLLs](#native-dlls) and [DEFLATE.md](docs/DEFLATE.md))
+- Can also be provided by a custom **Compression Handler** registered via `WasabiUseCompression`
 - Automatically negotiates with the server during handshake
-- Falls back gracefully if the server doesn't support compression or the DLL is missing
+- Falls back gracefully if the server does not support compression or the DLL is missing
 
 ```vb
 ' Connect with compression enabled
-If WebSocketConnect("wss://[example.com/ws](https://example.com/ws)", h, True, True) Then
+If WebSocketConnect("wss://example.com/ws", h, True, True) Then
     Debug.Print "Compression active:", WebSocketGetDeflateEnabled(h)
 End If
 ```
 
 > [!NOTE]
-> `permessage-deflate` reduces bandwidth, not latency. It's most beneficial for
+> `permessage-deflate` reduces bandwidth, not latency. It is most beneficial for
 > large payloads or connections with limited bandwidth. For small messages, the
 > CPU overhead may slightly outweigh the bandwidth savings.
 
@@ -532,13 +626,14 @@ Each `WebSocketReceive` call:
 2. Checks the OS socket buffer (`FIONREAD`)
 3. Reads available data
 4. Decrypts (if TLS) and parses WebSocket frames
-5. Returns the oldest queued message
+5. Runs all registered inbound middleware
+6. Returns the oldest queued message
 
 Between calls, the socket stays open and the kernel buffers incoming data.
 No messages are lost.
 
 - **Not slow.** The ring buffer holds up to 512 messages.
-- **Connection doesn't drop.** The socket stays active regardless of polling frequency.
+- **Connection does not drop.** The socket stays active regardless of polling frequency.
 - **No infinite loop required.** Simple send/receive/disconnect workflows work fine.
 
 ## Community & Acknowledgements
