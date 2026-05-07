@@ -1,6 +1,6 @@
 Attribute VB_Name = "Wasabi"
 ' ============================================================================
-' Wasabi v2.3.3-beta
+' Wasabi v2.3.4-beta
 ' Copyright (c) 2026 UesleiDev
 '
 ' Permission is hereby granted, free of charge, to any person obtaining a
@@ -673,6 +673,7 @@ Private Const SEC_E_OK As Long = 0
 Private Const SEC_I_CONTINUE_NEEDED As Long = &H90312
 Private Const SEC_E_INCOMPLETE_MESSAGE As Long = &H80090318
 Private Const SEC_I_RENEGOTIATE As Long = &H90321
+Private Const SEC_I_CONTEXT_EXPIRED As Long = &H90317
 Private Const ETHERNET_HEADER As Long = 14
 Private Const IP_HEADER_MIN As Long = 20
 Private Const TCP_HEADER_MIN As Long = 20
@@ -2435,6 +2436,12 @@ Private Sub TLSDecrypt(ByVal handle As Long)
             bufferDesc.pBuffers = VarPtr(buffers(0))
             result = DecryptMessage(.hContext, bufferDesc, 0, qop)
             If result = SEC_E_INCOMPLETE_MESSAGE Then Exit Sub
+            If result = SEC_I_CONTEXT_EXPIRED Then
+                WasabiLog handle, "TLS context expired (Server closed connection nicely)."
+                .State = STATE_CLOSED
+                If .AutoReconnect And .Mode = MODE_WEBSOCKET Then TryReconnect handle
+                Exit Sub
+            End If
             If result = SEC_I_RENEGOTIATE Then
                 SetError ERR_TLS_RENEGOTIATE, "TLS renegotiation requested - closing", "Secure connection interrupted (renegotiation).", handle, SEC_I_RENEGOTIATE
                 .State = STATE_CLOSED
