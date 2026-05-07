@@ -282,7 +282,7 @@ Dim h As Long
 WebSocketSetCertValidation True, h
 WebSocketSetRevocationCheck True, h
 
-If WebSocketConnect("wss://[example.com/ws](https://example.com/ws)", h) Then
+If WebSocketConnect("wss://example.com/ws", h) Then
     WebSocketSend "Secure hello", h
     WebSocketDisconnect h
 End If
@@ -294,7 +294,7 @@ End If
 Dim h As Long
 
 ' Connect with MQTT subprotocol declaration
-WebSocketConnect "wss://[broker.hivemq.com:8443/mqtt](https://broker.hivemq.com:8443/mqtt)", h, , , "mqtt"
+WebSocketConnect "wss://broker.hivemq.com:8443/mqtt", h, , , "mqtt"
 
 ' Enable offline queueing so messages aren't lost if the connection drops
 WebSocketSetOfflineQueueing True, h
@@ -311,7 +311,7 @@ MqttPublish "sensors/data", "Value: 42", 2, False, h
 Dim h As Long
 
 ' Set third parameter to True to enable Deflate
-If WebSocketConnect("wss://[example.com/ws](https://example.com/ws)", h, True) Then
+If WebSocketConnect("wss://example.com/ws", h, True) Then
     Debug.Print "Compression active: " & WebSocketGetDeflateEnabled(h)
     WebSocketSend "Compressed message payload", h
     WebSocketDisconnect h
@@ -332,7 +332,7 @@ Dim h As Long
 WebSocketSetProxy "proxy.company.com", 8080, "user", "pass", 0, h
 WebSocketSetProxyNtlm True, h
 
-If WebSocketConnect("wss://[example.com/ws](https://example.com/ws)", h) Then
+If WebSocketConnect("wss://example.com/ws", h) Then
     WebSocketSend "Behind the firewall", h
     WebSocketDisconnect h
 End If
@@ -348,7 +348,7 @@ WebSocketSetAutoReconnect True, 5, 1000, h
 ' Send ping every 30s, with up to 5s of random jitter to avoid strict gateway filters
 WebSocketSetPingInterval 30000, 5000, h 
 
-If WebSocketConnect("wss://[example.com/ws](https://example.com/ws)", h) Then
+If WebSocketConnect("wss://example.com/ws", h) Then
     Do While WebSocketIsConnected(h)
         Dim msg As String
         msg = WebSocketReceive(h)
@@ -543,7 +543,7 @@ No messages are lost.
 
 ## ![](resources/svg/star-rainbow.svg) Community & Acknowledgements
 
-Wasabi was not built in a vacuum. It is the culmination of years of research, trial, and error by some of the most brilliant minds in the VBA and VB6 networking community. We are honored to stand on the shoulders of these developers and their pioneering projects:
+Wasabi builds on techniques and groundwork pioneered by these projects and their authors:
 
 <p align="center">
   <table>
