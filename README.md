@@ -100,10 +100,10 @@ Beyond basic WebSocket messaging, Wasabi bundles an MQTT 3.1.1 client, NTLM/Kerb
 - [ ] `WSAAsyncSelect` event-driven socket notifications (Eliminating polling blocks)
 
 ### ![](resources/svg/planning.svg) The Future: "Framework Era" (Scalability & Extensions)
-- [ ] **Core Refactoring:** Isolate the raw TCP/Schannel engine (the "Dumb Pipe") from high-level protocol logic.
-- [ ] **Modular Compression:** Decouple the `zlib1.dll` dependency from the main module into an official extension (`ExtWasabiZlib.cls`).
-- [ ] **Pluggable Protocols:** Add a dedicated slot in the engine for application protocol injection (enabling the community to plug in MQTT 5.0, AMQP, or custom enterprise parsers).
-- [ ] **Security Interceptors:** Create a plugin architecture for autonomous injection of authentication headers (OAuth, JWT, AWS Signature V4) and custom E2E encryption (e.g., AES-256).
+- [x] **Core Refactoring:** Isolate the raw TCP/Schannel engine (the "Dumb Pipe") from high-level protocol logic.
+- [x] **Modular Compression:** Decouple the `zlib1.dll` dependency from the main module into an official extension (`ExtWasabiZlib.cls`).
+- [x] **Pluggable Protocols:** Add a dedicated slot in the engine for application protocol injection (enabling the community to plug in MQTT 5.0, AMQP, or custom enterprise parsers).
+- [x] **Security Interceptors:** Create a plugin architecture for autonomous injection of authentication headers (OAuth, JWT, AWS Signature V4) and custom E2E encryption (e.g., AES-256).
 
 ## Examples
 
