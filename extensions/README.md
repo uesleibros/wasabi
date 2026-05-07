@@ -1,46 +1,79 @@
-# Wasabi Extensions (Planning Phase)
+# Wasabi Extensions
 
 > [!IMPORTANT]
-> This entire directory and the extension system are currently in the ![](../resources/svg/planning.svg) **conceptual stage**. The current production release of Wasabi (v2.x) remains a monolithic `.bas` module. Do not attempt to use these features in production yet.
+> The extension system is in the **design & validation phase**. Although the injection points  
+> already exist in the engine (`WasabiUseProtocol`, `WasabiUseMiddleware`, `WasabiUseCompression`),  
+> the official stabilisation of the interfaces and the separation into pluggable packages are  
+> part of the upcoming **Framework Era** milestone.
 
-This directory is the blueprint for the future **Wasabi Extension Ecosystem**. We are moving toward a modular framework where the community can plug in custom logic without modifying the core WinAPI transport engine.
+This directory contains blueprints, specifications, and reference implementations for
+**extensions** – plug‑in components that add high‑level behaviour without modifying the
+core `Wasabi.bas` transport engine.
 
-### The Roadmap Vision
+## How Extensions Work
 
-In this upcoming era, `Wasabi.bas` will serve as the high-performance **Dumb Pipe**, handling only raw Sockets, Schannel (TLS), and memory management. Everything else becomes an injectable "Lego piece."
+Wasabi’s architecture separates the raw TCP/TLS “dumb pipe” from application‑layer logic.
+Custom code can be injected as an **extension** by implementing a clean interface (a VBA class)
+and registering it against a connection handle.
 
-#### 1. Custom Protocols (`/protocols`)
-While Wasabi ships with "batteries included" for **WebSocket** and **MQTT 3.1.1**, this architecture will allow the community to implement:
-*   **MQTT 5.0**: Advanced support for user properties and session management.
-*   **Socket.IO**: A translator for Engine.IO packets (types 0, 2, 3, 42) to bridge VBA with modern web servers.
-*   **ModbusTCP**: Direct communication for Industrial IoT and PLC integration.
-*   **AMQP**: Connectivity for enterprise message brokers like RabbitMQ.
+```vb
+' Example: registering a custom protocol handler
+Dim myProto As New MyMqttProtocol
+WasabiUseProtocol myProto, handle
+```
 
-#### 2. Middleware Pipeline (`/middlewares`)
-Inspired by the **Express.js** pipeline, allowing you to intercept data before it hits the wire or before it reaches your VBA code:
-*   **Security Interceptors**: Automatically inject OAuth2 tokens, JWTs, or AWS Signature V4 headers.
-*   **Audit Logging**: Real-time telemetry for packet sizes and RTT latency without bloat.
-*   **End-to-End Encryption**: Plug in AES-256 or custom encryption layers inside the secure tunnel.
+Extensions receive full lifecycle callbacks (`OnConnect` / `OnDisconnect`) and have access
+to the underlying connection, enabling infinite extensibility without forking.
 
-#### 3. Modular Compression (`/compression`)
-> [!NOTE]
-> We plan to decouple the `zlib1.dll` dependency from the main module.
-*   **Core-Only**: Keep your project lean if you don't need compression.
-*   **Wasabi-Zlib**: Simply import the `ExtWasabiZlib.cls` extension to re-enable `permessage-deflate` support.
+## Available Extension Types
 
-### Planned Architecture
-The system will utilize **Late Binding** (`Object`) and `Collections` to maintain the ease of a `.bas` file while gaining infinite extensibility.
+| Type                     | Registration function       | Primary purpose |
+|--------------------------|-----------------------------|-----------------|
+| **Protocol Handler**     | `WasabiUseProtocol`         | Add a new application‑layer protocol (MQTT 5, AMQP, ModbusTCP, etc.) |
+| **Middleware**           | `WasabiUseMiddleware`       | Intercept raw byte streams for logging, encryption, or transformation |
+| **Compression Handler**  | `WasabiUseCompression`      | Replace or customise per‑frame compression (LZ4, Brotli, Zstd) |
+
+Detailed specification and tutorials:
+
+- **[Protocol Extension Guide](protocols.md)** – Interface, lifecycle, and complete MQTT 5 example
+- **[Middleware Extension Guide](middlewares.md)** – Intercepting inbound/outbound data, chaining, and encryption
+- **[Compression Extension Guide](compression.md)** – Implementing custom `Deflate`/`Inflate` providers
+
+## Lifecycle Guarantees
+
+All extensions receive the same well‑defined callbacks:
+
+* **`OnConnect(handle)`** – called immediately after the WebSocket handshake (or TCP connect) succeeds.
+* **`OnDisconnect(handle)`** – called before the connection is fully torn down; the handler may still
+  attempt a final transmit if necessary.
+
+Middlewares additionally receive:
+
+* **`OnBeforeSend(handle, data())`** – every byte array *before* framing.
+* **`OnAfterReceive(handle, data())`** – every byte array *after* deframing / decryption.
+
+Compression handlers must provide:
+
+* **`Deflate(data(), windowBits, contextTakeover)` → `Byte()`**
+* **`Inflate(data(), windowBits, contextTakeover)` → `Byte()`**
+
+Protocol handlers receive already‑parsed WebSocket messages:
+
+* **`OnTextMessage(handle, message As String)`**
+* **`OnBinaryMessage(handle, data() As Byte)`**
 
 > [!TIP]
-> **Conceptual usage example:**
-> ```vb
-> ' Future implementation concept:
-> Dim sIO As Object
-> Set sIO = New WasabiSocketIO
->
-> Wasabi.UseProtocol sIO, handle
-> Wasabi.WebSocketConnect "wss://server.com/socket.io/?EIO=4"
-> ```
+> The engine **never** calls your extension on a wrong‑mode connection – a protocol handler
+> registered on a TCP handle will simply be ignored.
 
-> [!IMPORTANT]
-> If you are an experienced network engineer or VBA architect and wish to contribute to the **Extension API Specification**, please open a Pull Request/Issue or check the Roadmap.
+## Integration Plan
+
+The core `Wasabi.bas` module will remain a monolithic, zero‑dependency file.
+Extensions are distributed as **additional `.cls` / `.bas` files** that you import alongside Wasabi.
+No COM registration, no external references – just plain VBA.
+
+Future milestones:
+
+- [ ] Stabilise the callback signatures for all extension types.
+- [ ] Publish reference extensions (e.g., `ExtWasabiZlib.cls` for `permessage‑deflate`).
+- [ ] Provide a registration mechanism for **default global middleware** (applied to every new connection).
