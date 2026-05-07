@@ -1,8 +1,6 @@
 # Error Reference
 
-This document describes every error code in the `WasabiError` enumeration,
-including what triggers each error, what the associated system codes mean,
-and how to diagnose and resolve common failures.
+This document describes every error code in the `WasabiError` enumeration, including what triggers each error, what the associated system codes mean, and how to diagnose and resolve common failures.
 
 ## Reading Wasabi Errors
 
@@ -22,20 +20,12 @@ Debug.Print "System code:", sysCode
 Debug.Print "Details:", details
 ```
 
-**errType** is the high-level Wasabi error category. It tells you what failed.
-
-**sysCode** is the raw error code from the underlying system call. For Winsock
-errors, this is a WSA error code. For TLS errors, this is an SSPI/HRESULT
-status code. For successful operations, this is zero.
-
-**details** is a human-readable string describing the specific failure, including
-the function name and the numeric code. This is the most useful field for
-debugging.
+* `errType` is the high-level Wasabi error category. It tells you what failed.
+* `sysCode` is the raw error code from the underlying system call. For Winsock errors, this is a WSA error code. For TLS errors, this is an SSPI/HRESULT status code. For successful operations, this is zero.
+* `details` is a human-readable string describing the specific failure, including the function name and the numeric code. This is the most useful field for debugging.
 
 > [!TIP]
-> Always log all three values when diagnosing connection issues. The
-> `WebSocketGetErrorDescription` function combines them into a single
-> diagnostic string.
+> Always log all three values when diagnosing connection issues. The `WebSocketGetErrorDescription` function combines them into a single diagnostic string.
 
 ## Error Pattern
 
@@ -72,6 +62,9 @@ Sub ConnectSafely()
 End Sub
 ```
 
+> [!NOTE]
+> Errors that occur inside registered **extensions** (middleware, protocol handler, or compression handler) are not automatically propagated to the `WasabiError` system. Each extension is responsible for its own error handling. The engine itself only reports errors from its own internal operations.
+
 ## Complete Error Reference
 
 ### ERR_NONE (0)
@@ -80,17 +73,18 @@ No error occurred. The operation completed successfully.
 
 ### ERR_WSA_STARTUP_FAILED (1)
 
-**What happened:** `WSAStartup` returned a non-zero value. The Winsock
-subsystem could not be initialized.
+**What happened:** `WSAStartup` returned a non-zero value. The Winsock subsystem could not be initialized.
 
 **Common causes:**
-- Corrupted Winsock installation
-- Antivirus or security software blocking socket initialization
-- Extremely rare on modern Windows
+
+* Corrupted Winsock installation.
+* Antivirus or security software blocking socket initialization.
+* Extremely rare on modern Windows.
 
 **What to check:**
-- Run `netsh winsock reset` from an elevated command prompt and reboot
-- Verify no security software is interfering with network initialization
+
+* Run `netsh winsock reset` from an elevated command prompt and reboot.
+* Verify no security software is interfering with network initialization.
 
 ```vb
 ' Example error output
@@ -101,18 +95,19 @@ subsystem could not be initialized.
 
 ### ERR_SOCKET_CREATE_FAILED (2)
 
-**What happened:** The `socket()` function returned `INVALID_SOCKET`. A TCP
-socket could not be allocated.
+**What happened:** The `socket()` function returned `INVALID_SOCKET`. A TCP socket could not be allocated.
 
 **Common causes:**
-- System ran out of socket handles
-- Firewall blocking socket creation at the OS level
-- VPN software intercepting socket calls
+
+* System ran out of socket handles.
+* Firewall blocking socket creation at the OS level.
+* VPN software intercepting socket calls.
 
 **What to check:**
-- Close unused network connections
-- Verify firewall and VPN configuration
-- Check `WebSocketGetConnectionCount` to see if the pool is near capacity
+
+* Close unused network connections.
+* Verify firewall and VPN configuration.
+* Check `WebSocketGetConnectionCount` to see if the pool is near capacity.
 
 ```vb
 ' Example error output
@@ -126,14 +121,14 @@ socket could not be allocated.
 
 ### ERR_DNS_RESOLVE_FAILED (3)
 
-**What happened:** `gethostbyname()` could not resolve the hostname to an IP
-address.
+**What happened:** `gethostbyname()` could not resolve the hostname to an IP address.
 
 **Common causes:**
-- Hostname is misspelled
-- DNS server is unreachable
-- Corporate proxy requires direct IP or different DNS
-- Machine has no internet connectivity
+
+* Hostname is misspelled.
+* DNS server is unreachable.
+* Corporate proxy requires direct IP or different DNS.
+* Machine has no internet connectivity.
 
 **System codes and their meaning:**
 
@@ -145,10 +140,11 @@ address.
 | 11004 | WSANO_DATA | Hostname exists but has no IP address record |
 
 **What to check:**
-- Verify the hostname is correct
-- Try pinging the hostname from a command prompt
-- Check if a proxy is required for external access
-- Try using an IP address directly to isolate DNS issues
+
+* Verify the hostname is correct.
+* Try pinging the hostname from a command prompt.
+* Check if a proxy is required for external access.
+* Try using an IP address directly to isolate DNS issues.
 
 ```vb
 ' Example error output
@@ -162,22 +158,21 @@ address.
 
 ### ERR_CONNECT_FAILED (4)
 
-**What happened:** The TCP connection could not be established. Either
-`connect()` failed immediately or `select()` timed out waiting for the
-connection to complete. This includes failures from the Happy Eyeballs
-dual‑stack connection process.
+**What happened:** The TCP connection could not be established. Either `connect()` failed immediately or `select()` timed out waiting for the connection to complete. This includes failures from the Happy Eyeballs dual‑stack connection process.
 
 **Common causes:**
-- Server is down or not listening on the specified port
-- Firewall blocking outbound connections on the target port
-- Corporate proxy required but not configured
-- Wrong port number
+
+* Server is down or not listening on the specified port.
+* Firewall blocking outbound connections on the target port.
+* Corporate proxy required but not configured.
+* Wrong port number.
 
 **What to check:**
-- Verify the server is running and accepting connections
-- Try connecting to the same host and port with a browser or telnet
-- Check if a proxy is needed via `WebSocketSetProxy`
-- Verify the port is correct (80 for `ws://`, 443 for `wss://`)
+
+* Verify the server is running and accepting connections.
+* Try connecting to the same host and port with a browser or telnet.
+* Check if a proxy is needed via `WebSocketSetProxy`.
+* Verify the port is correct (80 for `ws://`, 443 for `wss://`).
 
 ```vb
 ' Example error output
@@ -191,18 +186,19 @@ dual‑stack connection process.
 
 ### ERR_TLS_ACQUIRE_CREDS_FAILED (5)
 
-**What happened:** `AcquireCredentialsHandle` could not initialize the
-Schannel security provider.
+**What happened:** `AcquireCredentialsHandle` could not initialize the Schannel security provider.
 
 **Common causes:**
-- Schannel provider is disabled or corrupted in the Windows registry
-- System-level security policy is blocking TLS
-- Extremely rare on properly configured systems
+
+* Schannel provider is disabled or corrupted in the Windows registry.
+* System-level security policy is blocking TLS.
+* Extremely rare on properly configured systems.
 
 **What to check:**
-- Verify TLS is enabled in Windows Internet Options
-- Check the Windows Event Log for Schannel errors
-- Ensure the system clock is correct (certificate validation depends on it)
+
+* Verify TLS is enabled in Windows Internet Options.
+* Check the Windows Event Log for Schannel errors.
+* Ensure the system clock is correct (certificate validation depends on it).
 
 ```vb
 ' Example error output
@@ -213,20 +209,21 @@ Schannel security provider.
 
 ### ERR_TLS_HANDSHAKE_FAILED (6)
 
-**What happened:** `InitializeSecurityContext` returned a fatal error during
-the TLS handshake.
+**What happened:** `InitializeSecurityContext` returned a fatal error during the TLS handshake.
 
 **Common causes:**
-- Server does not support TLS 1.2 or 1.3
-- Server requires a cipher suite that Schannel does not offer
-- Server certificate is expired or untrusted
-- Network device intercepting and modifying TLS traffic (SSL inspection)
+
+* Server does not support TLS 1.2 or 1.3.
+* Server requires a cipher suite that Schannel does not offer.
+* Server certificate is expired or untrusted.
+* Network device intercepting and modifying TLS traffic (SSL inspection).
 
 **What to check:**
-- Test the server with an external tool like `openssl s_client`
-- Check the server's supported TLS versions and cipher suites
-- Verify no corporate SSL inspection proxy is interfering
-- Check the system clock
+
+* Test the server with an external tool like `openssl s_client`.
+* Check the server's supported TLS versions and cipher suites.
+* Verify no corporate SSL inspection proxy is interfering.
+* Check the system clock.
 
 ```vb
 ' Example error output
@@ -240,19 +237,20 @@ the TLS handshake.
 
 ### ERR_TLS_HANDSHAKE_TIMEOUT (7)
 
-**What happened:** The TLS handshake did not complete within the allowed
-time or iteration limit.
+**What happened:** The TLS handshake did not complete within the allowed time or iteration limit.
 
 **Common causes:**
-- Server is extremely slow to respond
-- Network latency is very high
-- Server accepted the TCP connection but is not responding to TLS
-- Firewall is silently dropping TLS packets
+
+* Server is extremely slow to respond.
+* Network latency is very high.
+* Server accepted the TCP connection but is not responding to TLS.
+* Firewall is silently dropping TLS packets.
 
 **What to check:**
-- Increase the receive timeout via `WebSocketSetReceiveTimeout`
-- Test connectivity to the server from a browser
-- Check if the server is behind a load balancer that accepted TCP but is not routing TLS
+
+* Increase the receive timeout via `WebSocketSetReceiveTimeout`.
+* Test connectivity to the server from a browser.
+* Check if the server is behind a load balancer that accepted TCP but is not routing TLS.
 
 ```vb
 ' Example error output
@@ -263,18 +261,19 @@ time or iteration limit.
 
 ### ERR_WEBSOCKET_HANDSHAKE_FAILED (8)
 
-**What happened:** Wasabi could not send or receive the HTTP upgrade request
-that initiates the WebSocket connection.
+**What happened:** Wasabi could not send or receive the HTTP upgrade request that initiates the WebSocket connection.
 
 **Common causes:**
-- TLS was established but the HTTP request failed to send
-- Server closed the connection before responding
-- Network interruption between TLS completion and HTTP exchange
+
+* TLS was established but the HTTP request failed to send.
+* Server closed the connection before responding.
+* Network interruption between TLS completion and HTTP exchange.
 
 **What to check:**
-- Verify the URL path is correct
-- Check server logs for rejected requests
-- Ensure custom headers are not malformed
+
+* Verify the URL path is correct.
+* Check server logs for rejected requests.
+* Ensure custom headers are not malformed.
 
 ```vb
 ' Example error output
@@ -288,18 +287,19 @@ that initiates the WebSocket connection.
 
 ### ERR_WEBSOCKET_HANDSHAKE_TIMEOUT (9)
 
-**What happened:** The server did not respond to the HTTP upgrade request
-within the timeout period.
+**What happened:** The server did not respond to the HTTP upgrade request within the timeout period.
 
 **Common causes:**
-- Server is overloaded
-- Wrong endpoint (server exists but does not handle WebSocket)
-- Proxy or firewall silently consuming the upgrade request
+
+* Server is overloaded.
+* Wrong endpoint (server exists but does not handle WebSocket).
+* Proxy or firewall silently consuming the upgrade request.
 
 **What to check:**
-- Verify the URL path supports WebSocket
-- Increase the receive timeout
-- Check if the server requires specific headers or subprotocol
+
+* Verify the URL path supports WebSocket.
+* Increase the receive timeout.
+* Check if the server requires specific headers or subprotocol.
 
 ```vb
 ' Example error output
@@ -310,18 +310,19 @@ within the timeout period.
 
 ### ERR_SEND_FAILED (10)
 
-**What happened:** A `send()` call returned zero or negative after attempting
-to write data to the socket.
+**What happened:** A `send()` call returned zero or negative after attempting to write data to the socket.
 
 **Common causes:**
-- Server closed the connection unexpectedly
-- Network cable disconnected
-- VPN dropped
+
+* Server closed the connection unexpectedly.
+* Network cable disconnected.
+* VPN dropped.
 
 **What to check:**
-- Check `WebSocketIsConnected` before sending
-- Enable auto reconnect for resilient applications
-- Log the technical details for the specific WSA error
+
+* Check `WebSocketIsConnected` before sending.
+* Enable auto reconnect for resilient applications.
+* Log the technical details for the specific WSA error.
 
 ```vb
 ' Example error output
@@ -335,28 +336,31 @@ to write data to the socket.
 **What happened:** A `recv()` call returned a negative value.
 
 **Common causes:**
-- Same as `ERR_SEND_FAILED`
-- Server forcibly closed the connection
-- OS-level socket error
+
+* Same as `ERR_SEND_FAILED`.
+* Server forcibly closed the connection.
+* OS-level socket error.
 
 **What to check:**
-- Same diagnostics as send failure
-- Check if the server has connection duration limits
+
+* Same diagnostics as send failure.
+* Check if the server has connection duration limits.
 
 ### ERR_NOT_CONNECTED (12)
 
-**What happened:** A send operation was attempted on a handle that is not
-currently connected.
+**What happened:** A send operation was attempted on a handle that is not currently connected.
 
 **Common causes:**
-- Connection was never established
-- Connection was already closed or lost
-- Wrong handle was passed
+
+* Connection was never established.
+* Connection was already closed or lost.
+* Wrong handle was passed.
 
 **What to check:**
-- Verify the return value of `WebSocketConnect` before sending
-- Check `WebSocketIsConnected` before each send in long-running loops
-- Verify you are using the correct handle
+
+* Verify the return value of `WebSocketConnect` before sending.
+* Check `WebSocketIsConnected` before each send in long-running loops.
+* Verify you are using the correct handle.
 
 ```vb
 ' Safe send pattern
@@ -373,45 +377,49 @@ Reserved for future use.
 
 ### ERR_TLS_ENCRYPT_FAILED (14)
 
-**What happened:** `EncryptMessage` returned a non-zero SSPI status code.
-The outgoing data could not be encrypted.
+**What happened:** `EncryptMessage` returned a non-zero SSPI status code. The outgoing data could not be encrypted.
 
 **Common causes:**
-- TLS context was invalidated
-- Internal state corruption after a partial send
-- Extremely rare in normal operation
+
+* TLS context was invalidated.
+* Internal state corruption after a partial send.
+* Extremely rare in normal operation.
 
 **What to check:**
-- Disconnect and reconnect
-- Log the SSPI error code from `WebSocketGetLastErrorCode`
+
+* Disconnect and reconnect.
+* Log the SSPI error code from `WebSocketGetLastErrorCode`.
 
 ### ERR_TLS_DECRYPT_FAILED (15)
 
-**What happened:** `DecryptMessage` returned a fatal error other than
-`SEC_I_RENEGOTIATE` (which is handled separately by `ERR_TLS_RENEGOTIATE`).
+**What happened:** `DecryptMessage` returned a fatal error other than `SEC_I_RENEGOTIATE` (which is handled separately by `ERR_TLS_RENEGOTIATE`).
 
 **Common causes:**
-- Corrupted TLS record received
-- Network device modifying encrypted traffic
-- Internal SSPI failure
+
+* Corrupted TLS record received.
+* Network device modifying encrypted traffic.
+* Internal SSPI failure.
 
 **What to check:**
-- Disconnect and reconnect
-- Check for SSL inspection proxies
+
+* Disconnect and reconnect.
+* Check for SSL inspection proxies.
 
 ### ERR_INVALID_URL (16)
 
 **What happened:** The URL could not be parsed.
 
 **Common causes:**
-- URL does not start with `ws://` or `wss://`
-- Empty URL string
-- Missing hostname
-- Port number out of range (must be 1-65535)
-- Non-numeric characters in port
+
+* URL does not start with `ws://` or `wss://`.
+* Empty URL string.
+* Missing hostname.
+* Port number out of range (must be 1–65535).
+* Non-numeric characters in port.
 
 **What to check:**
-- Verify the URL format: `ws://host/path` or `wss://host:port/path`
+
+* Verify the URL format: `ws://host/path` or `wss://host:port/path`.
 
 ```vb
 ' Valid URLs
@@ -428,22 +436,22 @@ WebSocketConnect "wss://host:99999/path"     ' port out of range
 
 ### ERR_HANDSHAKE_REJECTED (17)
 
-**What happened:** The server responded to the HTTP upgrade request with a
-status code other than 101, or the `Sec-WebSocket-Accept` header value did
-not match the expected SHA-1 hash.
+**What happened:** The server responded to the HTTP upgrade request with a status code other than 101, or the `Sec-WebSocket-Accept` header value did not match the expected SHA‑1 hash.
 
 **Common causes:**
-- Server returned 403 (forbidden) or 401 (unauthorized)
-- Server returned 404 (wrong path)
-- Server does not support WebSocket on this endpoint
-- Missing required authentication headers
-- Load balancer or CDN intercepting the upgrade
+
+* Server returned 403 (forbidden) or 401 (unauthorized).
+* Server returned 404 (wrong path).
+* Server does not support WebSocket on this endpoint.
+* Missing required authentication headers.
+* Load balancer or CDN intercepting the upgrade.
 
 **What to check:**
-- Verify the URL path is a WebSocket endpoint
-- Add authentication headers via `WebSocketAddHeader` if required
-- Check the technical details for the server's actual response line
-- Test the endpoint with a browser-based WebSocket client
+
+* Verify the URL path is a WebSocket endpoint.
+* Add authentication headers via `WebSocketAddHeader` if required.
+* Check the technical details for the server's actual response line.
+* Test the endpoint with a browser-based WebSocket client.
 
 ```vb
 ' Example error output
@@ -457,22 +465,21 @@ not match the expected SHA-1 hash.
 
 ### ERR_CONNECTION_LOST (18)
 
-**What happened:** The connection was lost during normal operation. This
-can be triggered by `recv()` returning zero (clean server close),
-`ioctlsocket` failing, or an oversized frame being received.
+**What happened:** The connection was lost during normal operation. This can be triggered by `recv()` returning zero (clean server close), `ioctlsocket` failing, or an oversized frame being received.
 
 **Common causes:**
-- Server closed the connection normally
-- Network interruption
-- Server sent a frame larger than the configured buffer size
-- Idle connection timed out on the server side
+
+* Server closed the connection normally.
+* Network interruption.
+* Server sent a frame larger than the configured buffer size.
+* Idle connection timed out on the server side.
 
 **What to check:**
-- Enable auto reconnect for resilient applications
-- Check if the server has idle timeout settings
-- Use `WebSocketSetPingInterval` to keep the connection alive
-- If the error mentions "oversized frame", increase buffer sizes via
-  `WebSocketSetBufferSizes`
+
+* Enable auto reconnect for resilient applications.
+* Check if the server has idle timeout settings.
+* Use `WebSocketSetPingInterval` to keep the connection alive.
+* If the error mentions "oversized frame", increase buffer sizes via `WebSocketSetBufferSizes`.
 
 ```vb
 ' Resilient connection pattern
@@ -482,31 +489,34 @@ WebSocketSetPingInterval 25000, h
 
 ### ERR_INVALID_HANDLE (19)
 
-**What happened:** The handle passed to a function is outside the valid
-range (0 to 63).
+**What happened:** The handle passed to a function is outside the valid range (0 to 63).
 
 **Common causes:**
-- Using an uninitialized handle variable
-- Using a handle after it was cleaned up
-- Arithmetic error producing an out-of-range value
+
+* Using an uninitialized handle variable.
+* Using a handle after it was cleaned up.
+* Arithmetic error producing an out-of-range value.
 
 **What to check:**
-- Verify that `WebSocketConnect` returned `True` before using the handle
-- Do not reuse handles after `WebSocketDisconnect`
+
+* Verify that `WebSocketConnect` returned `True` before using the handle.
+* Do not reuse handles after `WebSocketDisconnect`.
 
 ### ERR_MAX_CONNECTIONS (20)
 
 **What happened:** All 64 slots in the connection pool are occupied.
 
 **Common causes:**
-- Opening connections without closing them
-- Leaked handles from failed error handling paths
-- Genuinely needing more than 64 simultaneous connections
+
+* Opening connections without closing them.
+* Leaked handles from failed error handling paths.
+* Genuinely needing more than 64 simultaneous connections.
 
 **What to check:**
-- Call `WebSocketDisconnect` on handles you no longer need
-- Use `WebSocketGetConnectionCount` to monitor pool usage
-- Use `WebSocketGetAllHandles` to find and audit active connections
+
+* Call `WebSocketDisconnect` on handles you no longer need.
+* Use `WebSocketGetConnectionCount` to monitor pool usage.
+* Use `WebSocketGetAllHandles` to find and audit active connections.
 
 ```vb
 ' Audit active connections
@@ -525,55 +535,54 @@ Next i
 
 ### ERR_PROXY_CONNECT_FAILED (21)
 
-**What happened:** The HTTP CONNECT request to the proxy server failed.
-Either the `send()` to the proxy failed, the proxy did not respond, or the
-proxy response could not be read.
+**What happened:** The HTTP CONNECT request to the proxy server failed. Either the `send()` to the proxy failed, the proxy did not respond, or the proxy response could not be read.
 
 **Common causes:**
-- Wrong proxy host or port
-- Proxy server is down
-- Firewall blocking the proxy port
+
+* Wrong proxy host or port.
+* Proxy server is down.
+* Firewall blocking the proxy port.
 
 **What to check:**
-- Verify proxy host and port with `WebSocketGetProxyInfo`
-- Test proxy connectivity independently
-- Check if the proxy requires authentication
+
+* Verify proxy host and port with `WebSocketGetProxyInfo`.
+* Test proxy connectivity independently.
+* Check if the proxy requires authentication.
 
 ### ERR_PROXY_AUTH_FAILED (22)
 
-**What happened:** The proxy returned HTTP 407 (Proxy Authentication
-Required) or the SOCKS5 authentication handshake failed.
+**What happened:** The proxy returned HTTP 407 (Proxy Authentication Required) or the SOCKS5 authentication handshake failed.
 
 **Common causes:**
-- Wrong proxy username or password
-- Proxy requires NTLM/Kerberos but only Basic was attempted
-- Proxy credentials expired
+
+* Wrong proxy username or password.
+* Proxy requires NTLM/Kerberos but only Basic was attempted.
+* Proxy credentials expired.
 
 **What to check:**
-- Verify credentials in `WebSocketSetProxy`
-- If the proxy is an HTTP corporate proxy that supports Windows Integrated
-  Authentication, enable NTLM via `WebSocketSetProxyNtlm True`
-- Check with your network administrator for correct credentials
+
+* Verify credentials in `WebSocketSetProxy`.
+* If the proxy is an HTTP corporate proxy that supports Windows Integrated Authentication, enable NTLM via `WebSocketSetProxyNtlm True`.
+* Check with your network administrator for correct credentials.
 
 > [!NOTE]
-> Wasabi supports HTTP Basic and NTLM/Kerberos (via `WebSocketSetProxyNtlm`)
-> for HTTP proxies. For SOCKS5, only username/password authentication is
-> available.
+> Wasabi supports HTTP Basic and NTLM/Kerberos (via `WebSocketSetProxyNtlm`) for HTTP proxies. For SOCKS5, only username/password authentication is available.
 
 ### ERR_PROXY_TUNNEL_FAILED (23)
 
-**What happened:** The proxy accepted the connection but returned a non-200
-status for the CONNECT tunnel request.
+**What happened:** The proxy accepted the connection but returned a non-200 status for the CONNECT tunnel request.
 
 **Common causes:**
-- Proxy policy blocks the target host or port
-- Proxy does not allow CONNECT to non-443 ports
-- Target hostname is blacklisted by the proxy
+
+* Proxy policy blocks the target host or port.
+* Proxy does not allow CONNECT to non-443 ports.
+* Target hostname is blacklisted by the proxy.
 
 **What to check:**
-- Verify the target host and port are allowed through the proxy
-- Check the technical details for the proxy's HTTP status line
-- Contact your network administrator if the proxy blocks WebSocket traffic
+
+* Verify the target host and port are allowed through the proxy.
+* Check the technical details for the proxy's HTTP status line.
+* Contact your network administrator if the proxy blocks WebSocket traffic.
 
 ```vb
 ' Example error output
@@ -584,20 +593,21 @@ status for the CONNECT tunnel request.
 
 ### ERR_INACTIVITY_TIMEOUT (24)
 
-**What happened:** No data was received from the server within the
-configured inactivity timeout period.
+**What happened:** No data was received from the server within the configured inactivity timeout period.
 
 **Common causes:**
-- Server stopped sending data
-- Network interruption that did not fully close the socket
-- Inactivity timeout is set too short for the application protocol
-- Server expects the client to send periodic messages to stay alive
+
+* Server stopped sending data.
+* Network interruption that did not fully close the socket.
+* Inactivity timeout is set too short for the application protocol.
+* Server expects the client to send periodic messages to stay alive.
 
 **What to check:**
-- Increase the timeout via `WebSocketSetInactivityTimeout`
-- Enable heartbeat via `WebSocketSetPingInterval`
-- Check if the server requires periodic client messages
-- Enable auto reconnect for automatic recovery
+
+* Increase the timeout via `WebSocketSetInactivityTimeout`.
+* Enable heartbeat via `WebSocketSetPingInterval`.
+* Check if the server requires periodic client messages.
+* Enable auto reconnect for automatic recovery.
 
 ```vb
 ' Recommended resilient configuration
@@ -611,22 +621,21 @@ WebSocketSetAutoReconnect True, 5, 2000, h
 
 ### ERR_CERT_LOAD_FAILED (25)
 
-**What happened:** Wasabi failed to load a client certificate from a PFX file
-or the Windows certificate store. The certificate was configured via
-`WebSocketSetClientCert` or `WebSocketSetClientCertPfx` but could not be
-found, imported, or parsed.
+**What happened:** Wasabi failed to load a client certificate from a PFX file or the Windows certificate store. The certificate was configured via `WebSocketSetClientCert` or `WebSocketSetClientCertPfx` but could not be found, imported, or parsed.
 
 **Common causes:**
-- Path to the PFX file is incorrect or the file is missing
-- PFX file is empty or password-protected with the wrong password
-- The specified subject or thumbprint does not match any certificate in the store
-- The user account lacks permission to read the certificate store or file
+
+* Path to the PFX file is incorrect or the file is missing.
+* PFX file is empty or password-protected with the wrong password.
+* The specified subject or thumbprint does not match any certificate in the store.
+* The user account lacks permission to read the certificate store or file.
 
 **What to check:**
-- Verify the file path and that the PFX file exists
-- Confirm the PFX password is correct
-- When using `WebSocketSetClientCert`, use a valid certificate subject or thumbprint
-- Check that the certificate is installed in the correct store (Current User\My)
+
+* Verify the file path and that the PFX file exists.
+* Confirm the PFX password is correct.
+* When using `WebSocketSetClientCert`, use a valid certificate subject or thumbprint.
+* Check that the certificate is installed in the correct store (Current User\My).
 
 ```vb
 ' Example error output
@@ -640,41 +649,38 @@ found, imported, or parsed.
 
 ### ERR_CERT_VALIDATE_FAILED (26)
 
-**What happened:** Server certificate validation was enabled
-(`WebSocketSetCertValidation True`) and the chain verification failed.
+**What happened:** Server certificate validation was enabled (`WebSocketSetCertValidation True`) and the chain verification failed.
 
 **Common causes:**
-- The server certificate is self-signed or issued by an untrusted CA
-- The certificate has expired or is not yet valid
-- The certificate's Common Name (CN) does not match the hostname
-- A required intermediate CA certificate is missing on the client machine
-- If `WebSocketSetRevocationCheck` is enabled, the certificate may have been
-  revoked or the CRL/OCSP responder is unreachable
+
+* The server certificate is self-signed or issued by an untrusted CA.
+* The certificate has expired or is not yet valid.
+* The certificate's Common Name (CN) does not match the hostname.
+* A required intermediate CA certificate is missing on the client machine.
+* If `WebSocketSetRevocationCheck` is enabled, the certificate may have been revoked or the CRL/OCSP responder is unreachable.
 
 **What to check:**
-- Verify that the server certificate is trusted by opening the URL in a browser
-- If using a self-signed certificate, disable validation or add the certificate to the Trusted Root store
-- Ensure the system clock is correct
-- If you have enabled revocation checking (`WebSocketSetRevocationCheck True`),
-  consider disabling it temporarily to isolate the issue
+
+* Verify that the server certificate is trusted by opening the URL in a browser.
+* If using a self-signed certificate, disable validation or add the certificate to the Trusted Root store.
+* Ensure the system clock is correct.
+* If you have enabled revocation checking (`WebSocketSetRevocationCheck True`), consider disabling it temporarily to isolate the issue.
 
 ### ERR_FRAGMENT_OVERFLOW (27)
 
-**What happened:** A fragmented WebSocket message grew larger than the
-configured `FragmentBuffer` size.
-
-The received continuation frames accumulated a payload that exceeded the
-buffer capacity. The connection is closed to prevent memory corruption.
+**What happened:** A fragmented WebSocket message grew larger than the configured `FragmentBuffer` size. The received continuation frames accumulated a payload that exceeded the buffer capacity. The connection is closed to prevent memory corruption.
 
 **Common causes:**
-- Server is sending messages larger than the default 256 KB fragment buffer
-- A sender is sending continuous fragments without a final FIN frame
-- Buffer size is too small for the expected message size
+
+* Server is sending messages larger than the default 256 KB fragment buffer.
+* A sender is sending continuous fragments without a final FIN frame.
+* Buffer size is too small for the expected message size.
 
 **What to check:**
-- Increase the fragment buffer size via `WebSocketSetBufferSizes` before connecting
-- If the sender is an API, verify the maximum message size it may send
-- Ensure the sender properly terminates fragmented messages
+
+* Increase the fragment buffer size via `WebSocketSetBufferSizes` before connecting.
+* If the sender is an API, verify the maximum message size it may send.
+* Ensure the sender properly terminates fragmented messages.
 
 ```vb
 ' Increasing the fragment buffer to 1 MB
@@ -683,19 +689,19 @@ WebSocketSetBufferSizes 262144, 1048576, h
 
 ### ERR_TLS_RENEGOTIATE (28)
 
-**What happened:** The server requested a TLS renegotiation after the initial
-handshake was complete. Wasabi does not support renegotiation and closes the
-connection.
+**What happened:** The server requested a TLS renegotiation after the initial handshake was complete. Wasabi does not support renegotiation and closes the connection.
 
 **Common causes:**
-- The server is configured to require periodic re-authentication
-- A security policy triggers renegotiation after a certain amount of data is transferred
-- Some older servers may renegotiate by default
+
+* The server is configured to require periodic re-authentication.
+* A security policy triggers renegotiation after a certain amount of data is transferred.
+* Some older servers may renegotiate by default.
 
 **What to check:**
-- If possible, disable server-initiated TLS renegotiation
-- Enable auto reconnect so the connection is automatically re-established
-- Adjust server configuration to avoid renegotiation
+
+* If possible, disable server-initiated TLS renegotiation.
+* Enable auto reconnect so the connection is automatically re-established.
+* Adjust server configuration to avoid renegotiation.
 
 > [!NOTE]
 > Wasabi intentionally does not implement TLS renegotiation due to the complexity of handling it correctly in single-threaded VBA. Auto reconnect is the recommended recovery mechanism.
@@ -719,8 +725,7 @@ When a connection fails, run through this list in order.
 
 ## Common WSA Error Codes
 
-These are the most frequently encountered Winsock error codes in Wasabi
-diagnostic output.
+These are the most frequently encountered Winsock error codes in Wasabi diagnostic output.
 
 | Code | Name | Meaning |
 |:---|:---|:---|
@@ -750,3 +755,9 @@ These are the most frequently encountered Schannel/SSPI error codes.
 | 0x80090326 | SEC_E_ILLEGAL_MESSAGE | Received message is corrupted or unexpected |
 | 0x00090312 | SEC_I_CONTINUE_NEEDED | Handshake needs more data (internal, handled by Wasabi) |
 | 0x00090321 | SEC_I_RENEGOTIATE | Server requested TLS renegotiation (now handled as `ERR_TLS_RENEGOTIATE`) |
+
+> [!NOTE]
+> Errors that occur inside **registered extensions** (middleware, protocol handler, or compression handler) are not automatically propagated to the `WasabiError` system. Each extension is responsible for its own error handling. The engine itself only reports errors from its own internal operations.
+
+> [!NOTE]
+> In MQTT operations, protocol-level errors (e.g., CONNACK with non‑zero return code) are returned as human‑readable strings through `MqttReceive`, such as `[CONNACK_ERROR] Code=5 | Erro: Not authorized`. These are not reflected in the `WasabiError` enumeration.
