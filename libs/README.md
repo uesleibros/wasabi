@@ -42,11 +42,6 @@ Copy the DLL that matches your Office architecture to the **same folder**
 as your Excel workbook, Word document, or add‑in. Wasabi searches this
 location first.
 
-For a complete description of the search order, fallback names, and
-compression configuration, please refer to the main documentation:
-
-[../docs/README.md – Optional zlib Dependency](../docs/README.md)
-
 ## Version info
 
 - **zlib source version:** as shipped in Joveler 4.2.0 (based on zlib 1.2.11)
