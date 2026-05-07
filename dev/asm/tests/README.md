@@ -1,24 +1,25 @@
-# Assembly Payloads and Thunks for VBA
+# Assembly Thunks & Test Payloads
 
 > [!NOTE]
-> This suite provides safe, contained environments to verify memory allocation, parameter passing, and raw machine code execution across architectures within VBA.
+> This directory (`dev/asm/tests`) contains a suite of test payloads designed to verify memory allocation, parameter passing, and raw machine code execution across different architectures within VBA.
 
 > [!IMPORTANT]
-> **Technical Purpose:** Calling raw machine code from VBA requires tricking the host environment (Excel/Access/Word) using the `CallWindowProcW` API. These test files verify that the bridging mechanism (the "Thunk") handles pointer arithmetic, registers, and stack cleanup correctly without crashing the application.
+> **Technical Purpose:** Calling raw machine code from VBA requires tricking the host environment (Excel/Access/Word) using APIs like `CallWindowProcW`. These test files verify that the bridging mechanism (the "Thunk") handles pointer arithmetic, CPU registers, and stack cleanup correctly without crashing the host application.
 
 ### The VBA Assembly Execution Concept
 
-In standard VBA, executing raw machine code natively is not supported. This limitation is typically bypassed by allocating executable memory (`VirtualAlloc` on Windows or `mmap` on macOS), injecting binary opcodes, and using `CallWindowProcW` as a bridge to redirect execution flow.
+In standard VBA, executing raw machine code natively is not supported. This limitation is typically bypassed by allocating executable memory (`VirtualAlloc` on Windows or `mmap` on macOS), injecting compiled binary opcodes, and using `CallWindowProcW` as a bridge to redirect execution flow.
 
-However, different CPU architectures handle parameters differently:
-1. **x64 (FastCall / Microsoft x64 Calling Convention):** Parameters are passed via hardware registers (`RCX`, `RDX`, `R8`, `R9`). The result is returned in `RAX`.
-2. **x86 (stdcall):** Parameters are pushed to the stack (`[ebp+8]`, `[ebp+12]`, etc.). The assembly code is responsible for cleaning up the stack before returning (`ret 16`). The result is returned in `EAX`.
+However, different CPU architectures handle parameters differently. If these conventions are violated, an immediate and fatal **Host Crash** occurs.
 
-If these conventions are violated (e.g., failing to clean the stack in x86), an immediate and fatal **Host Crash** occurs. These test cases are explicitly written to adhere to these strict calling conventions.
+1. **x64 (Microsoft x64 Calling Convention):** Parameters are passed via hardware registers (`RCX`, `RDX`, `R8`, `R9`). The result is returned in `RAX`.
+2. **x86 (stdcall):** Parameters are pushed to the stack (`[ebp+8]`, `[ebp+12]`, etc.). The assembly payload is strictly responsible for cleaning up the stack before returning (e.g., `ret 16`). The result is returned in `EAX`.
 
-### The Payloads
+These test cases are explicitly written to adhere to these strict calling conventions, providing a safe sandbox for low-level development.
 
-Beyond simple stability, this suite covers various CPU operations, memory manipulations, and logic loops to handle high-performance tasks directly in machine code:
+### The Test Payloads
+
+Beyond basic stability, this suite covers various CPU operations, memory manipulations, and logic loops to handle high-performance tasks directly in machine code:
 
 *   **Math Addition (`add_numbers`)**: Tests standard parameter passing and integer return values.
 *   **Memory Copy (`mem_copy`)**: A high-speed `memcpy` equivalent to test pointer manipulation and the `rep movsb` instruction.
@@ -33,31 +34,25 @@ Beyond simple stability, this suite covers various CPU operations, memory manipu
 
 | File | Architecture | Description |
 | :--- | :--- | :--- |
-| ![](../../resources/svg/assembly.svg) `add_x64.asm` / `add_x86.asm` | 64-bit / 32-bit | Simple math addition to test `RCX`/`RDX` and stack arguments. |
-| ![](../../resources/svg/assembly.svg) `memcpy_x64.asm` / `memcpy_x86.asm` | 64-bit / 32-bit | Fast block memory copy (`rep movsb`). |
-| ![](../../resources/svg/assembly.svg) `xor_x64.asm` / `xor_x86.asm` | 64-bit / 32-bit | In-place XOR bitwise operations for buffers. |
-| ![](../../resources/svg/assembly.svg) `strlen_x64.asm` / `strlen_x86.asm` | 64-bit / 32-bit | Fast null-terminated string length calculation. |
-| ![](../../resources/svg/assembly.svg) `memset_x64.asm` / `memset_x86.asm` | 64-bit / 32-bit | Optimized memory filling (`rep stosb`). |
-| ![](../../resources/svg/assembly.svg) `countbyte_x64.asm` / `countbyte_x86.asm`| 64-bit / 32-bit | Scans memory and counts occurrences of a specific byte. |
-| ![](../../resources/svg/assembly.svg) `memchr_x64.asm` / `memchr_x86.asm` | 64-bit / 32-bit | Locates the memory pointer of a specific byte. |
-| ![](../../resources/svg/assembly.svg) `memrev_x64.asm` / `memrev_x86.asm` | 64-bit / 32-bit | Reverses an array of bytes in-place. |
-
-### Implementation Details
-
-These thunks are designed to be injected into executable memory at runtime. Memory must be allocated using API calls like `VirtualAlloc` with `PAGE_EXECUTE_READWRITE` permissions. 
-
-To prevent memory leaks, you must always free the allocated memory using `VirtualFree` (or `munmap` on Mac) after the payload has finished executing or when the host application is closing. For sensitive data, a secure wipe (zeroing the memory) before freeing is recommended.
+| ![](../../../resources/svg/assembly.svg) `add_x64.asm` / `add_x86.asm` | 64-bit / 32-bit | Simple math addition to test `RCX`/`RDX` and stack arguments. |
+| ![](../../../resources/svg/assembly.svg) `memcpy_x64.asm` / `memcpy_x86.asm` | 64-bit / 32-bit | Fast block memory copy (`rep movsb`). |
+| ![](../../../resources/svg/assembly.svg) `xor_x64.asm` / `xor_x86.asm` | 64-bit / 32-bit | In-place XOR bitwise operations for buffers. |
+| ![](../../../resources/svg/assembly.svg) `strlen_x64.asm` / `strlen_x86.asm` | 64-bit / 32-bit | Fast null-terminated string length calculation. |
+| ![](../../../resources/svg/assembly.svg) `memset_x64.asm` / `memset_x86.asm` | 64-bit / 32-bit | Optimized memory filling (`rep stosb`). |
+| ![](../../../resources/svg/assembly.svg) `countbyte_x64.asm` / `countbyte_x86.asm`| 64-bit / 32-bit | Scans memory and counts occurrences of a specific byte. |
+| ![](../../../resources/svg/assembly.svg) `memchr_x64.asm` / `memchr_x86.asm` | 64-bit / 32-bit | Locates the memory pointer of a specific byte. |
+| ![](../../../resources/svg/assembly.svg) `memrev_x64.asm` / `memrev_x86.asm` | 64-bit / 32-bit | Reverses an array of bytes in-place. |
 
 ## Compilation and Verification
 
-To test and verify these Assembly thunks, you need to assemble the `.asm` source files into raw machine code (binary format).
+To test and verify these Assembly thunks, you must assemble the `.asm` source files into raw machine code (binary format).
 
 ### 1. Required Tooling: NASM
 
 The Netwide Assembler (NASM) is the industry standard for this task. It outputs raw binary files without the overhead of OS headers (like PE or ELF).
 
 1. Download the NASM executable from [nasm.us](https://www.nasm.us/).
-2. Add the NASM directory to your Windows System PATH or run it directly from the folder.
+2. Add the NASM directory to your Windows System PATH or run it directly from this folder.
 
 ### 2. Compilation Commands
 
@@ -75,7 +70,7 @@ nasm -f bin xor_x86.asm -o xor_x86.bin
 
 ### 3. Extracting Opcodes for VBA
 
-Once you have the `.bin` files, you can load them directly via a binary file reader in VBA, or you can extract the opcodes to hardcode them into your project as Byte Arrays.
+Once you have the `.bin` files, you can load them directly via a binary file reader in VBA, or extract the opcodes to hardcode them into your project as Byte Arrays.
 
 #### Method A: Using Windows CertUtil (Built-in)
 ```bash
@@ -89,7 +84,7 @@ certutil -dump xor_x64.bin
 
 ### 4. Integration Concept
 
-Once compiled, the payload can be executed by passing pointers and arguments directly to the memory address. A conceptual execution flow in VBA looks like this:
+Once compiled and loaded into executable memory, the payload can be triggered by passing pointers directly to the memory address. A conceptual execution flow in VBA looks like this:
 
 ```vba
 Sub TestXorPayload()
@@ -111,4 +106,4 @@ End Sub
 ```
 
 > [!CAUTION]
-> Always ensure you are compiling and injecting the correct binary architecture (`x86` vs `x64`). Running a 32-bit payload on a 64-bit Office installation (or vice versa) will result in an immediate application crash.
+> Always ensure you are compiling and injecting the correct binary architecture (`x86` vs `x64`). Running a 32-bit payload on a 64-bit host installation (or vice versa) will result in an immediate application crash.
