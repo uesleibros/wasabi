@@ -14,6 +14,7 @@ A Windows batch utility that automates the assembly process for the entire Wasab
 * **Categories Processed**:
     * **WebSocket Masking**: High-speed XOR bitwise operations (`ws_mask`).
     * **Memory Utilities**: Optimized memory zeroing (`mem_zero`) and pattern search (`mem_find`).
+    * **Timing Utilities**: High-performance tick difference calculation (`tick_diff`).
 * **Tooling**: Requires [NASM](https://www.nasm.us/) to be installed and accessible via the system `PATH`.
 
 ### 2. `bin_to_vba.py`
@@ -21,7 +22,7 @@ A Python extraction tool for binary-to-VBA conversion.
 
 * **Purpose**: Reads all compiled `.bin` files and outputs ready-to-paste VBA function blocks.
 * **Functionality**:
-    * Processes the full thunk library (`ws_mask`, `mem_zero`, `mem_find`) for both `x86` and `x64` in a single execution.
+    * Processes the full thunk library (`ws_mask`, `mem_zero`, `mem_find`, `tick_diff`) for both `x86` and `x64` in a single execution.
     * Generates complete `Private Function` blocks in the same style as the Wasabi module — no manual formatting required.
     * Groups opcodes in chunks of 8 bytes per line for readability and VBA line-length compliance.
     * Applies padding to multiples of 4 bytes to ensure safe `Long`-aligned extraction.
