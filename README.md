@@ -541,7 +541,7 @@ No messages are lost.
 - **Connection doesn't drop.** The socket stays active regardless of polling frequency.
 - **No infinite loop required.** Simple send/receive/disconnect workflows work fine.
 
-## Community & Acknowledgements
+## ![](resources/svg/star-rainbow.svg) Community & Acknowledgements
 
 Wasabi was not built in a vacuum. It is the culmination of years of research, trial, and error by some of the most brilliant minds in the VBA and VB6 networking community. We are honored to stand on the shoulders of these developers and their pioneering projects:
 
