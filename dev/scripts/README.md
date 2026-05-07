@@ -7,23 +7,26 @@ This directory contains automation utilities designed to bridge the gap between 
 
 ## Script Index
 
-### 1. compile_asm.bat
+### 1. `compile_asm.bat`
 A Windows batch utility that automates the assembly process for the entire Wasabi thunk library.
-* **Purpose**: Compiles all assembly source files (.asm) into raw machine code binaries (.bin).
-* **Categories Processed**:
-    * **Safe Thunks**: Core VBE Reset protection.
-    * **Endianness Utilities**: Fast 32-bit byte swapping.
-    * **WebSocket Masking**: High-speed XOR bitwise operations.
-    * **Memory Utilities**: Optimized memory zeroing.
-* **Tooling**: Requires NASM (Netwide Assembler) to be installed and accessible via the system PATH.
 
-### 2. bin_to_vba.py
-A Python-based extraction tool for binary-to-VBA conversion.
-* **Purpose**: Reads all compiled .bin files and outputs formatted hexadecimal byte arrays.
-* **Functionality**: 
-    * Processes the full library of binaries in a single execution.
-    * Provides the exact `asm(i) = &Hxx` sequences formatted for VBA.
-    * Displays the byte count for each binary to assist in `VirtualAlloc` sizing.
+* **Purpose**: Compiles all assembly source files (`.asm`) into raw machine code binaries (`.bin`).
+* **Categories Processed**:
+    * **WebSocket Masking**: High-speed XOR bitwise operations (`ws_mask`).
+    * **Memory Utilities**: Optimized memory zeroing (`mem_zero`) and pattern search (`mem_find`).
+* **Tooling**: Requires [NASM](https://www.nasm.us/) to be installed and accessible via the system `PATH`.
+
+### 2. `bin_to_vba.py`
+A Python extraction tool for binary-to-VBA conversion.
+
+* **Purpose**: Reads all compiled `.bin` files and outputs ready-to-paste VBA function blocks.
+* **Functionality**:
+    * Processes the full thunk library (`ws_mask`, `mem_zero`, `mem_find`) for both `x86` and `x64` in a single execution.
+    * Generates complete `Private Function` blocks in the same style as the Wasabi module — no manual formatting required.
+    * Groups opcodes in chunks of 8 bytes per line for readability and VBA line-length compliance.
+    * Applies padding to multiples of 4 bytes to ensure safe `Long`-aligned extraction.
+    * Prints a summary table with byte count per binary to assist in `VirtualAlloc` sizing and detecting unexpected compiler padding.
+    * Writes all output to `opcodes_output.txt`, ready to copy into the appropriate `#If Win64` / `#Else` blocks in the `Wasabi` module.
 
 ## Workflow
 
@@ -31,17 +34,26 @@ A Python-based extraction tool for binary-to-VBA conversion.
 > Always run the compilation script before the conversion script to ensure you are working with the most recent version of the assembly logic.
 
 1. **Modify Source**: Update the assembly logic within `dev/asm/`.
-2. **Compile**: Execute `compile_asm.bat` to refresh all binary blobs.
-3. **Convert**: Run `python bin_to_vba.py` to generate the new opcode strings for both x86 and x64 architectures.
-4. **Update VBA**: Copy the hexadecimal output into the appropriate conditional compilation blocks within the `Wasabi` module.
+2. **Compile**: Execute `compile_asm.bat` to refresh all `.bin` blobs.
+3. **Convert**: Run `python bin_to_vba.py` to generate the new opcode functions for both `x86` and `x64`.
+4. **Update VBA**: Copy the output functions from `opcodes_output.txt` into the appropriate `#If Win64` / `#Else` conditional blocks inside the `Wasabi` module.
 
 ## Technical Safety
 
 > [!CAUTION]
-> Incorrect modifications to the assembly source or improper injection of opcodes can lead to immediate memory corruption and host application crashes. Always verify the output size against the expected architecture specifications before updating the VBA source.
+> Incorrect modifications to the assembly source or improper injection of opcodes can lead to immediate memory corruption and host application crashes. Always verify the output byte count in the summary table against the expected size for your target architecture before updating the VBA source.
 
 ### Data Execution Prevention (DEP)
-The Wasabi framework must allocate memory using specific WinAPI constants to remain compatible with DEP. The scripts in this directory assist in preparing the code that will eventually be placed into memory segments marked with `PAGE_EXECUTE_READWRITE`.
+
+The Wasabi framework allocates executable memory using `VirtualAlloc` with `PAGE_EXECUTE_READWRITE`, which requires explicit opt-out of DEP for that memory region. The scripts in this directory prepare the opcode payloads that will be placed into those regions at runtime. Never attempt to execute opcode arrays allocated with standard `MEM_COMMIT` without the `PAGE_EXECUTE_READWRITE` flag.
 
 ### Architecture Parity
-Wasabi maintains strict parity between 32-bit and 64-bit implementations. Ensure that any logic changes made to an x64 assembly file are reflected in the corresponding x86 file to prevent platform-specific bugs.
+
+Wasabi maintains strict parity between 32-bit and 64-bit implementations. Every thunk exists in both an `x86` and an `x64` variant. Any logic change made to one architecture **must** be reflected in the corresponding file for the other. The `bin_to_vba.py` summary table will flag size mismatches between paired binaries, which is a reliable indicator of a missing or incomplete port.
+
+### Output Validation
+
+Before copying generated functions into the Wasabi module, confirm:
+- Byte count matches the array bound declared in the `Dim opcodes(0 To N)` line.
+- x86 and x64 variants of the same thunk produce different byte sequences — identical output for both architectures indicates a build error.
+- The generated function name matches the call site inside `InitWasabiThunks`.
