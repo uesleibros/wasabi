@@ -5,14 +5,15 @@ ASM_DIR = "../asm/"
 OUTPUT_FILE = "opcodes_output.txt"
 
 BINARIES = {
-    "x64": ["ws_mask_x64.bin", "mem_zero_x64.bin", "mem_find_x64.bin"],
-    "x86": ["ws_mask_x86.bin", "mem_zero_x86.bin", "mem_find_x86.bin"],
+    "x64": ["ws_mask_x64.bin", "mem_zero_x64.bin", "mem_find_x64.bin", "tick_diff_x64.bin"],
+    "x86": ["ws_mask_x86.bin", "mem_zero_x86.bin", "mem_find_x86.bin", "tick_diff_x86.bin"],
 }
 
 FUNC_NAMES = {
     "ws_mask":  "GetWsMaskOpcodes",
     "mem_zero": "GetMemZeroOpcodes",
     "mem_find": "GetMemFindOpcodes",
+    "tick_diff": "GetTickDiffOpcodes"
 }
 
 def get_func_name(filename):
