@@ -112,6 +112,7 @@ Beyond WebSocket, Wasabi ships a full MQTT client with MQTT 5 extensions (User P
 
 <p align="center">
   <sub>
+    <img src="resources/svg/verified.svg" /><br/>
     Recognition from developers behind influential VBA/VB6,
     systems, and low-level infrastructure projects.
   </sub>
