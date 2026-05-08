@@ -59,6 +59,7 @@
 ## Table of Contents
 
 - [What is Wasabi](#what-is-wasabi)
+- [Trusted by the VBA Community](#trusted-by-the-vba-community)
 - [Quick Start](#quick-start)
 - [Architecture](#architecture)
   - [Why a Standard Module](#why-a-standard-module-bas-instead-of-classes-cls)
@@ -85,6 +86,36 @@ Wasabi is a single, self-contained `.bas` module that brings real-time networkin
 A single file drop into any VBA project is all it takes. No references need to be enabled in **Tools -> References**.
 
 Beyond WebSocket, Wasabi ships a full MQTT client with MQTT 5 extensions (User Properties, Reason Codes, metadata handling), a first-class raw TCP client, NTLM/Kerberos proxy authentication, RTT latency measurement, fine-grained TLS certificate control, a composable middleware pipeline, and a pluggable compression architecture. The module compiles cleanly on 32-bit and 64-bit Office hosts, from Windows XP to Windows 11, through conditional compilation (`#If VBA7`).
+
+## Trusted by the VBA Community
+
+<p align="center">
+  <a href="https://github.com/EagleAglow">
+    <img src="https://github.com/EagleAglow.png?size=90" width="90" alt="EagleAglow" />
+  </a>
+  <a href="https://github.com/wqweto">
+    <img src="https://github.com/wqweto.png?size=90" width="90" alt="wqweto" />
+  </a>
+  <a href="https://github.com/Maatooh">
+    <img src="https://github.com/Maatooh.png?size=90" width="90" alt="Maatooh" />
+  </a>
+  <a href="https://github.com/PerditionC">
+    <img src="https://github.com/PerditionC.png?size=90" width="90" alt="PerditionC" />
+  </a>
+  <a href="https://github.com/Sven-Bo">
+    <img src="https://github.com/Sven-Bo.png?size=90" width="90" alt="Sven-Bo" />
+  </a>
+  <a href="https://github.com/DecimalTurn">
+    <img src="https://github.com/DecimalTurn.png?size=90" width="90" alt="DecimalTurn" />
+  </a>
+</p>
+
+<p align="center">
+  <sub>
+    Recognition from developers behind influential VBA/VB6,
+    systems, and low-level infrastructure projects.
+  </sub>
+</p>
 
 ## Quick Start
 
@@ -496,65 +527,19 @@ Many competing modules depend on `WinHttpWebSocket*` functions introduced in Win
 
 ## Community & Acknowledgements
 
-Wasabi builds on techniques and groundwork pioneered by these projects and their authors:
+Wasabi builds on years of experimentation and innovation from the VBA/VB6 low-level networking community.
 
-<p align="center">
-  <table>
-    <tr>
-      <td align="center">
-        <a href="https://github.com/EagleAglow">
-          <img src="https://github.com/EagleAglow.png?size=100" width="100" alt="EagleAglow"/><br/>
-          <b>EagleAglow</b>
-        </a>
-        <br />
-        <sub>Creator of <br/><a href="https://github.com/EagleAglow/vba-websocket"><img src="resources/svg/github.svg" height="18" /> vba-websocket</a></sub>
-      </td>
-      <td align="center">
-        <a href="https://github.com/wqweto">
-          <img src="https://github.com/wqweto.png?size=100" width="100" alt="wqweto"/><br/>
-          <b>wqweto</b>
-        </a>
-        <br />
-        <sub>Creator of <br/><a href="https://github.com/wqweto/VbAsyncSocket"><img src="resources/svg/github.svg" height="18" /> VbAsyncSocket</a></sub>
-      </td>
-      <td align="center">
-        <a href="https://github.com/sancarn">
-          <img src="https://github.com/sancarn.png?size=100" width="100" alt="sancarn"/><br/>
-          <b>sancarn</b>
-        </a>
-        <br />
-        <sub>Creator of <br/><a href="https://github.com/sancarn/stdVBA"><img src="resources/svg/github.svg" height="18" /> stdVBA</a></sub>
-      </td>
-      <td align="center">
-        <a href="https://github.com/Maatooh">
-          <img src="https://github.com/Maatooh.png?size=100" width="100" alt="Maatooh"/><br/>
-          <b>Maatooh</b>
-        </a>
-        <br />
-        <sub>Creator of <br/><a href="https://github.com/Maatooh/TlsSocketWSS-vb6"><img src="resources/svg/github.svg" height="18" /> TlsSocketWSS-vb6</a></sub>
-      </td>
-      <td align="center">
-        <a href="https://github.com/JoshyFrancis">
-          <img src="https://github.com/JoshyFrancis.png?size=100" width="100" alt="JoshyFrancis"/><br/>
-          <b>JoshyFrancis</b>
-        </a>
-        <br />
-        <sub>Creator of <br/><a href="https://github.com/JoshyFrancis/vb6-websocket-server-ssl"><img src="resources/svg/github.svg" height="18" /> vb6-ws-server</a></sub>
-      </td>
-      <td align="center">
-        <a href="https://github.com/papanda925">
-          <img src="https://github.com/papanda925.png?size=100" width="100" alt="papanda925"/><br/>
-          <b>papanda925</b>
-        </a>
-        <br />
-        <sub>Creator of <br/><a href="https://github.com/papanda925/VBA_WinsockAPI_TCP_Sample"><img src="resources/svg/github.svg" height="18" /> VBA_WinsockAPI</a></sub>
-      </td>
-    </tr>
-  </table>
-</p>
+Special thanks to the developers and projects that helped inspire parts of Wasabi's architecture and engineering direction:
+
+- <img src="resources/ms-vba.png" width="18" /> [vba-websocket](https://github.com/EagleAglow/vba-websocket): WebSocket client implementation for VBA by <img src="https://github.com/EagleAglow.png" width="18" /> [**EagleAglow**](https://github.com/EagleAglow)
+- <img src="resources/ms-vba.png" width="18" /> [VbAsyncSocket](https://github.com/wqweto/VbAsyncSocket): High-performance asynchronous socket library for VB6/VBA by <img src="https://github.com/wqweto.png" width="18" /> [**wqweto**](https://github.com/wqweto)
+- <img src="resources/ms-vba.png" width="18" /> [stdVBA](https://github.com/sancarn/stdVBA): Modern standard library and utilities for VBA by <img src="https://github.com/sancarn.png" width="18" /> [**sancarn**](https://github.com/sancarn)
+- <img src="resources/ms-vba.png" width="18" /> [TlsSocketWSS-vb6](https://github.com/Maatooh/TlsSocketWSS-vb6): TLS-enabled WebSocket implementation for VB6 by <img src="https://github.com/Maatooh.png" width="18" /> [**Maatooh**](https://github.com/Maatooh)
+- <img src="resources/ms-vba.png" width="18" /> [vb6-websocket-server-ssl](https://github.com/JoshyFrancis/vb6-websocket-server-ssl): Secure WebSocket server for VB6 by <img src="https://github.com/JoshyFrancis.png" width="18" /> [**JoshyFrancis**](https://github.com/JoshyFrancis)
+- <img src="resources/ms-vba.png" width="18" /> [VBA_WinsockAPI_TCP_Sample](https://github.com/papanda925/VBA_WinsockAPI_TCP_Sample): WinSock TCP examples and networking experiments for VBA by <img src="https://github.com/papanda925.png" width="18" /> [**papanda925**](https://github.com/papanda925)
 
 > [!NOTE]
-> ![](resources/svg/star-rainbow.svg) **Community Validation**: We are incredibly honored that some of these legendary developers have starred this repository. Their work paved the way, and their recognition means the world to this project.
+> We are honored that several developers from the VBA/VB6 networking community have recognized and starred this repository. Their work helped shape the ecosystem that made Wasabi possible.
 
 ## Contributing
 
