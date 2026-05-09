@@ -41,6 +41,36 @@
   </a>
 </p>
 
+<h2 align="center">Trusted by the VBA Community</h2>
+
+<p align="center">
+  <a href="https://github.com/EagleAglow">
+    <img src="https://github.com/EagleAglow.png?size=90" width="90" alt="EagleAglow" />
+  </a>
+  <a href="https://github.com/wqweto">
+    <img src="https://github.com/wqweto.png?size=90" width="90" alt="wqweto" />
+  </a>
+  <a href="https://github.com/Maatooh">
+    <img src="https://github.com/Maatooh.png?size=90" width="90" alt="Maatooh" />
+  </a>
+  <a href="https://github.com/PerditionC">
+    <img src="https://github.com/PerditionC.png?size=90" width="90" alt="PerditionC" />
+  </a>
+  <a href="https://github.com/Sven-Bo">
+    <img src="https://github.com/Sven-Bo.png?size=90" width="90" alt="Sven-Bo" />
+  </a>
+  <a href="https://github.com/DecimalTurn">
+    <img src="https://github.com/DecimalTurn.png?size=90" width="90" alt="DecimalTurn" />
+  </a>
+</p>
+
+<p align="center">
+  <sub>
+    Recognition from developers behind <br/> 
+    influential VBA/VB6 systems, and/or low-level infrastructure projects.
+  </sub>
+</p>
+
 > [!NOTE]
 > **Supported Applications**
 >
@@ -60,7 +90,6 @@
 ## Table of Contents
 
 - [What is Wasabi](#what-is-wasabi)
-- [Trusted by the VBA Community](#trusted-by-the-vba-community)
 - [Quick Start](#quick-start)
 - [Architecture](#architecture)
   - [Why a Standard Module](#why-a-standard-module-bas-instead-of-classes-cls)
@@ -87,37 +116,6 @@ Wasabi is a single, self-contained `.bas` module that brings real-time networkin
 A single file drop into any VBA project is all it takes. No references need to be enabled in **Tools -> References**.
 
 Beyond WebSocket, Wasabi ships a full MQTT client with MQTT 5 extensions (User Properties, Reason Codes, metadata handling), a first-class raw TCP client, NTLM/Kerberos proxy authentication, RTT latency measurement, fine-grained TLS certificate control, a composable middleware pipeline, a pluggable compression architecture, and a `WSAAsyncSelect`-based event-driven async system that fires callbacks while Excel is idle without any polling loop. The module compiles cleanly on 32-bit and 64-bit Office hosts, from Windows XP to Windows 11, through conditional compilation (`#If VBA7`).
-
-## Trusted by the VBA Community
-
-<p align="center">
-  <a href="https://github.com/EagleAglow">
-    <img src="https://github.com/EagleAglow.png?size=90" width="90" alt="EagleAglow" />
-  </a>
-  <a href="https://github.com/wqweto">
-    <img src="https://github.com/wqweto.png?size=90" width="90" alt="wqweto" />
-  </a>
-  <a href="https://github.com/Maatooh">
-    <img src="https://github.com/Maatooh.png?size=90" width="90" alt="Maatooh" />
-  </a>
-  <a href="https://github.com/PerditionC">
-    <img src="https://github.com/PerditionC.png?size=90" width="90" alt="PerditionC" />
-  </a>
-  <a href="https://github.com/Sven-Bo">
-    <img src="https://github.com/Sven-Bo.png?size=90" width="90" alt="Sven-Bo" />
-  </a>
-  <a href="https://github.com/DecimalTurn">
-    <img src="https://github.com/DecimalTurn.png?size=90" width="90" alt="DecimalTurn" />
-  </a>
-</p>
-
-<p align="center">
-  <sub>
-    <img src="resources/svg/verified.svg" /><br/>
-    Recognition from developers behind influential VBA/VB6,
-    systems, and/or low-level infrastructure projects.
-  </sub>
-</p>
 
 ## Quick Start
 
