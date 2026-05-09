@@ -105,6 +105,7 @@
 - [Use Cases](#use-cases)
 - [Roadmap](#roadmap)
 - [Community & Acknowledgements](#community--acknowledgements)
+- [Stargazers over time](#stargazers-over-time)
 - [Contributing](#contributing)
 - [Security](#security)
 - [License](#license)
