@@ -8,6 +8,7 @@ This document describes the complete public interface of **Wasabi.bas**, a nativ
   - [Handles and the Connection Pool](#handles-and-the-connection-pool)
   - [The Default Handle](#the-default-handle)
   - [Polling Model](#polling-model)
+  - [Async Model](#async-model)
   - [Message Queues and Capacity](#message-queues-and-capacity)
   - [Connection Modes](#connection-modes)
   - [Extension Architecture](#extensions-plug-in-architecture)
@@ -95,6 +96,82 @@ Each call to `WebSocketReceive` or `WebSocketReceiveAll` triggers the following 
 
 > [!IMPORTANT]
 > Your code must call a receive function regularly for any of the following to work: message delivery, automatic ping scheduling, inactivity timeout detection, and auto reconnect triggering.
+
+### Async Model
+
+Wasabi provides an event-driven async model as an alternative to the polling model. Instead of calling receive functions in a loop, you register a handler object and let the Windows message pump deliver socket events to your callbacks automatically.
+
+The async system is implemented via `WSAAsyncSelect`, which instructs Windows to post socket event notifications (`FD_READ`, `FD_WRITE`, `FD_CLOSE`, `FD_CONNECT`) as messages to a hidden Win32 window created internally by Wasabi. A native machine-code thunk subclasses that window and dispatches each event to your handler object using `CallByName`.
+
+This means socket callbacks fire naturally while the Excel runtime is idle, without any polling loop on your part. If your code is actively running a tight loop without `DoEvents`, incoming messages will queue in the Windows message pump and be dispatched as soon as your code finishes or yields.
+
+> [!IMPORTANT]
+> The async handler object must be stored in a module-level or workbook-level variable. If it is declared as a local variable inside a `Sub`, it will be destroyed when that `Sub` returns, and subsequent callbacks will have no target.
+
+```vb
+' In a standard module at module level
+Private g_Handler As cWasabiAsync
+Private g_Handle As Long
+
+Public Sub StartAsync()
+    Set g_Handler = New cWasabiAsync
+    If WebSocketConnect("wss://stream.binance.com:9443/ws/btcusdt@trade", g_Handle) Then
+        WasabiUseAsync g_Handler, g_Handle
+    End If
+    ' Sub ends here. Callbacks fire while Excel is idle.
+End Sub
+```
+
+The handler class must implement the following five methods:
+
+```vb
+Public Sub OnConnect(ByVal handle As Long)
+Public Sub OnReceive(ByVal handle As Long)
+Public Sub OnReadyToSend(ByVal handle As Long)
+Public Sub OnClose(ByVal handle As Long)
+Public Sub OnError(ByVal handle As Long, ByVal errorCode As Long, ByVal eventType As Long)
+```
+
+`OnReceive` is called whenever data arrives on the socket. Inside it, drain the queue normally using `WebSocketReceive` or `WebSocketGetPendingCount`.
+
+`OnReadyToSend` is called when the socket becomes writable after a previous send would have blocked. This is useful for backpressure scenarios and can be left empty if not needed.
+
+`OnError` receives the raw WSA error code and the event type that triggered the error (`FD_READ`, `FD_CONNECT`, etc.).
+
+A complete handler class example:
+
+```vb
+Option Explicit
+
+Public Sub OnConnect(ByVal handle As Long)
+    Debug.Print "Connected. Handle: " & handle
+End Sub
+
+Public Sub OnReceive(ByVal handle As Long)
+    Dim msg As String
+    Do While WebSocketGetPendingCount(handle) > 0
+        msg = WebSocketReceive(handle)
+        Debug.Print "Received: " & msg
+    Loop
+End Sub
+
+Public Sub OnReadyToSend(ByVal handle As Long)
+End Sub
+
+Public Sub OnClose(ByVal handle As Long)
+    Debug.Print "Connection closed. Handle: " & handle
+End Sub
+
+Public Sub OnError(ByVal handle As Long, ByVal errorCode As Long, ByVal eventType As Long)
+    Debug.Print "Async error on handle " & handle & " | Code: " & errorCode & " | Event: " & eventType
+End Sub
+```
+
+> [!NOTE]
+> The async and polling models are not mutually exclusive. Registering an async handler does not prevent you from calling `WebSocketReceive` manually. Both paths share the same internal message queue.
+
+> [!WARNING]
+> Always call `WebSocketDisconnectAll` or `WebSocketDisconnect` before resetting the VBA project or closing the workbook. The async system uses a native thunk that holds a pointer to the VBA runtime. Resetting without cleanup can crash the host application. The thunk contains a guard that checks whether the VBA runtime is still alive before dispatching, but explicit cleanup is the safe practice.
 
 ### Message Queues and Capacity
 
@@ -230,7 +307,7 @@ End If
 Public Sub WebSocketDisconnectAll()
 ```
 
-Iterates through the entire pool and disconnects every active connection.
+Iterates through the entire pool and disconnects every active connection. Also shuts down the async window and thunk if they were initialized.
 
 ```vb
 Private Sub Workbook_BeforeClose(Cancel As Boolean)
@@ -285,6 +362,30 @@ WebSocketSendClose 1001, "Client shutting down", h
 
 > [!NOTE]
 > `WebSocketDisconnect` calls `WebSocketSendClose` internally. Call `WebSocketSendClose` directly only if you need to specify a custom close code or reason before cleanup.
+
+### WasabiUseAsync
+
+```vb
+Public Sub WasabiUseAsync(ByVal handler As Object, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+```
+
+Registers an async event handler for the specified connection and switches it to event-driven mode. After this call, socket events are dispatched to the handler object via the Windows message pump instead of requiring manual polling.
+
+`handler` must be an object implementing all five async callback methods described in the [Async Model](#async-model) section.
+
+Calling this function on an already-connected handle immediately registers the socket with `WSAAsyncSelect`, so events begin arriving on the next idle cycle.
+
+```vb
+Dim g_Handler As cWasabiAsync
+Dim g_Handle As Long
+
+Set g_Handler = New cWasabiAsync
+WebSocketConnect "wss://stream.binance.com:9443/ws/btcusdt@trade", g_Handle
+WasabiUseAsync g_Handler, g_Handle
+```
+
+> [!WARNING]
+> The handler object must remain alive for as long as the connection is active. Store it at module or workbook level, never as a local variable.
 
 ## Sending Data
 
@@ -529,6 +630,9 @@ Sets the base interval in milliseconds for automatic Ping frames. Set `intervalM
 ```vb
 WebSocketSetPingInterval 30000, 5000, h
 ```
+
+> [!NOTE]
+> In async mode, automatic pings are driven by the `OnReceive` callback path, which internally calls `TickMaintenance`. If no data arrives for a long period, pings may not fire on schedule. For reliable heartbeating in async mode, consider calling `WebSocketSendPing` from a timer or `Application.OnTime` routine.
 
 ### WebSocketGetLatency
 
@@ -1578,6 +1682,56 @@ Sub PollConnections()
 End Sub
 ```
 
+### Async Event-Driven Connection
+
+```vb
+' In a standard module at module level
+Private g_Handler As cWasabiAsync
+Private g_Handle As Long
+
+Public Sub StartAsync()
+    Set g_Handler = New cWasabiAsync
+    If WebSocketConnect("wss://stream.binance.com:9443/ws/btcusdt@trade", g_Handle) Then
+        WasabiUseAsync g_Handler, g_Handle
+        Debug.Print "Async mode active. Callbacks fire while Excel is idle."
+    End If
+End Sub
+
+Public Sub StopAsync()
+    WebSocketDisconnect g_Handle
+    Set g_Handler = Nothing
+End Sub
+```
+
+Handler class (`cWasabiAsync`):
+
+```vb
+Option Explicit
+
+Public Sub OnConnect(ByVal handle As Long)
+    Debug.Print "Connected. Handle: " & handle
+End Sub
+
+Public Sub OnReceive(ByVal handle As Long)
+    Dim msg As String
+    Do While WebSocketGetPendingCount(handle) > 0
+        msg = WebSocketReceive(handle)
+        Debug.Print "Received: " & msg
+    Loop
+End Sub
+
+Public Sub OnReadyToSend(ByVal handle As Long)
+End Sub
+
+Public Sub OnClose(ByVal handle As Long)
+    Debug.Print "Connection closed. Handle: " & handle
+End Sub
+
+Public Sub OnError(ByVal handle As Long, ByVal errorCode As Long, ByVal eventType As Long)
+    Debug.Print "Error on handle " & handle & " | Code: " & errorCode
+End Sub
+```
+
 ### MQTT IoT Dashboard with MQTT 5 User Properties
 
 ```vb
@@ -1620,10 +1774,13 @@ End Sub
 ## Operational Caveats
 
 > [!WARNING]
-> Wasabi operates entirely on the VBA main thread. There are no background threads. All socket activity, maintenance, and reconnect logic runs when your code explicitly calls a Wasabi function.
+> Wasabi operates entirely on the VBA main thread. There are no background threads. All socket activity, maintenance, and reconnect logic runs when your code explicitly calls a Wasabi function or when the Windows message pump dispatches an async event.
 
 > [!WARNING]
-> Automatic heartbeat, ping scheduling, inactivity timeout detection, and auto reconnect triggering are all driven by polling calls. If your code stops calling receive functions, these features stop functioning.
+> In polling mode, automatic heartbeat, ping scheduling, inactivity timeout detection, and auto reconnect triggering are all driven by polling calls. If your code stops calling receive functions, these features stop functioning.
+
+> [!WARNING]
+> In async mode, the handler object must remain alive for the entire duration of the connection. Store it at module or workbook level. Always call `WebSocketDisconnect` or `WebSocketDisconnectAll` before resetting the VBA project or closing the workbook.
 
 > [!WARNING]
 > Queue capacity is fixed at 512 messages per type per connection. Under sustained high message rates, messages will be dropped without error if the queue is not drained fast enough.
