@@ -30,6 +30,7 @@
   <img src="https://img.shields.io/badge/TCP-Native%20Client-blue" alt="TCP" />
   <img src="https://img.shields.io/badge/Middleware-Pipeline-blueviolet" alt="Middleware" />
   <img src="https://img.shields.io/badge/Compression-Pluggable-red" alt="Compression Pluggable" />
+  <img src="https://img.shields.io/badge/Async-Event--Driven-teal" alt="Async" />
   <img src="https://img.shields.io/github/stars/uesleibros/wasabi?style=flat&color=gold" alt="Stars" />
   <img src="https://img.shields.io/github/last-commit/uesleibros/wasabi?style=flat" alt="Last Commit" />
   <a href="../../releases">
@@ -65,7 +66,7 @@
   - [Why a Standard Module](#why-a-standard-module-bas-instead-of-classes-cls)
   - [Assembly Engine](#the-assembly-engine-thunks)
   - [Modular Design](#modular-design-dumb-pipe--extensions)
-  - [Execution Model](#execution-model-single-thread-and-polling)
+  - [Execution Model](#execution-model-single-thread-polling-and-async)
 - [Features](#features)
   - [Middleware Pipeline](#the-middleware-pipeline)
   - [Protocol and Compression Extensions](#protocol-and-compression-extensions)
@@ -85,7 +86,7 @@ Wasabi is a single, self-contained `.bas` module that brings real-time networkin
 
 A single file drop into any VBA project is all it takes. No references need to be enabled in **Tools -> References**.
 
-Beyond WebSocket, Wasabi ships a full MQTT client with MQTT 5 extensions (User Properties, Reason Codes, metadata handling), a first-class raw TCP client, NTLM/Kerberos proxy authentication, RTT latency measurement, fine-grained TLS certificate control, a composable middleware pipeline, and a pluggable compression architecture. The module compiles cleanly on 32-bit and 64-bit Office hosts, from Windows XP to Windows 11, through conditional compilation (`#If VBA7`).
+Beyond WebSocket, Wasabi ships a full MQTT client with MQTT 5 extensions (User Properties, Reason Codes, metadata handling), a first-class raw TCP client, NTLM/Kerberos proxy authentication, RTT latency measurement, fine-grained TLS certificate control, a composable middleware pipeline, a pluggable compression architecture, and a `WSAAsyncSelect`-based event-driven async system that fires callbacks while Excel is idle without any polling loop. The module compiles cleanly on 32-bit and 64-bit Office hosts, from Windows XP to Windows 11, through conditional compilation (`#If VBA7`).
 
 ## Trusted by the VBA Community
 
@@ -203,6 +204,56 @@ If WebSocketConnect("wss://example.com/ws", h) Then
     Loop
 End If
 ```
+
+### Event-Driven Async
+
+Instead of polling in a loop, register a handler object and let Wasabi call your callbacks automatically while Excel is idle.
+
+```vb
+' In a standard module at module level
+Private g_Handler As cMyHandler
+Private g_Handle As Long
+
+Public Sub StartAsync()
+    Set g_Handler = New cMyHandler
+    If WebSocketConnect("wss://stream.binance.com:9443/ws/btcusdt@trade", g_Handle) Then
+        WasabiUseAsync g_Handler, g_Handle
+        ' Sub ends here. Callbacks fire while Excel is idle.
+    End If
+End Sub
+```
+
+Handler class (`cMyHandler`):
+
+```vb
+Option Explicit
+
+Public Sub OnConnect(ByVal handle As Long)
+    Debug.Print "Connected. Handle: " & handle
+End Sub
+
+Public Sub OnReceive(ByVal handle As Long)
+    Dim msg As String
+    Do While WebSocketGetPendingCount(handle) > 0
+        msg = WebSocketReceive(handle)
+        Debug.Print "Received: " & msg
+    Loop
+End Sub
+
+Public Sub OnReadyToSend(ByVal handle As Long)
+End Sub
+
+Public Sub OnClose(ByVal handle As Long)
+    Debug.Print "Connection closed. Handle: " & handle
+End Sub
+
+Public Sub OnError(ByVal handle As Long, ByVal errorCode As Long, ByVal eventType As Long)
+    Debug.Print "Error on handle " & handle & " | Code: " & errorCode
+End Sub
+```
+
+> [!IMPORTANT]
+> The handler object must be stored at module or workbook level, never as a local variable inside a `Sub`. Always call `WebSocketDisconnect` before resetting the VBA project or closing the workbook.
 
 ### Pluggable Compression
 
@@ -353,13 +404,13 @@ Wasabi is built on strict separation of concerns across four layers.
 
 This separation means security patches, protocol additions, and algorithm changes are confined to isolated components, without ever requiring a fork of the main module.
 
-### Execution Model: Single-Thread and Polling
+### Execution Model: Single-Thread, Polling, and Async
 
 VBA is single-threaded. One execution thread is shared between your code and the Office UI, so there is no native background socket listener.
 
-Wasabi uses a polling model: incoming messages accumulate in an internal ring buffer (up to 512 messages) and are delivered when you call `WebSocketReceive`. Each call runs keepalive maintenance (pings, inactivity timeout, MTU probes), checks the OS socket buffer via `FIONREAD`, reads available data, decrypts if TLS is active, parses WebSocket frames, runs all registered inbound middleware, and returns the oldest queued message.
+**Polling model.** Incoming messages accumulate in an internal ring buffer (up to 512 messages) and are delivered when you call `WebSocketReceive`. Each call runs keepalive maintenance (pings, inactivity timeout, MTU probes), checks the OS socket buffer via `FIONREAD`, reads available data, decrypts if TLS is active, parses WebSocket frames, runs all registered inbound middleware, and returns the oldest queued message. Between calls, the kernel continues buffering incoming data. No messages are lost and the connection does not drop regardless of polling frequency. Simple send/receive/disconnect workflows work fine without any loop. For live dashboards and reactive scenarios, the recommended polling pattern is `Application.OnTime`.
 
-Between calls, the kernel continues buffering incoming data. No messages are lost, and the connection does not drop regardless of polling frequency. Simple send/receive/disconnect workflows work fine without any loop. For live dashboards and reactive scenarios, the recommended pattern is `Application.OnTime`. See the [examples](examples/) folder for the definitive non-blocking UI implementation.
+**Async model.** Wasabi also supports a fully event-driven mode via `WasabiUseAsync`. Under the hood it uses `WSAAsyncSelect` to register the socket with a hidden Win32 window, and a native machine-code thunk subclasses that window to dispatch `FD_READ`, `FD_WRITE`, `FD_CLOSE`, and `FD_CONNECT` events to your handler object. Callbacks fire while Excel is idle without any polling loop on your part. If your code is running a tight loop without `DoEvents`, messages queue in the Windows message pump and are delivered as soon as your code finishes or yields. The async thunk includes a VBA runtime liveness guard that falls back to `DefWindowProcW` if the project has been reset, preventing crashes. See the [API Reference](docs/API_REFERENCE.md) for the full async callback contract and usage notes.
 
 ## Features
 
@@ -413,6 +464,8 @@ Ready-to-run `.xlsm` workbooks are in the [`examples/`](examples/) folder. Highl
 **MQTT QoS 2 Dashboard.** Full-duplex IoT dashboard with guaranteed message delivery, MQTT 5 User Properties, ping jitter, and offline queueing.
 
 **Non-Blocking UI (Event Loop).** The definitive architectural pattern using `Application.OnTime` to keep spreadsheets 100% interactive while listening to background data.
+
+**Async Event-Driven.** Register a handler class and receive callbacks while Excel is idle, with no polling loop required.
 
 **High-Speed Batching and Corporate Auth.** Advanced configurations for strict TLS, system proxies, and high-throughput telemetry.
 
@@ -520,11 +573,11 @@ Many competing modules depend on `WinHttpWebSocket*` functions introduced in Win
 - [x] **Compression Handler** (`WasabiUseCompression`) for decoupled compression extensions
 - [x] **Core Refactoring**: raw transport decoupled from protocol logic
 - [x] **Modular Compression**: `zlib1.dll` dependency isolated into the `ExtWasabiZlib.cls` extension
+- [x] **Async Event-Driven Mode** (`WasabiUseAsync`): `WSAAsyncSelect`-based socket notifications with a native thunk dispatcher, eliminating polling loops
 
 ### ![](resources/svg/looking.svg) In Progress
 
-- [ ] `WebSocketStartListening` helper for one-line polling loops
-- [ ] `WSAAsyncSelect` event-driven socket notifications (eliminating polling)
+Nothing currently in progress. Have an idea? Open an issue or a pull request.
 
 ## Community & Acknowledgements
 
