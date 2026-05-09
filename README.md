@@ -591,6 +591,7 @@ Special thanks to the developers and projects that helped inspire parts of Wasab
 - <img src="resources/ms-vba.png" width="18" /> [TlsSocketWSS-vb6](https://github.com/Maatooh/TlsSocketWSS-vb6): TLS-enabled WebSocket implementation for VB6 by <img src="https://github.com/Maatooh.png" width="18" /> [**Maatooh**](https://github.com/Maatooh)
 - <img src="resources/ms-vba.png" width="18" /> [vb6-websocket-server-ssl](https://github.com/JoshyFrancis/vb6-websocket-server-ssl): Secure WebSocket server for VB6 by <img src="https://github.com/JoshyFrancis.png" width="18" /> [**JoshyFrancis**](https://github.com/JoshyFrancis)
 - <img src="resources/ms-vba.png" width="18" /> [VBA_WinsockAPI_TCP_Sample](https://github.com/papanda925/VBA_WinsockAPI_TCP_Sample): WinSock TCP examples and networking experiments for VBA by <img src="https://github.com/papanda925.png" width="18" /> [**papanda925**](https://github.com/papanda925)
+- <img src="resources/ms-vba.png" width="18" /> [VBA-MemoryTools](https://github.com/cristianbuse/VBA-MemoryTools): Native Memory Manipulation in VBA by <img src="https://github.com/cristianbuse.png" width="18" /> [**cristianbuse**](https://github.com/cristianbuse)
 
 > [!NOTE]
 > We are honored that several developers from the VBA/VB6 networking community have recognized and starred this repository. Their work helped shape the ecosystem that made Wasabi possible.
