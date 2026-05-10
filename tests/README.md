@@ -3,6 +3,9 @@
 > [!NOTE]
 > These unit tests can run and display results in any ![](../resources/svg/ms-office.svg) **Microsoft Office** program.
 
+> [!NOTE]
+> <img src="../resources/logo.png" width="20" /> **Wasabi Version used:** [v2.1.1-vNext](https://github.com/uesleibros/wasabi/releases/tag/v2.1.1-vNext)
+
 This folder contains unit and integration tests for Wasabi. The tests are
 written in pure VBA and run inside the VBA IDE without any external tools.
 
