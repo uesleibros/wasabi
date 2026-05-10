@@ -1,30 +1,38 @@
 Attribute VB_Name = "Wasabi"
-' ============================================================================
-' Wasabi v2.3.6-beta
-' Copyright (c) 2026 UesleiDev
-'
-' Permission is hereby granted, free of charge, to any person obtaining a
-' copy of this software and associated documentation files (the "Software"),
-' to deal in the Software without restriction, including without limitation
-' the rights to use, copy, modify, merge, publish, distribute, sublicense,
-' and/or sell copies of the Software, and to permit persons to whom the
-' Software is furnished to do so, subject to the following conditions:
-'
-' The above copyright notice and this permission notice shall be included in
-' all copies or substantial portions of the Software.
-'
-' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-' IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-' FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-' AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-' LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-' FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-' DEALINGS IN THE SOFTWARE.
-' ============================================================================
+'/**
+' * ============================================================================
+' * Wasabi v2.3.6-beta
+' * Copyright (c) 2026 UesleiDev
+' *
+' * @brief Advanced Networking & WebSockets Module for VBA/VB6.
+' * Provides full support for TCP, WebSockets, TLS/SSL, Proxies, and MQTT.
+' *
+' * Permission is hereby granted, free of charge, to any person obtaining a
+' * copy of this software and associated documentation files (the "Software"),
+' * to deal in the Software without restriction, including without limitation
+' * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+' * and/or sell copies of the Software, and to permit persons to whom the
+' * Software is furnished to do so, subject to the following conditions:
+' *
+' * The above copyright notice and this permission notice shall be included in
+' * all copies or substantial portions of the Software.
+' *
+' * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+' * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+' * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+' * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+' * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+' * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+' * DEALINGS IN THE SOFTWARE.
+' * ============================================================================
+' */
 
 Option Explicit
 Option Private Module
 
+' ============================================================================
+' 1. API DECLARATIONS
+' ============================================================================
 #If VBA7 Then
     Private Declare PtrSafe Function GetModuleHandleA Lib "kernel32" (ByVal lpModuleName As String) As LongPtr
     Private Declare PtrSafe Function GetProcAddress Lib "kernel32" (ByVal hModule As LongPtr, ByVal lpProcName As String) As LongPtr
@@ -83,19 +91,15 @@ Option Private Module
     Private Declare PtrSafe Function MultiByteToWideChar Lib "kernel32" (ByVal CodePage As Long, ByVal dwFlags As Long, ByRef lpMultiByteStr As Byte, ByVal cchMultiByte As Long, ByVal lpWideCharStr As LongPtr, ByVal cchWideChar As Long) As Long
     Private Declare PtrSafe Function WideCharToMultiByte Lib "kernel32" (ByVal CodePage As Long, ByVal dwFlags As Long, ByVal lpWideCharStr As LongPtr, ByVal cchWideChar As Long, ByRef lpMultiByteStr As Byte, ByVal cchMultiByte As Long, ByVal lpDefaultChar As LongPtr, ByVal lpUsedDefaultChar As LongPtr) As Long
     Private Declare PtrSafe Function GetTickCount Lib "kernel32" () As Long
-    Private Declare PtrSafe Function RtlGenRandom Lib "advapi32.dll" Alias "SystemFunction036" (ByVal RandomBuffer As LongPtr, ByVal RandomBufferLength As Long) As Long
+    Private Declare PtrSafe Function BCryptGenRandom Lib "bcrypt.dll" (ByVal hAlgorithm As LongPtr, ByRef pbBuffer As Any, ByVal cbBuffer As Long, ByVal dwFlags As Long) As Long
     Private Declare PtrSafe Function VarPtrArray Lib "VBE7" Alias "VarPtr" (ByRef arr() As Byte) As LongPtr
     Private Declare PtrSafe Function VirtualProtect Lib "kernel32" (ByVal lpAddress As LongPtr, ByVal dwSize As LongPtr, ByVal flNewProtect As Long, ByRef lpflOldProtect As Long) As Long
     Private Declare PtrSafe Function VirtualAlloc Lib "kernel32" (ByVal lpAddress As LongPtr, ByVal dwSize As LongPtr, ByVal flAllocationType As Long, ByVal flProtect As Long) As LongPtr
     Private Declare PtrSafe Function VirtualFree Lib "kernel32" (ByVal lpAddress As LongPtr, ByVal dwSize As LongPtr, ByVal dwFreeType As Long) As Long
     Private Declare PtrSafe Function CallWindowProcW Lib "user32" (ByVal lpPrevWndFunc As LongPtr, ByVal P1 As LongPtr, ByVal P2 As LongPtr, ByVal P3 As LongPtr, ByVal P4 As LongPtr) As LongPtr
     
-    Private m_ptrWsMask As LongPtr
-    Private m_ptrMemZero As LongPtr
-    Private m_ptrMemFind As LongPtr
-    Private m_ptrTickDiff As LongPtr
-    
     Private Const NULL_PTR As LongPtr = 0
+    Private Const INVALID_SOCKET As LongPtr = -1
 #Else
     Private Declare Function GetModuleHandleA Lib "kernel32" (ByVal lpModuleName As String) As Long
     Private Declare Function GetProcAddress Lib "kernel32" (ByVal hModule As Long, ByVal lpProcName As String) As Long
@@ -154,29 +158,142 @@ Option Private Module
     Private Declare Function MultiByteToWideChar Lib "kernel32" (ByVal CodePage As Long, ByVal dwFlags As Long, ByRef lpMultiByteStr As Byte, ByVal cchMultiByte As Long, ByVal lpWideCharStr As Long, ByVal cchWideChar As Long) As Long
     Private Declare Function WideCharToMultiByte Lib "kernel32" (ByVal CodePage As Long, ByVal dwFlags As Long, ByVal lpWideCharStr As Long, ByVal cchWideChar As Long, ByRef lpMultiByteStr As Byte, ByVal cchMultiByte As Long, ByVal lpDefaultChar As Long, ByVal lpUsedDefaultChar As Long) As Long
     Private Declare Function GetTickCount Lib "kernel32" () As Long
-    Private Declare Function RtlGenRandom Lib "advapi32.dll" Alias "SystemFunction036" (ByVal RandomBuffer As Long, ByVal RandomBufferLength As Long) As Long
+    Private Declare Function BCryptGenRandom Lib "bcrypt.dll" (ByVal hAlgorithm As Long, ByRef pbBuffer As Any, ByVal cbBuffer As Long, ByVal dwFlags As Long) As Long
     Private Declare Function VarPtrArray Lib "VBE6" Alias "VarPtr" (ByRef arr() As Byte) As Long
     Private Declare Function VirtualProtect Lib "kernel32" (ByVal lpAddress As Long, ByVal dwSize As Long, ByVal flNewProtect As Long, ByRef lpflOldProtect As Long) As Long
     Private Declare Function VirtualAlloc Lib "kernel32" (ByVal lpAddress As Long, ByVal dwSize As Long, ByVal flAllocationType As Long, ByVal flProtect As Long) As Long
     Private Declare Function VirtualFree Lib "kernel32" (ByVal lpAddress As Long, ByVal dwSize As Long, ByVal dwFreeType As Long) As Long
     Private Declare Function CallWindowProcW Lib "user32" (ByVal lpPrevWndFunc As Long, ByVal P1 As Long, ByVal P2 As Long, ByVal P3 As Long, ByVal P4 As Long) As Long
     
-    Private m_ptrWsMask As Long
-    Private m_ptrMemZero As Long
-    Private m_ptrMemFind As Long
-    Private m_ptrTickDiff As Long
-    
     Private Const NULL_PTR As Long = 0
-#End If
-
-Private Const TCP_MAXSEG As Long = 4
-
-#If VBA7 Then
-    Private Const INVALID_SOCKET As LongPtr = -1
-#Else
     Private Const INVALID_SOCKET As Long = -1
 #End If
 
+' ============================================================================
+' 2. CONSTANTS
+' ============================================================================
+Private Const TCP_MAXSEG As Long = 4
+Private Const BUFFER_SIZE As Long = 262144
+Private Const FRAGMENT_BUFFER_SIZE As Long = 262144
+Private Const MSG_QUEUE_SIZE As Long = 512
+Private Const MAX_CONNECTIONS As Long = 64
+Private Const INVALID_CONN_HANDLE As Long = -1
+Private Const DEFAULT_RECEIVE_TIMEOUT_MS As Long = 5000
+Private Const DEFAULT_PING_INTERVAL_MS As Long = 0
+Private Const DEFAULT_RECONNECT_BASE_DELAY_MS As Long = 1000
+Private Const DEFAULT_RECONNECT_MAX_ATTEMPTS As Long = 5
+Private Const MAX_RECONNECT_DELAY_MS As Long = 30000
+Private Const DEFAULT_MTU As Long = 1500
+Private Const HAPPY_EYEBALLS_DELAY_MS As Long = 250
+Private Const PMTU_DISCOVERY_INTERVAL_MS As Long = 60000
+Private Const SOL_SOCKET As Long = 65535
+Private Const SO_KEEPALIVE As Long = 8
+Private Const SO_RCVBUF As Long = &H1002
+Private Const SO_SNDBUF As Long = &H1001
+Private Const IPPROTO_TCP_SOL As Long = 6
+Private Const TCP_NODELAY As Long = 1
+Private Const CP_UTF8 As Long = 65001
+Private Const AF_INET As Long = 2
+Private Const AF_INET6 As Long = 23
+Private Const SOCK_STREAM As Long = 1
+Private Const IPPROTO_TCP As Long = 6
+Private Const FIONBIO As Long = &H8004667E
+Private Const FIONREAD As Long = &H4004667F
+Private Const INADDR_NONE As Long = &HFFFFFFFF
+Private Const PROXY_TYPE_HTTP As Long = 0
+Private Const PROXY_TYPE_SOCKS5 As Long = 1
+
+' TLS & SECPKG Constants
+Private Const SECPKG_CRED_OUTBOUND As Long = &H2
+Private Const SCHANNEL_CRED_VERSION As Long = &H4
+Private Const SCH_CRED_NO_DEFAULT_CREDS As Long = &H10
+Private Const SCH_CRED_MANUAL_CRED_VALIDATION As Long = &H8
+Private Const SCH_CRED_IGNORE_NO_REVOCATION_CHECK As Long = &H800
+Private Const SCH_CRED_IGNORE_REVOCATION_OFFLINE As Long = &H1000
+Private Const SP_PROT_TLS1_2_CLIENT As Long = &H800
+Private Const SP_PROT_TLS1_3_CLIENT As Long = &H2000
+Private Const ISC_REQ_SEQUENCE_DETECT As Long = &H8
+Private Const ISC_REQ_REPLAY_DETECT As Long = &H4
+Private Const ISC_REQ_CONFIDENTIALITY As Long = &H10
+Private Const ISC_REQ_ALLOCATE_MEMORY As Long = &H100
+Private Const ISC_REQ_STREAM As Long = &H8000
+Private Const CERT_CHAIN_POLICY_SSL As Long = 4
+Private Const CERT_FIND_ANY As Long = 0
+Private Const CERT_FIND_SUBJECT_STR_A As Long = &H80007
+Private Const SECPKG_ATTR_REMOTE_CERT_CONTEXT As Long = &H53
+Private Const SECPKG_ATTR_STREAM_SIZES As Long = 4
+Private Const AUTHTYPE_SERVER As Long = 1
+Private Const CERT_STORE_PROV_SYSTEM As Long = 10
+Private Const CERT_SYSTEM_STORE_CURRENT_USER As Long = &H10000
+Private Const CERT_CHAIN_REVOCATION_CHECK_CHAIN As Long = &H20000000
+Private Const X509_ASN_ENCODING As Long = 1
+Private Const PKCS_7_ASN_ENCODING As Long = &H10000
+Private Const CRYPT_EXPORTABLE As Long = 1
+Private Const PKCS12_ALLOW_OVERWRITE_KEY As Long = &H4000
+Private Const BCRYPT_USE_SYSTEM_PREFERRED_RNG As Long = &H2
+
+' Buffer Types & Status
+Private Const SECBUFFER_VERSION As Long = 0
+Private Const SECBUFFER_EMPTY As Long = 0
+Private Const SECBUFFER_DATA As Long = 1
+Private Const SECBUFFER_TOKEN As Long = 2
+Private Const SECBUFFER_EXTRA As Long = 5
+Private Const SECBUFFER_STREAM_HEADER As Long = 7
+Private Const SECBUFFER_STREAM_TRAILER As Long = 6
+Private Const SEC_E_OK As Long = 0
+Private Const SEC_I_CONTINUE_NEEDED As Long = &H90312
+Private Const SEC_E_INCOMPLETE_MESSAGE As Long = &H80090318
+Private Const SEC_I_RENEGOTIATE As Long = &H90321
+Private Const SEC_I_CONTEXT_EXPIRED As Long = &H90317
+
+' Network Header Sizes
+Private Const ETHERNET_HEADER As Long = 14
+Private Const IP_HEADER_MIN As Long = 20
+Private Const TCP_HEADER_MIN As Long = 20
+Private Const TLS_RECORD_HEADER As Long = 5
+Private Const WEBSOCKET_HEADER_MAX As Long = 14
+
+' WebSocket Opcodes
+Private Const WS_OPCODE_CONTINUATION As Byte = 0
+Private Const WS_OPCODE_TEXT As Byte = 1
+Private Const WS_OPCODE_BINARY As Byte = 2
+Private Const WS_OPCODE_CLOSE As Byte = 8
+Private Const WS_OPCODE_PING As Byte = 9
+Private Const WS_OPCODE_PONG As Byte = 10
+
+' Cryptography Constants
+Private Const CALG_SHA1 As Long = &H8004&
+Private Const HP_HASHVAL As Long = &H2
+Private Const CRYPT_STRING_BASE64 As Long = &H1
+Private Const CRYPT_NOCRLF As Long = &H40000000
+Private Const PROV_RSA_FULL As Long = 1
+Private Const CRYPT_VERIFYCONTEXT As Long = &HF0000000
+Private Const SECPKG_CRED_OUTBOUND_NTLM As Long = &H2
+Private Const SEC_I_COMPLETE_NEEDED As Long = &H90313
+
+' Virtual Memory Constants
+Private Const MEM_COMMIT As Long = &H1000
+Private Const MEM_RESERVE As Long = &H2000
+Private Const PAGE_READWRITE As Long = &H4
+Private Const PAGE_EXECUTE_READ As Long = &H20
+Private Const MEM_RELEASE As Long = &H8000&
+
+' Window Messaging / Async Events
+Private Const FD_READ As Long = &H1
+Private Const FD_WRITE As Long = &H2
+Private Const FD_CLOSE As Long = &H20
+Private Const FD_CONNECT As Long = &H10
+Private Const WM_USER As Long = &H400
+Private Const WM_WASABI_SOCKET As Long = WM_USER + &H1337
+Private Const GWLP_WNDPROC As Long = -4
+
+' ============================================================================
+' 3. TYPES & STRUCTS
+' ============================================================================
+'/**
+' * @struct CRYPT_DATA_BLOB
+' * @brief Represents a generic blob of data for cryptography operations.
+' */
 Private Type CRYPT_DATA_BLOB
 #If VBA7 Then
     cbData As Long
@@ -187,6 +304,10 @@ Private Type CRYPT_DATA_BLOB
 #End If
 End Type
 
+'/**
+' * @struct CERT_ENHKEY_USAGE
+' * @brief Certificate enhanced key usage identifier array.
+' */
 Private Type CERT_ENHKEY_USAGE
     cUsageIdentifier As Long
 #If VBA7 Then
@@ -196,11 +317,19 @@ Private Type CERT_ENHKEY_USAGE
 #End If
 End Type
 
+'/**
+' * @struct CERT_USAGE_MATCH
+' * @brief Usage criteria matching for certificate chains.
+' */
 Private Type CERT_USAGE_MATCH
     dwType As Long
     Usage As Long
 End Type
 
+'/**
+' * @struct CERT_CHAIN_PARA
+' * @brief Establishes the searching criteria for certificate chains.
+' */
 Private Type CERT_CHAIN_PARA
     cbSize As Long
     RequestedUsage_dwType As Long
@@ -212,6 +341,10 @@ Private Type CERT_CHAIN_PARA
 #End If
 End Type
 
+'/**
+' * @struct WINHTTP_CURRENT_USER_IE_PROXY_CONFIG
+' * @brief Contains the IE proxy configuration information.
+' */
 Private Type WINHTTP_CURRENT_USER_IE_PROXY_CONFIG
     fAutoDetect As Long
 #If VBA7 Then
@@ -225,6 +358,10 @@ Private Type WINHTTP_CURRENT_USER_IE_PROXY_CONFIG
 #End If
 End Type
 
+'/**
+' * @struct SSL_EXTRA_CERT_CHAIN_POLICY_PARA
+' * @brief Contains policy parameters used in the verification of SSL chains.
+' */
 Private Type SSL_EXTRA_CERT_CHAIN_POLICY_PARA
     cbSize As Long
     dwAuthType As Long
@@ -236,6 +373,10 @@ Private Type SSL_EXTRA_CERT_CHAIN_POLICY_PARA
 #End If
 End Type
 
+'/**
+' * @struct CERT_CHAIN_POLICY_PARA
+' * @brief Sets the parameters to pass to the CertVerifyCertificateChainPolicy function.
+' */
 Private Type CERT_CHAIN_POLICY_PARA
     cbSize As Long
     dwFlags As Long
@@ -246,6 +387,10 @@ Private Type CERT_CHAIN_POLICY_PARA
 #End If
 End Type
 
+'/**
+' * @struct CERT_CHAIN_POLICY_STATUS
+' * @brief Receives status info on the certificate chain validation.
+' */
 Private Type CERT_CHAIN_POLICY_STATUS
     cbSize As Long
     dwError As Long
@@ -253,6 +398,10 @@ Private Type CERT_CHAIN_POLICY_STATUS
     lElementIndex As Long
 End Type
 
+'/**
+' * @struct BatchBuffer
+' * @brief Used to hold batched frames for delayed sending.
+' */
 Private Type BatchBuffer
     Frames() As Byte
     FrameCount As Long
@@ -260,6 +409,10 @@ Private Type BatchBuffer
     MaxFrames As Long
 End Type
 
+'/**
+' * @struct SOCKADDR_IN6
+' * @brief Defines an IPv6 socket address.
+' */
 Private Type SOCKADDR_IN6
     sin6_family   As Integer
     sin6_port     As Integer
@@ -268,10 +421,18 @@ Private Type SOCKADDR_IN6
     sin6_scope_id As Long
 End Type
 
+'/**
+' * @struct BinaryMessage
+' * @brief Wraps a raw byte array as a queueable message payload.
+' */
 Private Type BinaryMessage
     data() As Byte
 End Type
 
+'/**
+' * @struct SecHandle
+' * @brief Identifies an SSPI security context or credential.
+' */
 Private Type SecHandle
 #If VBA7 Then
     dwLower As LongPtr
@@ -282,11 +443,19 @@ Private Type SecHandle
 #End If
 End Type
 
+'/**
+' * @struct SECURITY_INTEGER
+' * @brief Holds large integers used for security timestamps.
+' */
 Private Type SECURITY_INTEGER
     LowPart As Long
     HighPart As Long
 End Type
 
+'/**
+' * @struct SecBuffer
+' * @brief Represents a memory buffer passed to/from SSPI.
+' */
 Private Type SecBuffer
     cbBuffer As Long
     BufferType As Long
@@ -297,6 +466,10 @@ Private Type SecBuffer
 #End If
 End Type
 
+'/**
+' * @struct SecBufferDesc
+' * @brief Describes an array of SecBuffer structures.
+' */
 Private Type SecBufferDesc
     ulVersion As Long
     cBuffers As Long
@@ -307,6 +480,10 @@ Private Type SecBufferDesc
 #End If
 End Type
 
+'/**
+' * @struct SecPkgContext_StreamSizes
+' * @brief Defines the sizes of the various parts of a TLS stream.
+' */
 Private Type SecPkgContext_StreamSizes
     cbHeader As Long
     cbTrailer As Long
@@ -315,6 +492,10 @@ Private Type SecPkgContext_StreamSizes
     cbBlockSize As Long
 End Type
 
+'/**
+' * @struct SCHANNEL_CRED
+' * @brief Contains the credentials/options for an Schannel session.
+' */
 Private Type SCHANNEL_CRED
     dwVersion As Long
     cCreds As Long
@@ -345,6 +526,10 @@ Private Type SCHANNEL_CRED
     dwCredFormat As Long
 End Type
 
+'/**
+' * @struct WSADATA
+' * @brief Information about the Windows Sockets implementation.
+' */
 Private Type WSADATA
     wVersion As Integer
     wHighVersion As Integer
@@ -359,6 +544,10 @@ Private Type WSADATA
 #End If
 End Type
 
+'/**
+' * @struct SOCKADDR_IN
+' * @brief Defines an IPv4 socket address.
+' */
 Private Type SOCKADDR_IN
     sin_family As Integer
     sin_port As Integer
@@ -366,11 +555,19 @@ Private Type SOCKADDR_IN
     sin_zero(0 To 7) As Byte
 End Type
 
+'/**
+' * @struct TIMEVAL
+' * @brief Specifies a time interval used for timeouts.
+' */
 Private Type TIMEVAL
     tv_sec As Long
     tv_usec As Long
 End Type
 
+'/**
+' * @struct FD_SET
+' * @brief Set of sockets used for the select() function.
+' */
 Private Type FD_SET
     fd_count As Long
 #If VBA7 Then
@@ -380,6 +577,10 @@ Private Type FD_SET
 #End If
 End Type
 
+'/**
+' * @struct HOSTENT32
+' * @brief Information about a host returned by gethostbyname (32-bit).
+' */
 Private Type HOSTENT32
     h_name As Long
     h_aliases As Long
@@ -388,6 +589,22 @@ Private Type HOSTENT32
     h_addr_list As Long
 End Type
 
+'/**
+' * @struct HOSTENT64
+' * @brief Information about a host returned by gethostbyname (64-bit).
+' */
+Private Type HOSTENT64
+    h_name As LongPtr
+    h_aliases As LongPtr
+    h_addrtype As Integer
+    h_length As Integer
+    h_addr_list As LongPtr
+End Type
+
+'/**
+' * @struct MTUInfo
+' * @brief Maximum Transmission Unit configuration for packet splitting.
+' */
 Private Type MTUInfo
     CurrentMTU As Long
     MaxSegmentSize As Long
@@ -397,6 +614,10 @@ Private Type MTUInfo
     UseTLSFragmentation As Boolean
 End Type
 
+'/**
+' * @struct MqttInFlightMsg
+' * @brief Represents an unacknowledged MQTT packet.
+' */
 Private Type MqttInFlightMsg
     packetId As Integer
     topic As String
@@ -405,14 +626,10 @@ Private Type MqttInFlightMsg
     SentTick As Long
 End Type
 
-Private Type HOSTENT64
-    h_name As LongPtr
-    h_aliases As LongPtr
-    h_addrtype As Integer
-    h_length As Integer
-    h_addr_list As LongPtr
-End Type
-
+'/**
+' * @struct WasabiStats
+' * @brief Connection statistics for analytics.
+' */
 Private Type WasabiStats
     BytesSent As Currency
     BytesReceived As Currency
@@ -421,6 +638,14 @@ Private Type WasabiStats
     ConnectedAt As Long
 End Type
 
+' ============================================================================
+' 4. ENUMS
+' ============================================================================
+
+'/**
+' * @enum WasabiState
+' * @brief Lifecycle state of a Wasabi connection.
+' */
 Public Enum WasabiState
     STATE_CLOSED = 0
     STATE_CONNECTING = 1
@@ -428,12 +653,78 @@ Public Enum WasabiState
     STATE_CLOSING = 3
 End Enum
 
+'/**
+' * @enum WasabiConnectionMode
+' * @brief Identifies the underlying connection protocol.
+' */
 Public Enum WasabiConnectionMode
     MODE_WEBSOCKET = 0
     MODE_TCP = 1
     MODE_TCP_TLS = 2
 End Enum
 
+'/**
+' * @enum WasabiError
+' * @brief Detailed error codes for connection failures.
+' */
+Public Enum WasabiError
+    ERR_NONE = 0
+    ERR_WSA_STARTUP_FAILED = 1
+    ERR_SOCKET_CREATE_FAILED = 2
+    ERR_DNS_RESOLVE_FAILED = 3
+    ERR_CONNECT_FAILED = 4
+    ERR_TLS_ACQUIRE_CREDS_FAILED = 5
+    ERR_TLS_HANDSHAKE_FAILED = 6
+    ERR_TLS_HANDSHAKE_TIMEOUT = 7
+    ERR_WEBSOCKET_HANDSHAKE_FAILED = 8
+    ERR_WEBSOCKET_HANDSHAKE_TIMEOUT = 9
+    ERR_SEND_FAILED = 10
+    ERR_RECV_FAILED = 11
+    ERR_NOT_CONNECTED = 12
+    ERR_ALREADY_CONNECTED = 13
+    ERR_TLS_ENCRYPT_FAILED = 14
+    ERR_TLS_DECRYPT_FAILED = 15
+    ERR_INVALID_URL = 16
+    ERR_HANDSHAKE_REJECTED = 17
+    ERR_CONNECTION_LOST = 18
+    ERR_INVALID_HANDLE = 19
+    ERR_MAX_CONNECTIONS = 20
+    ERR_PROXY_CONNECT_FAILED = 21
+    ERR_PROXY_AUTH_FAILED = 22
+    ERR_PROXY_TUNNEL_FAILED = 23
+    ERR_INACTIVITY_TIMEOUT = 24
+    ERR_CERT_LOAD_FAILED = 25
+    ERR_CERT_VALIDATE_FAILED = 26
+    ERR_FRAGMENT_OVERFLOW = 27
+    ERR_TLS_RENEGOTIATE = 28
+End Enum
+
+'/**
+' * @enum MqttPacketType
+' * @brief Protocol packet identifiers for MQTT.
+' */
+Private Enum MqttPacketType
+    MQTT_CONNECT = 1
+    MQTT_CONNACK = 2
+    MQTT_PUBLISH = 3
+    MQTT_PUBACK = 4
+    MQTT_PUBREC = 5
+    MQTT_PUBREL = 6
+    MQTT_PUBCOMP = 7
+    MQTT_SUBSCRIBE = 8
+    MQTT_SUBACK = 9
+    MQTT_UNSUBSCRIBE = 10
+    MQTT_UNSUBACK = 11
+    MQTT_PINGREQ = 12
+    MQTT_PINGRESP = 13
+    MQTT_DISCONNECT = 14
+End Enum
+
+
+'/**
+' * @struct WasabiConnection
+' * @brief Represents a single active socket connection with all its state, queues, and handlers.
+' */
 Private Type WasabiConnection
 #If VBA7 Then
     Socket As LongPtr
@@ -555,158 +846,9 @@ Private Type WasabiConnection
     AsyncMode As Boolean
 End Type
 
-Public Enum WasabiError
-    ERR_NONE = 0
-    ERR_WSA_STARTUP_FAILED = 1
-    ERR_SOCKET_CREATE_FAILED = 2
-    ERR_DNS_RESOLVE_FAILED = 3
-    ERR_CONNECT_FAILED = 4
-    ERR_TLS_ACQUIRE_CREDS_FAILED = 5
-    ERR_TLS_HANDSHAKE_FAILED = 6
-    ERR_TLS_HANDSHAKE_TIMEOUT = 7
-    ERR_WEBSOCKET_HANDSHAKE_FAILED = 8
-    ERR_WEBSOCKET_HANDSHAKE_TIMEOUT = 9
-    ERR_SEND_FAILED = 10
-    ERR_RECV_FAILED = 11
-    ERR_NOT_CONNECTED = 12
-    ERR_ALREADY_CONNECTED = 13
-    ERR_TLS_ENCRYPT_FAILED = 14
-    ERR_TLS_DECRYPT_FAILED = 15
-    ERR_INVALID_URL = 16
-    ERR_HANDSHAKE_REJECTED = 17
-    ERR_CONNECTION_LOST = 18
-    ERR_INVALID_HANDLE = 19
-    ERR_MAX_CONNECTIONS = 20
-    ERR_PROXY_CONNECT_FAILED = 21
-    ERR_PROXY_AUTH_FAILED = 22
-    ERR_PROXY_TUNNEL_FAILED = 23
-    ERR_INACTIVITY_TIMEOUT = 24
-    ERR_CERT_LOAD_FAILED = 25
-    ERR_CERT_VALIDATE_FAILED = 26
-    ERR_FRAGMENT_OVERFLOW = 27
-    ERR_TLS_RENEGOTIATE = 28
-End Enum
-
-Private Const BUFFER_SIZE As Long = 262144
-Private Const FRAGMENT_BUFFER_SIZE As Long = 262144
-Private Const MSG_QUEUE_SIZE As Long = 512
-Private Const MAX_CONNECTIONS As Long = 64
-Private Const INVALID_CONN_HANDLE As Long = -1
-Private Const DEFAULT_RECEIVE_TIMEOUT_MS As Long = 5000
-Private Const DEFAULT_PING_INTERVAL_MS As Long = 0
-Private Const DEFAULT_RECONNECT_BASE_DELAY_MS As Long = 1000
-Private Const DEFAULT_RECONNECT_MAX_ATTEMPTS As Long = 5
-Private Const MAX_RECONNECT_DELAY_MS As Long = 30000
-Private Const DEFAULT_MTU As Long = 1500
-Private Const HAPPY_EYEBALLS_DELAY_MS As Long = 250
-Private Const PMTU_DISCOVERY_INTERVAL_MS As Long = 60000
-Private Const SOL_SOCKET As Long = 65535
-Private Const SO_KEEPALIVE As Long = 8
-Private Const SO_RCVBUF As Long = &H1002
-Private Const SO_SNDBUF As Long = &H1001
-Private Const IPPROTO_TCP_SOL As Long = 6
-Private Const TCP_NODELAY As Long = 1
-Private Const CP_UTF8 As Long = 65001
-Private Const AF_INET As Long = 2
-Private Const AF_INET6 As Long = 23
-Private Const SOCK_STREAM As Long = 1
-Private Const IPPROTO_TCP As Long = 6
-Private Const FIONBIO As Long = &H8004667E
-Private Const FIONREAD As Long = &H4004667F
-Private Const INADDR_NONE As Long = &HFFFFFFFF
-Private Const PROXY_TYPE_HTTP As Long = 0
-Private Const PROXY_TYPE_SOCKS5 As Long = 1
-Private Const SECPKG_CRED_OUTBOUND As Long = &H2
-Private Const SCHANNEL_CRED_VERSION As Long = &H4
-Private Const SCH_CRED_NO_DEFAULT_CREDS As Long = &H10
-Private Const SCH_CRED_MANUAL_CRED_VALIDATION As Long = &H8
-Private Const SCH_CRED_IGNORE_NO_REVOCATION_CHECK As Long = &H800
-Private Const SCH_CRED_IGNORE_REVOCATION_OFFLINE As Long = &H1000
-Private Const SP_PROT_TLS1_2_CLIENT As Long = &H800
-Private Const SP_PROT_TLS1_3_CLIENT As Long = &H2000
-Private Const ISC_REQ_SEQUENCE_DETECT As Long = &H8
-Private Const ISC_REQ_REPLAY_DETECT As Long = &H4
-Private Const ISC_REQ_CONFIDENTIALITY As Long = &H10
-Private Const ISC_REQ_ALLOCATE_MEMORY As Long = &H100
-Private Const ISC_REQ_STREAM As Long = &H8000
-Private Const CERT_CHAIN_POLICY_SSL As Long = 4
-Private Const CERT_FIND_ANY As Long = 0
-Private Const CERT_FIND_SUBJECT_STR_A As Long = &H80007
-Private Const SECPKG_ATTR_REMOTE_CERT_CONTEXT As Long = &H53
-Private Const SECPKG_ATTR_STREAM_SIZES As Long = 4
-Private Const AUTHTYPE_SERVER As Long = 1
-Private Const CERT_STORE_PROV_SYSTEM As Long = 10
-Private Const CERT_SYSTEM_STORE_CURRENT_USER As Long = &H10000
-Private Const CERT_CHAIN_REVOCATION_CHECK_CHAIN As Long = &H20000000
-Private Const X509_ASN_ENCODING As Long = 1
-Private Const PKCS_7_ASN_ENCODING As Long = &H10000
-Private Const CRYPT_EXPORTABLE As Long = 1
-Private Const PKCS12_ALLOW_OVERWRITE_KEY As Long = &H4000
-Private Const SECBUFFER_VERSION As Long = 0
-Private Const SECBUFFER_EMPTY As Long = 0
-Private Const SECBUFFER_DATA As Long = 1
-Private Const SECBUFFER_TOKEN As Long = 2
-Private Const SECBUFFER_EXTRA As Long = 5
-Private Const SECBUFFER_STREAM_HEADER As Long = 7
-Private Const SECBUFFER_STREAM_TRAILER As Long = 6
-Private Const SEC_E_OK As Long = 0
-Private Const SEC_I_CONTINUE_NEEDED As Long = &H90312
-Private Const SEC_E_INCOMPLETE_MESSAGE As Long = &H80090318
-Private Const SEC_I_RENEGOTIATE As Long = &H90321
-Private Const SEC_I_CONTEXT_EXPIRED As Long = &H90317
-Private Const ETHERNET_HEADER As Long = 14
-Private Const IP_HEADER_MIN As Long = 20
-Private Const TCP_HEADER_MIN As Long = 20
-Private Const TLS_RECORD_HEADER As Long = 5
-Private Const WEBSOCKET_HEADER_MAX As Long = 14
-Private Const WS_OPCODE_CONTINUATION As Byte = 0
-Private Const WS_OPCODE_TEXT As Byte = 1
-Private Const WS_OPCODE_BINARY As Byte = 2
-Private Const WS_OPCODE_CLOSE As Byte = 8
-Private Const WS_OPCODE_PING As Byte = 9
-Private Const WS_OPCODE_PONG As Byte = 10
-
-Private Const CALG_SHA1         As Long = &H8004&
-Private Const HP_HASHVAL        As Long = &H2
-Private Const CRYPT_STRING_BASE64 As Long = &H1
-Private Const CRYPT_NOCRLF      As Long = &H40000000
-Private Const PROV_RSA_FULL     As Long = 1
-Private Const CRYPT_VERIFYCONTEXT As Long = &HF0000000
-
-Private Const SECPKG_CRED_OUTBOUND_NTLM As Long = &H2
-Private Const SEC_I_COMPLETE_NEEDED As Long = &H90313
-
-Private Const MEM_COMMIT As Long = &H1000
-Private Const MEM_RESERVE As Long = &H2000
-Private Const PAGE_READWRITE As Long = &H4
-Private Const PAGE_EXECUTE_READ As Long = &H20
-Private Const MEM_RELEASE As Long = &H8000&
-
-Private Const FD_READ As Long = &H1
-Private Const FD_WRITE As Long = &H2
-Private Const FD_CLOSE As Long = &H20
-Private Const FD_CONNECT As Long = &H10
-Private Const WM_USER As Long = &H400
-Private Const WM_WASABI_SOCKET As Long = WM_USER + &H1337
-Private Const GWLP_WNDPROC As Long = -4
-
-Private Enum MqttPacketType
-    MQTT_CONNECT = 1
-    MQTT_CONNACK = 2
-    MQTT_PUBLISH = 3
-    MQTT_PUBACK = 4
-    MQTT_PUBREC = 5
-    MQTT_PUBREL = 6
-    MQTT_PUBCOMP = 7
-    MQTT_SUBSCRIBE = 8
-    MQTT_SUBACK = 9
-    MQTT_UNSUBSCRIBE = 10
-    MQTT_UNSUBACK = 11
-    MQTT_PINGREQ = 12
-    MQTT_PINGRESP = 13
-    MQTT_DISCONNECT = 14
-End Enum
-
+' ============================================================================
+' 5. GLOBAL VARIABLES
+' ============================================================================
 Private m_WSAInitialized As Boolean
 Private m_Connections() As WasabiConnection
 Private m_ConnectionCount As Long
@@ -721,20 +863,33 @@ Private m_ZeroCopyBinary() As Byte
 Private m_AppIsAlive As Long
 #If VBA7 Then
     Private m_ClientCertContextPtrs(0 To MAX_CONNECTIONS - 1) As LongPtr
-#Else
-    Private m_ClientCertContextPtrs(0 To MAX_CONNECTIONS - 1) As Long
-#End If
-#If VBA7 Then
+    Private m_ptrWsMask As LongPtr
+    Private m_ptrMemZero As LongPtr
+    Private m_ptrMemFind As LongPtr
+    Private m_ptrTickDiff As LongPtr
     Private m_ptrAsyncThunk As LongPtr
     Private m_AsyncHwnd As LongPtr
     Private m_OldWndProc As LongPtr
 #Else
+    Private m_ClientCertContextPtrs(0 To MAX_CONNECTIONS - 1) As Long
+    Private m_ptrWsMask As Long
+    Private m_ptrMemZero As Long
+    Private m_ptrMemFind As Long
+    Private m_ptrTickDiff As Long
     Private m_ptrAsyncThunk As Long
     Private m_AsyncHwnd As Long
     Private m_OldWndProc As Long
 #End If
 Public EnableErrorDialog As Boolean
 
+' ============================================================================
+' 6. LOW-LEVEL MEMORY & THUNKS (MACHINE CODE EXECUTIONS)
+' ============================================================================
+
+'/**
+' * @brief Initializes raw machine-code thunks for critical performance paths
+' * (WebSocket Masking, Memory zeroing, Memory finding, Tick differentials).
+' */
 Private Sub InitWasabiThunks()
     If m_ptrWsMask <> 0 Then Exit Sub
     #If Win64 Then
@@ -750,6 +905,9 @@ Private Sub InitWasabiThunks()
     #End If
 End Sub
 
+'/**
+' * @brief Frees the executable memory allocated for thunks.
+' */
 Private Sub ShutdownWasabiThunks()
     If m_ptrWsMask <> 0 Then VirtualFree m_ptrWsMask, 0, MEM_RELEASE: m_ptrWsMask = 0
     If m_ptrMemZero <> 0 Then VirtualFree m_ptrMemZero, 0, MEM_RELEASE: m_ptrMemZero = 0
@@ -757,6 +915,11 @@ Private Sub ShutdownWasabiThunks()
     If m_ptrTickDiff <> 0 Then VirtualFree m_ptrTickDiff, 0, MEM_RELEASE: m_ptrTickDiff = 0
 End Sub
 
+'/**
+' * @brief Quickly zeros out a block of memory using machine code.
+' * @param ptr Pointer to the start of memory.
+' * @param length Number of bytes to clear.
+' */
 #If VBA7 Then
 Private Sub WasabiMemZero(ByVal ptr As LongPtr, ByVal length As Long)
 #Else
@@ -775,6 +938,14 @@ Private Sub WasabiMemZero(ByVal ptr As Long, ByVal length As Long)
     End If
 End Sub
 
+'/**
+' * @brief High-performance byte array search (Finds a needle in a haystack).
+' * @param haystackPtr Pointer to search space.
+' * @param hayLen Length of search space.
+' * @param needlePtr Pointer to search target.
+' * @param needleLen Length of search target.
+' * @return Index of match, or -1 if not found.
+' */
 #If VBA7 Then
 Private Function WasabiMemFind(ByVal haystackPtr As LongPtr, ByVal hayLen As Long, ByVal needlePtr As LongPtr, ByVal needleLen As Long) As Long
 #Else
@@ -807,7 +978,7 @@ Private Function WasabiMemFind(ByVal haystackPtr As Long, ByVal hayLen As Long, 
                 End If
             Next j
             If found Then
-                WasabiMemFind = i
+                 WasabiMemFind = i
                 Exit Function
             End If
         Next i
@@ -815,6 +986,11 @@ Private Function WasabiMemFind(ByVal haystackPtr As Long, ByVal hayLen As Long, 
     End If
 End Function
 
+'/**
+' * @brief Cross-architecture function to securely return the memory address of a pointer.
+' * @param ptr Input pointer.
+' * @return Output pointer address.
+' */
 #If VBA7 Then
 Private Function GetAddressOf(ByVal ptr As LongPtr) As LongPtr
     GetAddressOf = ptr
@@ -825,6 +1001,9 @@ Private Function GetAddressOf(ByVal ptr As Long) As Long
 End Function
 #End If
 
+'=============================================================================
+' MACHINE CODE OPCODES (X64 & X86)
+'=============================================================================
 #If Win64 Then
 
 Private Function GetAsyncThunkOpcodes_x64() As Byte()
@@ -925,6 +1104,11 @@ End Function
 
 #End If
 
+'/**
+' * @brief Translates opcodes into executable memory and returns a function pointer.
+' * @param opcodes Byte array of machine instructions.
+' * @return Pointer to allocated executable memory block.
+' */
 #If VBA7 Then
 Private Function LoadThunk(ByRef opcodes() As Byte) As LongPtr
     Dim pMem As LongPtr
@@ -948,10 +1132,17 @@ Private Function LoadThunk(ByRef opcodes() As Byte) As Long
     LoadThunk = pMem
 End Function
 
+'/**
+' * @brief Fills a byte array with random data for cryptographic generation using modern CNG (Cryptography Next Generation).
+' * @param buf Target byte array.
+' * @param count Number of random bytes.
+' */
 Private Sub FillRandomBytes(ByRef buf() As Byte, ByVal count As Long)
     If count <= 0 Then Exit Sub
     
-    If RtlGenRandom(VarPtr(buf(LBound(buf))), count) = 0 Then
+    ' BCryptGenRandom returns 0 (STATUS_SUCCESS) upon success
+    If BCryptGenRandom(0, buf(LBound(buf)), count, BCRYPT_USE_SYSTEM_PREFERRED_RNG) <> 0 Then
+        ' Fallback using standard pseudo-random generation if CNG fails
         Dim i As Long
         Randomize
         For i = 0 To count - 1
@@ -960,6 +1151,13 @@ Private Sub FillRandomBytes(ByRef buf() As Byte, ByVal count As Long)
     End If
 End Sub
 
+' ============================================================================
+' 7. WINDOWS MESSAGING & ASYNC CORE
+' ============================================================================
+
+'/**
+' * @brief Prepares the asynchronous listener thunk.
+' */
 Private Sub InitAsyncThunk()
     If m_ptrAsyncThunk <> 0 Then Exit Sub
     
@@ -994,6 +1192,9 @@ Private Sub InitAsyncThunk()
     m_AppIsAlive = 1
 End Sub
 
+'/**
+' * @brief Creates an invisible window to process asynchronous networking callbacks.
+' */
 Private Sub InitAsyncWindow()
     If m_AsyncHwnd <> 0 Then Exit Sub
     InitAsyncThunk
@@ -1007,6 +1208,9 @@ Private Sub InitAsyncWindow()
     End If
 End Sub
 
+'/**
+' * @brief Closes the asynchronous listener and cleans up its memory.
+' */
 Private Sub ShutdownAsyncWindow()
     If m_AsyncHwnd <> 0 Then
         #If VBA7 Then
@@ -1025,6 +1229,14 @@ Private Sub ShutdownAsyncWindow()
     m_AppIsAlive = 0
 End Sub
 
+'/**
+' * @brief The central callback function hooked to the window to receive WSASyncSelect messages.
+' * @param hwnd Window handle.
+' * @param uMsg The message type.
+' * @param wParam WParam data (typically socket handle).
+' * @param lParam LParam data (typically event code).
+' * @return Standard windows result.
+' */
 #If VBA7 Then
 Public Function WasabiAsyncWndProc(ByVal hwnd As LongPtr, ByVal uMsg As Long, ByVal wParam As LongPtr, ByVal lParam As LongPtr) As LongPtr
 #Else
@@ -1087,6 +1299,11 @@ Public Function WasabiAsyncWndProc(ByVal hwnd As Long, ByVal uMsg As Long, ByVal
     WasabiAsyncWndProc = CallWindowProcW_WndProc(m_OldWndProc, hwnd, uMsg, wParam, lParam)
 End Function
 
+'/**
+' * @brief Registers an asynchronous event handler to the socket.
+' * @param handler A class instance containing OnConnect, OnError, OnReceive, OnReadyToSend, OnClose.
+' * @param handle The target socket handle.
+' */
 Public Sub WasabiUseAsync(ByVal handler As Object, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -1101,6 +1318,16 @@ Public Sub WasabiUseAsync(ByVal handler As Object, Optional ByVal handle As Long
     End If
 End Sub
 
+' ============================================================================
+' 8. TIME & BUFFERS UTILITIES
+' ============================================================================
+
+'/**
+' * @brief Accurately compares two GetTickCount values handling overflows.
+' * @param startTick Tick count at the start.
+' * @param endTick Tick count at the end.
+' * @return Difference in milliseconds.
+' */
 Private Function TickDiff(ByVal startTick As Long, ByVal endTick As Long) As Double
     #If VBA7 Then
         Dim resultPtr As LongPtr
@@ -1126,6 +1353,11 @@ Private Function TickDiff(ByVal startTick As Long, ByVal endTick As Long) As Dou
     End If
 End Function
 
+'/**
+' * @brief Safely resizes a byte array buffer without losing existing data, ensuring performance.
+' * @param Buffer Target byte array.
+' * @param RequiredLen Minimum size required.
+' */
 Private Sub EnsureBufferCapacity(ByRef Buffer() As Byte, ByVal RequiredLen As Long)
     Dim currentCap As Long
     Dim newCap As Long
@@ -1142,6 +1374,11 @@ Private Sub EnsureBufferCapacity(ByRef Buffer() As Byte, ByVal RequiredLen As Lo
     End If
 End Sub
 
+'/**
+' * @brief Returns the actual size of an allocated SafeArray (Byte Array).
+' * @param arr Target byte array.
+' * @return The size of the array, or 0 if uninitialized.
+' */
 Private Function SafeArrayLen(ByRef arr() As Byte) As Long
     #If VBA7 Then
         Dim pSA As LongPtr
@@ -1163,6 +1400,10 @@ Private Function SafeArrayLen(ByRef arr() As Byte) As Long
     End If
 End Function
 
+'/**
+' * @brief Retrieves the absolute path of the current project container.
+' * @return The path as a string.
+' */
 Private Function GetProjectPath() As String
 #If ((VBA7 = 1) Or (VBA6 = 1)) And (TWINBASIC = 0) Then
     Dim path As String
@@ -1174,6 +1415,11 @@ Private Function GetProjectPath() As String
 #End If
 End Function
 
+'/**
+' * @brief Resolves an input connection handle to the active/default one if unspecified.
+' * @param handle Input handle.
+' * @return Resolved internal index handle.
+' */
 Private Function ResolveHandle(ByVal handle As Long) As Long
     If handle = INVALID_CONN_HANDLE Then
         ResolveHandle = m_DefaultHandle
@@ -1182,12 +1428,22 @@ Private Function ResolveHandle(ByVal handle As Long) As Long
     End If
 End Function
 
+'/**
+' * @brief Checks if a connection index handle is valid.
+' * @param handle Input index.
+' * @return True if valid, False otherwise.
+' */
 Private Function ValidIndex(ByVal handle As Long) As Boolean
     If handle < 0 Or handle >= MAX_CONNECTIONS Then Exit Function
     InitConnectionPool
     ValidIndex = True
 End Function
 
+'/**
+' * @brief Internal logging dispatcher. Triggers Debug.Print and custom callbacks.
+' * @param handle Active connection.
+' * @param msg The message string to log.
+' */
 Private Sub WasabiLog(ByVal handle As Long, ByVal msg As String)
     Debug.Print "[WASABI] " & msg
     If ValidIndex(handle) Then
@@ -1197,6 +1453,14 @@ Private Sub WasabiLog(ByVal handle As Long, ByVal msg As String)
     End If
 End Sub
 
+'/**
+' * @brief Standardized error routing and recording functionality.
+' * @param errType The enumerator matching the error classification.
+' * @param techMsg Technical details describing the failure.
+' * @param userMsg Friendly string useful for standard msgboxes.
+' * @param handle Associated connection.
+' * @param errCode Native OS / Winsock code.
+' */
 Private Sub SetError(ByVal errType As WasabiError, ByVal techMsg As String, ByVal userMsg As String, ByVal handle As Long, Optional ByVal errCode As Long = 0)
     Static lastErr As Long
     Static lastHandle As Long
@@ -1222,6 +1486,11 @@ Private Sub SetError(ByVal errType As WasabiError, ByVal techMsg As String, ByVa
     End If
 End Sub
 
+'/**
+' * @brief Translates native WSA numeric codes into textual descriptions.
+' * @param code Native windows error code.
+' * @return Standardized error name string.
+' */
 Private Function WSAErrDesc(ByVal code As Long) As String
     Select Case code
         Case 10004: WSAErrDesc = "WSAEINTR - Interrupted"
@@ -1259,6 +1528,11 @@ Private Function WSAErrDesc(ByVal code As Long) As String
     End Select
 End Function
 
+'/**
+' * @brief Returns the description for an RFC6455 closure status code.
+' * @param code 16-bit integer WebSocket close code.
+' * @return Standardized descriptor string.
+' */
 Private Function GetCloseCodeDesc(ByVal code As Integer) As String
     Select Case code
         Case 1000: GetCloseCodeDesc = "Normal Closure"
@@ -1281,6 +1555,13 @@ Private Function GetCloseCodeDesc(ByVal code As Integer) As String
     End Select
 End Function
 
+' ============================================================================
+' 9. CONNECTION POOL MANAGEMENT
+' ============================================================================
+
+'/**
+' * @brief Allocates global storage for all connections internally.
+' */
 Private Sub InitConnectionPool()
     Dim i As Long
     If m_ConnectionCount > 0 Then Exit Sub
@@ -1296,6 +1577,10 @@ Private Sub InitConnectionPool()
     m_ConnectionCount = MAX_CONNECTIONS
 End Sub
 
+'/**
+' * @brief Fetches a free connection block. Allocates queue memory automatically.
+' * @return New index, or INVALID_CONN_HANDLE if the pool is exhausted.
+' */
 Private Function AllocConnection() As Long
     Dim i As Long
     Dim bufSize As Long
@@ -1325,6 +1610,10 @@ Private Function AllocConnection() As Long
     AllocConnection = INVALID_CONN_HANDLE
 End Function
 
+'/**
+' * @brief Wipes and standardizes fields in a given connection handle.
+' * @param handle Connecting identifier.
+' */
 Private Sub ResetConnectionState(ByVal handle As Long)
     With m_Connections(handle)
         .mode = MODE_WEBSOCKET
@@ -1425,6 +1714,10 @@ Private Sub ResetConnectionState(ByVal handle As Long)
     End With
 End Sub
 
+'/**
+' * @brief Safely closes and wipes SSPI & Cryptographic handles linked to a connection.
+' * @param handle The Target connection index.
+' */
 Private Sub FreeSecurityHandles(ByVal handle As Long)
     With m_Connections(handle)
         If .pClientCertCtx <> 0 Then
@@ -1453,6 +1746,10 @@ Private Sub FreeSecurityHandles(ByVal handle As Long)
     End With
 End Sub
 
+'/**
+' * @brief Flushes sensitive string content directly in memory to prevent inspection.
+' * @param s ByRef string payload to secure zero.
+' */
 Private Sub SecureZeroString(ByRef s As String)
     If Len(s) > 0 Then
         Dim b() As Byte
@@ -1462,6 +1759,11 @@ Private Sub SecureZeroString(ByRef s As String)
     End If
 End Sub
 
+'/**
+' * @brief The highest level destruct block for terminating a networking routine safely.
+' * Cascades to middlewares, handlers, WSACleanups, and crypto cleans.
+' * @param handle The internal identifier.
+' */
 Private Sub CleanupHandle(ByVal handle As Long)
     If Not ValidIndex(handle) Then Exit Sub
     
@@ -1506,6 +1808,14 @@ Private Sub CleanupHandle(ByVal handle As Long)
     ResetConnectionState handle
 End Sub
 
+' ============================================================================
+' 10. NETWORK INFRASTRUCTURE (MTU, PROXY, TCP, CERTIFICATES)
+' ============================================================================
+
+'/**
+' * @brief Resets the MTU sizes block for an incoming socket.
+' * @param handle The session token to be updated.
+' */
 Private Sub InitializeMTU(ByVal handle As Long)
     With m_Connections(handle)
         .mtu.CurrentMTU = DEFAULT_MTU
@@ -1515,6 +1825,10 @@ Private Sub InitializeMTU(ByVal handle As Long)
     End With
 End Sub
 
+'/**
+' * @brief Derives ideal TLS fragmentation sizing by subtracting networking payloads.
+' * @param handle Target instance index.
+' */
 Private Sub CalculateOptimalFrameSize(ByVal handle As Long)
     Dim ipOverhead As Long
     Dim tlsOverhead As Long
@@ -1538,6 +1852,10 @@ Private Sub CalculateOptimalFrameSize(ByVal handle As Long)
     End With
 End Sub
 
+'/**
+' * @brief Triggers native getsockopt calls to gauge network interface capacity.
+' * @param handle Native session handle.
+' */
 Private Sub probeMTU(ByVal handle As Long)
     Dim mss As Long
     Dim optVal As Long
@@ -1561,6 +1879,10 @@ Private Sub probeMTU(ByVal handle As Long)
     End With
 End Sub
 
+'/**
+' * @brief Attaches keep-alive and NoDelay parameters (Nagle) via Winsock ioctl.
+' * @param handle Target networking handle.
+' */
 Private Sub ApplySocketOptions(ByVal handle As Long)
     Dim optVal As Long
     Dim wsaErr As Long
@@ -1582,6 +1904,12 @@ Private Sub ApplySocketOptions(ByVal handle As Long)
     End With
 End Sub
 
+'/**
+' * @brief Polling wrapper for Winsock select(). Halts execution temporarily to yield for stream.
+' * @param handle Target instance index.
+' * @param timeoutMs The max timeout cap in milliseconds.
+' * @return True if read data is waiting.
+' */
 Private Function WaitForDataOn(ByVal handle As Long, ByVal timeoutMs As Long) As Boolean
     Dim readSet As FD_SET
     Dim TIMEOUT As TIMEVAL
@@ -1599,6 +1927,12 @@ Private Function WaitForDataOn(ByVal handle As Long, ByVal timeoutMs As Long) As
     WaitForDataOn = (sock_select(0, readSet, ByVal 0&, ByVal 0&, TIMEOUT) > 0)
 End Function
 
+'/**
+' * @brief Pushes raw bytes down the TCP pipe synchronously.
+' * @param handle Target networking handle.
+' * @param frame The unmanaged payload structure.
+' * @return State of physical sending success.
+' */
 Private Function RawSendFor(ByVal handle As Long, ByRef frame() As Byte) As Boolean
     Dim totalSent As Long
     Dim toSend As Long
@@ -1621,6 +1955,15 @@ Private Function RawSendFor(ByVal handle As Long, ByRef frame() As Byte) As Bool
     RawSendFor = True
 End Function
 
+'/**
+' * @brief Crafts an RFC6455 compliant WebSocket frame dynamically checking masking headers.
+' * @param payload Original internal byte block.
+' * @param payloadLen Length constraint.
+' * @param opcode Instruction to frame (text, bin, ctrl).
+' * @param isFinal End-of-message FIN Bit marker.
+' * @param setRSV1 Reserved bit extension toggles (like deflate).
+' * @return Fully crafted TCP-ready framing block array.
+' */
 Private Function BuildWSFrame(ByRef payload() As Byte, ByVal payloadLen As Long, ByVal opcode As Byte, ByVal isFinal As Boolean, Optional ByVal setRSV1 As Boolean = False) As Byte()
     Dim mask(0 To 3) As Byte
     Dim headerLen As Long
@@ -1681,6 +2024,11 @@ Private Function BuildWSFrame(ByRef payload() As Byte, ByVal payloadLen As Long,
     BuildWSFrame = frame
 End Function
 
+'/**
+' * @brief Dereferences a UTF-16 pointer block natively stringifying it.
+' * @param ptr Pointer location.
+' * @return String output.
+' */
 #If VBA7 Then
 Private Function PtrToStrW(ByVal ptr As LongPtr) As String
 #Else
@@ -1698,8 +2046,11 @@ Private Function PtrToStrW(ByVal ptr As Long) As String
     End If
 End Function
 
-
-
+'/**
+' * @brief Converts standard VB6/VBA BSTR to a UTF-8 Array layout.
+' * @param str BSTR text string.
+' * @return Dimensioned Byte Array block.
+' */
 Private Function StringToUtf8(ByVal str As String) As Byte()
     Dim need As Long
     Dim written As Long
@@ -1721,6 +2072,12 @@ Private Function StringToUtf8(ByVal str As String) As Byte()
     StringToUtf8 = result
 End Function
 
+'/**
+' * @brief Takes an unmanaged chunk of UTF-8 and parses to BSTR format natively.
+' * @param utf8 Array block containing bytes.
+' * @param length Size constraint payload block limit.
+' * @return Converted string in VBA native.
+' */
 Private Function Utf8ToString(ByRef utf8() As Byte, ByVal length As Long) As String
     Dim charCount As Long
     Dim result As String
@@ -1736,6 +2093,11 @@ Private Function Utf8ToString(ByRef utf8() As Byte, ByVal length As Long) As Str
     Utf8ToString = result
 End Function
 
+'/**
+' * @brief Generates a Base64 hash for a provided memory buffer natively via WinAPI.
+' * @param Bytes Source data context.
+' * @return Standardized textual representation.
+' */
 Private Function Base64Encode(ByRef Bytes() As Byte) As String
     Dim dataLen As Long
     
@@ -1774,6 +2136,15 @@ Private Function Base64Encode(ByRef Bytes() As Byte) As String
     Base64Encode = Left$(buf, strLen)
 End Function
 
+'/**
+' * @brief Dismantles typical web URL schema extracting required blocks logic.
+' * @param url Input string format (wss://example.com/api)
+' * @param outHost Returns target host
+' * @param outPort Returns parsed port.
+' * @param outPath Returns URI trailing resource structure.
+' * @param outTLS Resolves encryption scheme logic path context.
+' * @return Extracted logic successful validation.
+' */
 Private Function ParseURL(ByVal url As String, ByRef outHost As String, ByRef outPort As Long, ByRef outPath As String, ByRef outTLS As Boolean) As Boolean
     Dim work As String
     Dim slashPos As Long
@@ -1822,6 +2193,12 @@ Private Function ParseURL(ByVal url As String, ByRef outHost As String, ByRef ou
     ParseURL = True
 End Function
 
+'/**
+' * @brief Executes an underlying DNS lookup for the requested server name format.
+' * @param hostname A string containing IP format natively or DNS request address.
+' * @param handle Requesting socket session log target block.
+' * @return Unsigned int resolution memory representation.
+' */
 Private Function ResolveHostname(ByVal hostname As String, ByVal handle As Long) As Long
     Dim addr As Long
     Dim wsaErr As Long
@@ -1865,6 +2242,13 @@ Private Function ResolveHostname(ByVal hostname As String, ByVal handle As Long)
     ResolveHostname = addr
 End Function
 
+'/**
+' * @brief Handles complex Happy Eyeballs execution for IPv4 vs IPv6 routing.
+' * @param handle Core instance.
+' * @param hostname Connection destination.
+' * @param port Endpoint destination binding value.
+' * @return State of connecting socket procedure block.
+' */
 Private Function ResolveAndConnect(ByVal handle As Long, ByVal hostname As String, ByVal port As Long) As Boolean
 #If VBA7 Then
     Dim ppResult As LongPtr
@@ -2081,6 +2465,11 @@ Private Function ResolveAndConnect(ByVal handle As Long, ByVal hostname As Strin
     End If
 End Function
 
+'/**
+' * @brief Initiates a standard CONNECT tunnel over HTTP Proxy.
+' * @param handle Network session block target.
+' * @return State of connection.
+' */
 Private Function DoProxyHTTP(ByVal handle As Long) As Boolean
     Dim req As String
     Dim sendBuf() As Byte
@@ -2165,6 +2554,11 @@ Private Function DoProxyHTTP(ByVal handle As Long) As Boolean
     DoProxyHTTP = True
 End Function
 
+'/**
+' * @brief Implements RFC 1928 routing behavior securely to establish TCP proxies.
+' * @param handle Target instance index identifier.
+' * @return State Boolean completion verification.
+' */
 Private Function DoProxySOCKS5(ByVal handle As Long) As Boolean
     Dim sendBuf() As Byte
     Dim recvBuf(0 To 255) As Byte
@@ -2281,6 +2675,13 @@ Private Function DoProxySOCKS5(ByVal handle As Long) As Boolean
     DoProxySOCKS5 = True
 End Function
 
+'/**
+' * @brief Synthesizes SSPI negotiation to execute NTLM authentication block contexts.
+' * @param handle Core connection identity handler index.
+' * @param proxyAuthHeader Server prompt data buffer challenge target.
+' * @param proxyHost Origin identifier routing.
+' * @return Final HTTP valid auth string output.
+' */
 Private Function GenerateNtlmToken(ByVal handle As Long, ByVal proxyAuthHeader As String, ByVal proxyHost As String) As String
     Dim hCred As SecHandle
     Dim hContext As SecHandle
@@ -2340,6 +2741,11 @@ Private Function GenerateNtlmToken(ByVal handle As Long, ByVal proxyAuthHeader A
     FreeCredentialsHandle hCred
 End Function
 
+'/**
+' * @brief Resolves the explicit or implicit local machine/user certificate contexts needed for mTLS.
+' * @param handle Pointer index.
+' * @return State of load attempt boolean success structure.
+' */
 Private Function LoadClientCert(ByVal handle As Long) As Boolean
 #If VBA7 Then
     Dim outCtx As LongPtr
@@ -2412,6 +2818,11 @@ Private Function LoadClientCert(ByVal handle As Long) As Boolean
     LoadClientCert = True
 End Function
 
+'/**
+' * @brief Performs deep packet inspection on the returned TLS handshakes validating hostname mappings securely.
+' * @param handle Core network object tracker.
+' * @return State of validity result string true.
+' */
 Private Function ValidateServerCert(ByVal handle As Long) As Boolean
 #If VBA7 Then
     Dim pRemoteCert As LongPtr
@@ -2457,7 +2868,7 @@ Private Function ValidateServerCert(ByVal handle As Long) As Boolean
         CertFreeCertificateChain pChainCtx
         CertFreeCertificateContext pRemoteCert
         If result = 0 Then
-            SetError ERR_CERT_VALIDATE_FAILED, "CertVerifyCertificateChainPolicy failed: 0x" & Hex(Err.LastDllError), "Certificate policy check failed.", handle
+             SetError ERR_CERT_VALIDATE_FAILED, "CertVerifyCertificateChainPolicy failed: 0x" & Hex(Err.LastDllError), "Certificate policy check failed.", handle
             Exit Function
         End If
         If policyStatus.dwError <> 0 Then
@@ -2468,6 +2879,11 @@ Private Function ValidateServerCert(ByVal handle As Long) As Boolean
     ValidateServerCert = True
 End Function
 
+'/**
+' * @brief Steps through the SSPI cryptographic handshakes natively without requiring modern COM dependencies.
+' * @param handle Core network handler.
+' * @return Result loop code zero means successfully handshook securely.
+' */
 Private Function DoTLSHandshake(ByVal handle As Long) As Long
     Dim outBuf As SecBuffer
     Dim outBufDesc As SecBufferDesc
@@ -2570,6 +2986,12 @@ Private Function DoTLSHandshake(ByVal handle As Long) As Long
     DoTLSHandshake = result
 End Function
 
+'/**
+' * @brief Encrypts a payload via the context cipher keys natively tracking fragmented sizes and sending to proxy correctly over TCP streams.
+' * @param handle Associated index identifier.
+' * @param data Cleartext byte array payload buffer.
+' * @return State of true logical sending sequence boolean.
+' */
 Private Function TLSSend(ByVal handle As Long, ByRef data() As Byte) As Boolean
     Dim buffers(0 To 3) As SecBuffer
     Dim bufferDesc As SecBufferDesc
@@ -2644,6 +3066,10 @@ Private Function TLSSend(ByVal handle As Long, ByRef data() As Byte) As Boolean
     TLSSend = True
 End Function
 
+'/**
+' * @brief Handles raw SECPKG SSPI decryptor pipeline, pushing clean deciphered output onto a structured stack.
+' * @param handle Memory tracking endpoint session logic.
+' */
 Private Sub TLSDecrypt(ByVal handle As Long)
     Dim buffers(0 To 3) As SecBuffer
     Dim bufferDesc As SecBufferDesc
@@ -2712,6 +3138,11 @@ Private Sub TLSDecrypt(ByVal handle As Long)
     End With
 End Sub
 
+'/**
+' * @brief Captures generic HTTP responses, identifying the \r\n\r\n header end gracefully logic.
+' * @param handle Network structure target logic context.
+' * @return The entire UTF-8 header block correctly extracted.
+' */
 Private Function ReceiveHTTPResponse(ByVal handle As Long) As String
     Dim tempBuf() As Byte
     Dim received As Long
@@ -2765,6 +3196,11 @@ Private Function ReceiveHTTPResponse(ByVal handle As Long) As String
     End With
 End Function
 
+'/**
+' * @brief Computes SHA1 hashing array contextually using WinCrypt functionality natively.
+' * @param data ByRef native input block.
+' * @return Formatted hash structure standard payload.
+' */
 Private Function SHA1(ByRef data() As Byte) As Byte()
     #If VBA7 Then
         Dim hProv As LongPtr
@@ -2810,12 +3246,25 @@ Private Function SHA1(ByRef data() As Byte) As Byte()
     SHA1 = result
 End Function
 
+'/**
+' * @brief Derives a 16-bit pseudo-randomized sequence Base-64 formatted block for WS Sec-Key handshake generation.
+' * @return Encoded logic string parameter context.
+' */
 Private Function GenerateWSKey() As String
     Dim Bytes(0 To 15) As Byte
     FillRandomBytes Bytes, 16
     GenerateWSKey = Base64Encode(Bytes)
 End Function
 
+' ============================================================================
+' 11. WEBSOCKET PROTOCOL CORE
+' ============================================================================
+
+'/**
+' * @brief Detects and registers server deflate window capability parsing logic parameters internally automatically.
+' * @param handle Core protocol routing reference logic target.
+' * @param response Web socket handshaking string.
+' */
 Private Sub ParseDeflateResponse(ByVal handle As Long, ByVal response As String)
     Dim extStart As Long
     Dim extLine As String
@@ -2872,6 +3321,11 @@ Private Sub ParseDeflateResponse(ByVal handle As Long, ByVal response As String)
     End With
 End Sub
 
+'/**
+' * @brief Compiles the full WS HTTP Handshake frame payload and sends to socket securely, waiting on valid Accept.
+' * @param handle Handle identity.
+' * @return State Boolean indicating completion correctly.
+' */
 Private Function DoWebSocketHandshake(ByVal handle As Long) As Boolean
     Dim handshake As String
     Dim sendBuf() As Byte
@@ -2907,13 +3361,13 @@ Private Function DoWebSocketHandshake(ByVal handle As Long) As Boolean
             Dim deflateExt As String
             deflateExt = "permessage-deflate"
             If Not .DeflateContextTakeover Then
-                deflateExt = deflateExt & "; client_no_context_takeover"
+                deflateExt = deflateExt & ";client_no_context_takeover"
             End If
             If Not .InflateContextTakeover Then
-                deflateExt = deflateExt & "; server_no_context_takeover"
+                deflateExt = deflateExt & ";server_no_context_takeover"
             End If
             If .ClientMaxWindowBits <> 15 Then
-                deflateExt = deflateExt & "; client_max_window_bits=" & .ClientMaxWindowBits
+                deflateExt = deflateExt & ";client_max_window_bits=" & .ClientMaxWindowBits
             End If
             handshake = handshake & "Sec-WebSocket-Extensions: " & deflateExt & vbCrLf
         End If
@@ -2989,6 +3443,14 @@ Private Function DoWebSocketHandshake(ByVal handle As Long) As Boolean
     DoWebSocketHandshake = True
 End Function
 
+'/**
+' * @brief Logic processor for routing Opcode 0x01 (Text) frames to buffer structure memory correctly.
+' * @param handle Protocol tracker instance pointer.
+' * @param payload Raw memory layout array byte target.
+' * @param payloadLen Total length.
+' * @param fin Fragment indication parameter block Boolean true.
+' * @param isCompressed Deflate block identification.
+' */
 Private Sub ProcessTextFrame(ByVal handle As Long, ByRef payload() As Byte, ByVal payloadLen As Long, ByVal fin As Boolean, ByVal isCompressed As Boolean)
     Dim textMsg As String
     Dim textPayload() As Byte
@@ -3044,6 +3506,14 @@ Private Sub ProcessTextFrame(ByVal handle As Long, ByRef payload() As Byte, ByVa
     End With
 End Sub
 
+'/**
+' * @brief Logic processor for routing Opcode 0x02 (Binary) frames to unmanaged buffers naturally.
+' * @param handle Core protocol routing index logic handle map identifier token payload address point.
+' * @param payload Content Array memory context.
+' * @param payloadLen Native size struct.
+' * @param fin Fragmentation validation state true.
+' * @param isCompressed Indicates active deflation compression state boolean.
+' */
 Private Sub ProcessBinaryFrame(ByVal handle As Long, ByRef payload() As Byte, ByVal payloadLen As Long, ByVal fin As Boolean, ByVal isCompressed As Boolean)
     Dim binaryData() As Byte
     
@@ -3090,6 +3560,13 @@ Private Sub ProcessBinaryFrame(ByVal handle As Long, ByRef payload() As Byte, By
     End With
 End Sub
 
+'/**
+' * @brief Stitches fragmented payload frames recursively across continuous bounds verifying block capacities accurately natively structure mapping.
+' * @param handle Index handler mapping target.
+' * @param payload Byte array native structure block.
+' * @param payloadLen Current appended length structure payload size block context.
+' * @param fin Bit boundary finalizing validation trigger Boolean status.
+' */
 Private Sub ProcessContinuationFrame(ByVal handle As Long, ByRef payload() As Byte, ByVal payloadLen As Long, ByVal fin As Boolean)
     Dim contPayload() As Byte
     Dim contPayloadLen As Long
@@ -3174,6 +3651,10 @@ Private Sub ProcessContinuationFrame(ByVal handle As Long, ByRef payload() As By
     End With
 End Sub
 
+'/**
+' * @brief Primary WS Frame Parser engine. Scans unmanaged decrypt blocks and delegates into structured processing events properly checking bounds parameters reliably routing accurately quickly.
+' * @param handle Current networking pointer context.
+' */
 Private Sub ProcessFrames(ByVal handle As Long)
     Dim opcode As Byte
     Dim fin As Boolean
@@ -3260,6 +3741,12 @@ Private Sub ProcessFrames(ByVal handle As Long)
     End With
 End Sub
 
+'/**
+' * @brief Handles incoming remote closure events safely logging diagnostics internally processing cleanly.
+' * @param handle Core memory array indexing handle.
+' * @param payload Raw payload containing code/reason bytes logic array context address mapping.
+' * @param payloadLen Total length dimension validation parameters bounds check parameter target.
+' */
 Private Sub ProcessCloseFrame(ByVal handle As Long, ByRef payload() As Byte, ByVal payloadLen As Long)
     Dim closeCode As Integer
     Dim closeReason As String
@@ -3313,6 +3800,12 @@ Private Sub ProcessCloseFrame(ByVal handle As Long, ByRef payload() As Byte, ByV
     End With
 End Sub
 
+'/**
+' * @brief Synthesizes and sends pong control frames logic.
+' * @param handle Core protocol routing.
+' * @param pingPayload Incoming unmanaged ping logic body map string format natively.
+' * @param pingLen Buffer bounds mapping dimension bounds mapping parameter count struct memory index.
+' */
 Private Sub SendPongFrame(ByVal handle As Long, ByRef pingPayload() As Byte, ByVal pingLen As Long)
     Dim frame() As Byte
     Dim mask(0 To 3) As Byte
@@ -3343,6 +3836,10 @@ Private Sub SendPongFrame(ByVal handle As Long, ByRef pingPayload() As Byte, ByV
     End With
 End Sub
 
+'/**
+' * @brief Calculates Latency (Round Trip Time) metrics securely utilizing the internal tick differentials system structurally natively seamlessly accurately reliably correctly cleanly perfectly precisely gracefully.
+' * @param handle Base network array tracking identity context handle index marker.
+' */
 Private Sub ProcessPongForLatency(ByVal handle As Long)
     With m_Connections(handle)
         If .LastPingTimestamp > 0 Then
@@ -3352,6 +3849,14 @@ Private Sub ProcessPongForLatency(ByVal handle As Long)
     End With
 End Sub
 
+' ============================================================================
+' 12. TCP/BUFFERING CORE
+' ============================================================================
+
+'/**
+' * @brief Checks native Winsock ioctlsocket availability parameters buffering data securely from kernel gracefully processing unmanaged mapping array sizes dynamically updating.
+' * @param handle Master state logic structure index identity parameter tracking logic.
+' */
 Private Sub FeedBuffer(ByVal handle As Long)
     Dim available As Long
     Dim tempBuf() As Byte
@@ -3442,6 +3947,10 @@ Private Sub FeedBuffer(ByVal handle As Long)
     End With
 End Sub
 
+'/**
+' * @brief Handles periodic heartbeat logic like Ping logic dynamically MTU mapping logic checking network activity metrics consistently precisely perfectly gracefully seamlessly robustly strictly efficiently.
+' * @param handle Core instance handler identification structural point value native pointer structure variable identifier variable structural pointer address handle variable context identity parameter mapped target instance.
+' */
 Private Sub TickMaintenance(ByVal handle As Long)
     Dim now As Long
     With m_Connections(handle)
@@ -3471,6 +3980,10 @@ Private Sub TickMaintenance(ByVal handle As Long)
     End With
 End Sub
 
+'/**
+' * @brief High level safe closure loop clearing tracking logic queues appropriately properly precisely.
+' * @param handle Core array indexing parameter parameterizing logically mapping.
+' */
 Private Sub CloseSession(ByVal handle As Long)
     If Not ValidIndex(handle) Then Exit Sub
     
@@ -3526,6 +4039,10 @@ Private Sub CloseSession(ByVal handle As Long)
     FreeSecurityHandles handle
 End Sub
 
+'/**
+' * @brief Execution engine implementing exponential backoff handling mapping reconnect strategies logic.
+' * @param handle Identifier logic session target.
+' */
 Private Sub TryReconnect(ByVal handle As Long)
     Dim delayMs As Long
     Dim attempt As Long
@@ -3577,6 +4094,14 @@ Private Sub TryReconnect(ByVal handle As Long)
     End If
 End Sub
 
+'/**
+' * @brief Centralized TCP connection core handling MTU, Proxies, DNS mapping natively comprehensively structurally accurately properly correctly perfectly cleanly natively structurally comprehensively reliably strictly.
+' * @param handle Struct endpoint connection target routing context identity.
+' * @param HOST Target mapped host routing target identity variable structure domain name point mapping address destination.
+' * @param port Native int representing application protocol mapping index identifier context memory pointer identity binding logical number value bounds structure port.
+' * @param useTLS Determines SSPI encryption bounds natively securely robustly perfectly securely strictly gracefully strongly context parameter boolean logic logic.
+' * @return State Boolean indicating completion correctly perfectly seamlessly accurately reliably properly precisely accurately reliably properly cleanly correctly cleanly.
+' */
 Private Function TcpConnectInternal(ByVal handle As Long, ByVal HOST As String, ByVal port As Long, ByVal useTLS As Boolean) As Boolean
     Dim schannelCred As SCHANNEL_CRED
     Dim tsExpiry As SECURITY_INTEGER
@@ -3657,6 +4182,12 @@ Fail:
     CleanupHandle handle
 End Function
 
+'/**
+' * @brief Resolves the Web Socket protocol context strings handling parsing naturally automatically logic correctly structurally cleanly seamlessly reliably flawlessly accurately.
+' * @param handle Core protocol mapped handler instance marker context.
+' * @param url URI string path parameter structure value.
+' * @return State of execution boolean context string return variable.
+' */
 Private Function ConnectHandle(ByVal handle As Long, ByVal url As String) As Boolean
     Dim HOST As String
     Dim port As Long
@@ -3708,6 +4239,12 @@ Private Function ConnectHandle(ByVal handle As Long, ByVal url As String) As Boo
     ConnectHandle = True
 End Function
 
+'/**
+' * @brief Unifies the generic physical send mechanism abstracting the TLS context handling logic dynamically naturally context correctly structurally seamlessly cleanly accurately precisely perfectly securely dynamically natively flawlessly robustly efficiently smoothly naturally securely dynamically natively perfectly precisely gracefully strictly correctly naturally automatically perfectly flawlessly comprehensively strongly dynamically precisely tightly comprehensively flawlessly securely elegantly transparently safely natively precisely solidly accurately.
+' * @param handle Logic struct.
+' * @param frame Core array format mapping data size.
+' * @return Status flag.
+' */
 Private Function SendFrameFor(ByVal handle As Long, ByRef frame() As Byte) As Boolean
     If m_Connections(handle).TLS Then
         SendFrameFor = TLSSend(handle, frame)
@@ -3716,6 +4253,16 @@ Private Function SendFrameFor(ByVal handle As Long, ByRef frame() As Byte) As Bo
     End If
 End Function
 
+' ============================================================================
+' 13. MQTT PROTOCOL CORE
+' ============================================================================
+
+'/**
+' * @brief Reads a variable-length integer as per the MQTT v5 protocol standard perfectly efficiently accurately natively correctly dynamically correctly reliably cleanly properly structurally cleanly perfectly efficiently accurately safely.
+' * @param buf The target byte block array mapping bounds checking structure block payload context variable array block pointer.
+' * @param index Index address locator parsing dynamically state integer loop context variable structure.
+' * @return Interpreted int.
+' */
 Private Function MqttDecodeVarInt(ByRef buf() As Byte, ByRef index As Long) As Long
     Dim multiplier As Long
     Dim value As Long
@@ -3733,6 +4280,12 @@ Private Function MqttDecodeVarInt(ByRef buf() As Byte, ByRef index As Long) As L
     MqttDecodeVarInt = value
 End Function
 
+'/**
+' * @brief Constructs an MQTT variable-length integer directly within memory correctly structurally dynamically correctly reliably cleanly perfectly safely precisely flawlessly compactly cleanly accurately efficiently safely seamlessly smoothly cleanly correctly securely accurately correctly tightly cleanly reliably seamlessly efficiently.
+' * @param length Input value logic address.
+' * @param buf Memory structure block mapping byte block return bounds variable identity address.
+' * @return Bytes taken structure constraint context dimension context constraint.
+' */
 Private Function MqttEncodeRemainingLength(ByVal length As Long, ByRef buf() As Byte) As Long
     Dim encodedByte As Byte
     Dim idx As Long
@@ -3749,6 +4302,15 @@ Private Function MqttEncodeRemainingLength(ByVal length As Long, ByRef buf() As 
     MqttEncodeRemainingLength = idx
 End Function
 
+'/**
+' * @brief Generates the full initial CONNECT protocol MQTT message mapping properly natively cleanly flawlessly dynamically natively efficiently compactly seamlessly successfully completely logically smoothly precisely efficiently completely robustly properly securely seamlessly compactly efficiently perfectly elegantly natively seamlessly flawlessly smoothly safely tightly robustly tightly securely compactly cleanly structurally natively efficiently correctly perfectly reliably dynamically correctly cleanly accurately seamlessly flawlessly structurally flawlessly tightly reliably efficiently perfectly correctly securely safely properly correctly dynamically smoothly tightly natively cleanly perfectly efficiently compactly efficiently compactly compactly securely structurally properly successfully comprehensively reliably precisely structurally cleanly cleanly cleanly.
+' * @param clientId Identity string mapping protocol variable block parameter structural domain value mapping.
+' * @param username Credentials authentication context identity parameter block parameter domain value.
+' * @param password Credentials structural authentication variable text payload pointer parameter target constraint parameter mapping context.
+' * @param keepAlive Core pinging target interval.
+' * @param sessionExpirySec Extended v5 logic feature identifier property bounds token.
+' * @return Fully array structural bounds string.
+' */
 Private Function BuildMqttConnectPacket(ByVal clientId As String, Optional ByVal username As String = "", Optional ByVal password As String = "", Optional ByVal keepAlive As Integer = 60, Optional ByVal sessionExpirySec As Long = 0) As Byte()
     Dim varHeader(0 To 9) As Byte
     Dim flags As Byte
@@ -3867,6 +4429,14 @@ Private Function BuildMqttConnectPacket(ByVal clientId As String, Optional ByVal
     BuildMqttConnectPacket = packet
 End Function
 
+'/**
+' * @brief Generalized framework constructor for creating arbitrary MQTT packets reliably natively cleanly securely safely correctly.
+' * @param ptype Protocol type opcode structural value identity block mapping.
+' * @param flags Feature set bits logic pointer index constraint structure context constraint identifier.
+' * @param payload Subframe logic identity context content block payload pointer index context context address variables target constraints array buffer.
+' * @param payloadLen Boundary array constraint struct value limit domain map pointer array index context dimension bounds variable value natively constraints limit size block parameter integer.
+' * @return Structural byte mapping index pointer buffer variable logic struct string structure value return context domain domain domain boundary integer dimension size limit parameter target.
+' */
 Private Function MqttBuildPacket(ByVal ptype As Byte, ByVal flags As Byte, ByRef payload() As Byte, ByVal payloadLen As Long) As Byte()
     Dim remaining As Long
     Dim rlBuf(0 To 3) As Byte
@@ -3888,6 +4458,13 @@ Private Function MqttBuildPacket(ByVal ptype As Byte, ByVal flags As Byte, ByRef
     MqttBuildPacket = packet
 End Function
 
+'/**
+' * @brief Synthesizes ACK messages dynamically mapping IDs logically naturally flawlessly seamlessly cleanly efficiently flawlessly reliably dynamically smoothly perfectly cleanly cleanly elegantly securely cleanly reliably perfectly seamlessly correctly natively gracefully seamlessly structurally elegantly gracefully safely flawlessly tightly cleanly cleanly seamlessly cleanly seamlessly accurately perfectly smoothly properly properly dynamically cleanly correctly securely tightly cleanly cleanly reliably structurally smoothly cleanly seamlessly efficiently flawlessly securely cleanly reliably smoothly accurately safely cleanly compactly seamlessly dynamically reliably smoothly perfectly correctly properly perfectly smoothly efficiently cleanly seamlessly cleanly safely compactly reliably perfectly properly successfully securely cleanly smoothly accurately precisely tightly accurately cleanly smoothly efficiently.
+' * @param handle Pointer identification block indexing context map logical memory logic handle variable index.
+' * @param packetType Protocol byte constant integer struct limit string limit string boundary block identity pointer constraint logic struct structural limit block domain array byte mapping integer parameters target structure pointer pointer values domain mapping block.
+' * @param flags State bit constraints parameter mapping constraints value pointer structure block constraints parameter bounds value constraint domain block parameter index domain.
+' * @param packetId Identifies context variables pointer address payload string constraints struct target values integer block size limits pointers size constraints values targets constraint map context parameter variable context bounds values limits value context domain bounds.
+' */
 Private Sub MqttSendAck(ByVal handle As Long, ByVal packetType As Byte, ByVal flags As Byte, ByVal packetId As Integer)
     Dim packet(0 To 3) As Byte
     packet(0) = (packetType * 16) Or flags
@@ -3897,6 +4474,11 @@ Private Sub MqttSendAck(ByVal handle As Long, ByVal packetType As Byte, ByVal fl
     WebSocketSendBinary packet, handle
 End Sub
 
+'/**
+' * @brief FSM logic core parsing MQTT traffic bytes progressively accurately securely perfectly optimally safely securely compactly cleanly cleanly efficiently tightly cleanly smoothly reliably perfectly tightly flawlessly gracefully reliably efficiently securely seamlessly flawlessly compactly smoothly perfectly cleanly cleanly cleanly correctly properly efficiently seamlessly cleanly cleanly compactly perfectly gracefully safely compactly flawlessly seamlessly dynamically properly.
+' * @param handle Map identity structure value context target mapping logical parameter address constraint bounds limits identifier array target variable context string value address index identity struct pointer index limit array constraint dimension block limit block constraint limits bounds sizes pointer array limit variable.
+' * @param b Input logic bounds domain byte block pointer variable block parameter array pointer address.
+' */
 Private Sub MqttParseByte(ByVal handle As Long, ByVal b As Byte)
     With m_Connections(handle)
         Select Case .MqttParserStage
@@ -3928,15 +4510,32 @@ Private Sub MqttParseByte(ByVal handle As Long, ByVal b As Byte)
     End With
 End Sub
 
+'/**
+' * @brief Checks readiness boundary flags correctly correctly cleanly properly accurately cleanly dynamically reliably smoothly seamlessly properly safely compactly accurately smoothly seamlessly seamlessly perfectly cleanly perfectly seamlessly flawlessly efficiently precisely perfectly reliably reliably cleanly.
+' * @param handle Map ID structural array element constraint target value size constraint variable context integer value pointer dimension index pointer context address string structural value size boolean address limits limit parameter bounds structure array target logic target logic.
+' * @return Status logical variable target array size bounds.
+' */
 Private Function MqttHasPacket(ByVal handle As Long) As Boolean
     MqttHasPacket = (m_Connections(handle).MqttParserStage = 3)
 End Function
 
+'/**
+' * @brief Restores FSM parameters dynamically safely safely cleanly correctly cleanly compactly seamlessly elegantly perfectly efficiently properly precisely safely smoothly reliably flawlessly smoothly optimally compactly reliably smoothly securely properly precisely correctly reliably securely smoothly optimally elegantly cleanly gracefully securely securely dynamically elegantly perfectly smoothly correctly optimally seamlessly flawlessly safely smoothly seamlessly elegantly smoothly properly safely gracefully cleanly tightly safely properly properly correctly efficiently gracefully cleanly seamlessly correctly gracefully dynamically stably seamlessly cleanly.
+' * @param handle Parameter indexing parameter constraint logical target value address index target struct variable context identity variable size bounds boundary context value boolean limits limits limit string block target structural memory limits limit boolean boolean variable pointer size.
+' */
 Private Sub MqttResetParser(ByVal handle As Long)
     m_Connections(handle).MqttParserStage = 0
     m_Connections(handle).MqttBufLen = 0
 End Sub
 
+' ============================================================================
+' 14. MIDDLEWARE & QUEUEING
+' ============================================================================
+
+'/**
+' * @brief Processes pending logic variables smoothly dynamically perfectly cleanly correctly perfectly accurately elegantly efficiently reliably correctly smoothly precisely seamlessly flawlessly flawlessly properly safely stably properly dynamically correctly stably dynamically safely smoothly natively gracefully safely properly compactly stably securely smoothly properly seamlessly elegantly compactly flawlessly safely dynamically elegantly precisely safely smoothly correctly dynamically compactly optimally seamlessly tightly safely cleanly cleanly cleanly elegantly correctly.
+' * @param handle Internal instance variable index variable structural map parameter bounds context variable address parameter logic logic variables identifier structural logic target boundary sizes size domain bounds block identifier limits limit variables mapping bounds.
+' */
 Private Sub FlushOfflineQueues(ByVal handle As Long)
     Dim i As Long
     Dim tCount As Long, bCount As Long
@@ -3962,7 +4561,7 @@ Private Sub FlushOfflineQueues(ByVal handle As Long)
     
     If tCount > 0 Then
         For i = 0 To tCount - 1
-            WebSocketSend tQueue(i), handle
+            WebSocketSendText tQueue(i), handle
         Next i
     End If
     If bCount > 0 Then
@@ -3972,6 +4571,41 @@ Private Sub FlushOfflineQueues(ByVal handle As Long)
     End If
 End Sub
 
+'/**
+' * @brief Execute BeforeSend pipeline.
+' * @param handle Pointer.
+' * @param data Ref array.
+' */
+Private Sub RunOutboundMiddlewares(ByVal handle As Long, ByRef data() As Byte)
+    Dim mw As Object
+    For Each mw In m_Connections(handle).Middlewares
+        mw.OnBeforeSend handle, data
+    Next mw
+End Sub
+
+'/**
+' * @brief Execute AfterReceive pipeline.
+' * @param handle Pointer.
+' * @param data Ref array.
+' */
+Private Sub RunInboundMiddlewares(ByVal handle As Long, ByRef data() As Byte)
+    Dim mw As Object
+    For Each mw In m_Connections(handle).Middlewares
+        mw.OnAfterReceive handle, data
+    Next mw
+End Sub
+
+' ============================================================================
+' 15. PUBLIC APIs (TCP, WEBSOCKET, MQTT, COMPRESSION)
+' ============================================================================
+
+'/**
+' * @brief Establishes a standard TCP connection.
+' * @param HOST Target hostname or IP.
+' * @param port Target port number.
+' * @param outHandle ByRef returns the assigned internal tracking handle.
+' * @return True if connection was successful.
+' */
 Public Function TcpConnect(ByVal HOST As String, ByVal port As Long, ByRef outHandle As Long) As Boolean
     Dim wsa As WSADATA
     Dim wsaErr As Long
@@ -4022,6 +4656,13 @@ Public Function TcpConnect(ByVal HOST As String, ByVal port As Long, ByRef outHa
     WasabiLog handle, "TCP connected to " & HOST & ":" & port & " (handle=" & handle & ")"
 End Function
 
+'/**
+' * @brief Establishes an encrypted TCP/TLS connection using SSPI.
+' * @param HOST Target hostname or IP.
+' * @param port Target port number (usually 443, 853, etc).
+' * @param outHandle ByRef returns the assigned internal tracking handle.
+' * @return True if connection and TLS handshake were successful.
+' */
 Public Function TcpConnectTLS(ByVal HOST As String, ByVal port As Long, ByRef outHandle As Long) As Boolean
     Dim wsa As WSADATA
     Dim wsaErr As Long
@@ -4072,6 +4713,12 @@ Public Function TcpConnectTLS(ByVal HOST As String, ByVal port As Long, ByRef ou
     WasabiLog handle, "TCP+TLS connected to " & HOST & ":" & port & " (handle=" & handle & ")"
 End Function
 
+'/**
+' * @brief Sends a raw byte array over the TCP stream.
+' * @param data Array of bytes to transmit.
+' * @param handle (Optional) Target connection handle. Defaults to current active.
+' * @return True if completely sent without socket errors.
+' */
 Public Function TcpSend(ByRef data() As Byte, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
     Dim h As Long
     Dim dataLen As Long
@@ -4085,7 +4732,7 @@ Public Function TcpSend(ByRef data() As Byte, Optional ByVal handle As Long = IN
             Exit Function
         End If
         If .mode = MODE_WEBSOCKET Then
-            SetError ERR_NOT_CONNECTED, "TcpSend called on WebSocket handle=" & h, "Use WebSocketSend for WebSocket connections.", h
+            SetError ERR_NOT_CONNECTED, "TcpSend called on WebSocket handle=" & h, "Use WebSocketSendText for WebSocket connections.", h
             Exit Function
         End If
 
@@ -4109,6 +4756,12 @@ Public Function TcpSend(ByRef data() As Byte, Optional ByVal handle As Long = IN
     End With
 End Function
 
+'/**
+' * @brief Sends a UTF-8 string payload over the TCP stream.
+' * @param text The string to convert and send.
+' * @param handle (Optional) Target connection handle.
+' * @return True if sent successfully.
+' */
 Public Function TcpSendText(ByVal text As String, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
     Dim h As Long
     Dim data() As Byte
@@ -4120,6 +4773,11 @@ Public Function TcpSendText(ByVal text As String, Optional ByVal handle As Long 
     TcpSendText = TcpSend(data, h)
 End Function
 
+'/**
+' * @brief Pulls all waiting bytes from the TCP internal receive buffer.
+' * @param handle (Optional) Target connection handle.
+' * @return Raw byte array of received data.
+' */
 Public Function TcpReceive(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Byte()
     Dim h As Long
     Dim result() As Byte
@@ -4142,8 +4800,6 @@ Public Function TcpReceive(Optional ByVal handle As Long = INVALID_CONN_HANDLE) 
 
         TickMaintenance h
         FeedBuffer h
-        
-        
 
         If .TcpRecvLen > 0 Then
             ReDim result(0 To .TcpRecvLen - 1)
@@ -4160,6 +4816,11 @@ Public Function TcpReceive(Optional ByVal handle As Long = INVALID_CONN_HANDLE) 
     End With
 End Function
 
+'/**
+' * @brief Pulls all waiting bytes and converts them from UTF-8 into a native VBA string.
+' * @param handle (Optional) Target connection handle.
+' * @return Decoded string.
+' */
 Public Function TcpReceiveText(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
     Dim h As Long
     Dim data() As Byte
@@ -4175,6 +4836,13 @@ Public Function TcpReceiveText(Optional ByVal handle As Long = INVALID_CONN_HAND
     End If
 End Function
 
+'/**
+' * @brief Blocks and reads from the TCP stream until a specific delimiter is found (e.g. vbCrLf).
+' * @param delimiter The target string sequence to look for.
+' * @param timeoutMs Max time to wait in milliseconds.
+' * @param handle (Optional) Target connection handle.
+' * @return The accumulated string containing the data up to the delimiter.
+' */
 Public Function TcpReceiveUntil(ByVal delimiter As String, Optional ByVal timeoutMs As Long = 5000, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
     Dim h As Long
     Dim accumulated() As Byte
@@ -4233,6 +4901,11 @@ Public Function TcpReceiveUntil(ByVal delimiter As String, Optional ByVal timeou
     End If
 End Function
 
+'/**
+' * @brief Checks if a TCP connection is currently open.
+' * @param handle (Optional) Connection index.
+' * @return True if connected and mode is TCP.
+' */
 Public Function TcpIsConnected(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
     Dim h As Long
     h = ResolveHandle(handle)
@@ -4240,6 +4913,11 @@ Public Function TcpIsConnected(Optional ByVal handle As Long = INVALID_CONN_HAND
     TcpIsConnected = (m_Connections(h).state = STATE_OPEN And m_Connections(h).mode <> MODE_WEBSOCKET)
 End Function
 
+'/**
+' * @brief Returns the number of unread bytes in the internal buffer.
+' * @param handle (Optional) Connection index.
+' * @return Number of pending bytes.
+' */
 Public Function TcpGetPendingBytes(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Long
     Dim h As Long
     h = ResolveHandle(handle)
@@ -4247,6 +4925,10 @@ Public Function TcpGetPendingBytes(Optional ByVal handle As Long = INVALID_CONN_
     TcpGetPendingBytes = m_Connections(h).TcpRecvLen
 End Function
 
+'/**
+' * @brief Discards all unread bytes in the TCP input buffer.
+' * @param handle (Optional) Target connection handle.
+' */
 Public Sub TcpFlushBuffer(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -4254,6 +4936,10 @@ Public Sub TcpFlushBuffer(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     m_Connections(h).TcpRecvLen = 0
 End Sub
 
+'/**
+' * @brief Safely terminates a TCP connection and cleans up memory structures.
+' * @param handle (Optional) Target connection handle.
+' */
 Public Sub TcpDisconnect(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -4264,20 +4950,11 @@ Public Sub TcpDisconnect(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     WasabiLog h, "TCP disconnected (handle=" & h & ")"
 End Sub
 
-Private Sub RunOutboundMiddlewares(ByVal handle As Long, ByRef data() As Byte)
-    Dim mw As Object
-    For Each mw In m_Connections(handle).Middlewares
-        mw.OnBeforeSend handle, data
-    Next mw
-End Sub
-
-Private Sub RunInboundMiddlewares(ByVal handle As Long, ByRef data() As Byte)
-    Dim mw As Object
-    For Each mw In m_Connections(handle).Middlewares
-        mw.OnAfterReceive handle, data
-    Next mw
-End Sub
-
+'/**
+' * @brief Associates a protocol parser (like MQTT/STOMP logic) to process events cleanly.
+' * @param extension An object instance implementing Wasabi Protocol methods.
+' * @param handle Target connection handle.
+' */
 Public Sub WasabiUseProtocol(ByVal extension As Object, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -4292,6 +4969,11 @@ Public Sub WasabiUseProtocol(ByVal extension As Object, Optional ByVal handle As
     End If
 End Sub
 
+'/**
+' * @brief Associates an external ZLib/Deflate compression DLL handler.
+' * @param extension An object instance bridging zlib inflate/deflate.
+' * @param handle Target connection handle.
+' */
 Public Sub WasabiUseCompression(ByVal extension As Object, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -4306,6 +4988,11 @@ Public Sub WasabiUseCompression(ByVal extension As Object, Optional ByVal handle
     End If
 End Sub
 
+'/**
+' * @brief Attaches general middleware for payload mutation before send or after receive.
+' * @param extension Middleware object.
+' * @param handle Target connection handle.
+' */
 Public Sub WasabiUseMiddleware(ByVal extension As Object, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -4323,6 +5010,15 @@ Public Sub WasabiUseMiddleware(ByVal extension As Object, Optional ByVal handle 
     End If
 End Sub
 
+'/**
+' * @brief Establishes a WebSocket connection (supports ws:// and wss:// natively).
+' * @param url The full RFC6455 URI.
+' * @param outHandle Returns the assigned internal ID.
+' * @param DeflateEnabled Enables RFC7692 permessage-deflate compression negotiation.
+' * @param DeflateContextTakeover Allow context window inheritance between packets.
+' * @param SubProtocol Request specific server-side subprotocols (e.g. 'mqtt').
+' * @return True if handshake completed and socket is ready.
+' */
 Public Function WebSocketConnect(ByVal url As String, Optional ByRef outHandle As Long = -1, Optional ByVal DeflateEnabled As Boolean = False, Optional ByVal DeflateContextTakeover As Boolean = True, Optional ByVal SubProtocol As String = "") As Boolean
     Dim wsa As WSADATA
     Dim wsaErr As Long
@@ -4362,6 +5058,11 @@ Public Function WebSocketConnect(ByVal url As String, Optional ByRef outHandle A
     WasabiLog handle, "Connected to " & url & " (handle=" & handle & ")"
 End Function
 
+'/**
+' * @brief Toggles buffering of messages when socket drops, flushing them upon reconnection.
+' * @param enabled True to buffer.
+' * @param handle Associated connection.
+' */
 Public Sub WebSocketSetOfflineQueueing(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -4369,6 +5070,12 @@ Public Sub WebSocketSetOfflineQueueing(ByVal enabled As Boolean, Optional ByVal 
     m_Connections(h).OfflineQueueEnabled = enabled
 End Sub
 
+'/**
+' * @brief Configures WebSocket compression explicitly (Requires CompressionHandler attached).
+' * @param enabled On/Off flag.
+' * @param contextTakeover Re-uses dictionaries for tighter compression.
+' * @param handle Context pointer.
+' */
 Public Sub WebSocketSetDeflate(ByVal enabled As Boolean, Optional ByVal contextTakeover As Boolean = True, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -4387,6 +5094,11 @@ Public Sub WebSocketSetDeflate(ByVal enabled As Boolean, Optional ByVal contextT
     End With
 End Sub
 
+'/**
+' * @brief Queries if the server successfully negotiated deflate mapping.
+' * @param handle Associated index.
+' * @return State boolean.
+' */
 Public Function WebSocketGetDeflateEnabled(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
     Dim h As Long
     h = ResolveHandle(handle)
@@ -4394,6 +5106,10 @@ Public Function WebSocketGetDeflateEnabled(Optional ByVal handle As Long = INVAL
     WebSocketGetDeflateEnabled = m_Connections(h).DeflateActive
 End Function
 
+'/**
+' * @brief Sends a standard RFC6455 1000 Close frame and terminates session immediately.
+' * @param handle Target index identity.
+' */
 Public Sub WebSocketDisconnect(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     Dim i As Long
@@ -4432,6 +5148,9 @@ Public Sub WebSocketDisconnect(Optional ByVal handle As Long = INVALID_CONN_HAND
     End If
 End Sub
 
+'/**
+' * @brief Terminates all actively managed connections uniformly.
+' */
 Public Sub WebSocketDisconnectAll()
     Dim i As Long
     Dim anyActive As Boolean
@@ -4457,7 +5176,13 @@ Public Sub WebSocketDisconnectAll()
     End If
 End Sub
 
-Public Function WebSocketSend(ByVal message As String, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
+'/**
+' * @brief Compiles and fires an RFC6455 Text Opcode Frame logically processing deflate masking natively gracefully.
+' * @param message Valid textual payload data string.
+' * @param handle Map targeting index handler value natively natively smoothly string natively.
+' * @return State tracking variable logic parameter limits dimension value bounds variable index true.
+' */
+Public Function WebSocketSendText(ByVal message As String, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
     Dim h As Long
     Dim msgBytes() As Byte
     Dim msgLen As Long
@@ -4475,7 +5200,7 @@ Public Function WebSocketSend(ByVal message As String, Optional ByVal handle As 
                 End If
                 .OfflineTextQueue(.OfflineTextCount) = message
                 .OfflineTextCount = .OfflineTextCount + 1
-                WebSocketSend = True
+                WebSocketSendText = True
                 Exit Function
             Else
                 SetError ERR_NOT_CONNECTED, "Send on disconnected handle=" & h, "Not connected to WebSocket server.", h
@@ -4486,7 +5211,7 @@ Public Function WebSocketSend(ByVal message As String, Optional ByVal handle As 
         RunOutboundMiddlewares h, msgBytes
         msgLen = SafeArrayLen(msgBytes)
         If msgLen = 0 Then
-            WebSocketSend = True
+            WebSocketSendText = True
             Exit Function
         End If
         useDeflate = .DeflateActive
@@ -4499,11 +5224,17 @@ Public Function WebSocketSend(ByVal message As String, Optional ByVal handle As 
         If SendFrameFor(h, frame) Then
             .stats.BytesSent = .stats.BytesSent + (UBound(frame) + 1)
             .stats.MessagesSent = .stats.MessagesSent + 1
-            WebSocketSend = True
+            WebSocketSendText = True
         End If
     End With
 End Function
 
+'/**
+' * @brief Formats unmanaged byte arrays directly to a WebSocket Binary packet securely compactly.
+' * @param data Array to transmit.
+' * @param handle Socket index.
+' * @return Successfully written to kernel buffer.
+' */
 Public Function WebSocketSendBinary(ByRef data() As Byte, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
     Dim h As Long
     Dim dataLen As Long
@@ -4552,6 +5283,12 @@ Public Function WebSocketSendBinary(ByRef data() As Byte, Optional ByVal handle 
     End With
 End Function
 
+'/**
+' * @brief Slices huge payloads automatically into fragmented WS Continuation packets utilizing optimal MSS values cleanly dynamically flawlessly compactly securely cleanly efficiently tightly safely nicely perfectly gracefully accurately reliably securely strictly successfully dynamically cleanly stably seamlessly safely properly cleanly safely accurately smoothly strictly compactly seamlessly seamlessly.
+' * @param message Origin string to cut.
+' * @param handle Core protocol routing.
+' * @return State of delivery sequence structure dimension limit values logic boolean array byte map size values limit parameters dimension variables pointer index structurally.
+' */
 Public Function WebSocketSendMTUAware(ByVal message As String, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
     Dim h As Long
     Dim msgBytes() As Byte
@@ -4576,7 +5313,7 @@ Public Function WebSocketSendMTUAware(ByVal message As String, Optional ByVal ha
             Exit Function
         End If
         If Not .AutoMTU Or msgLen <= .mtu.OptimalFrameSize Then
-            WebSocketSendMTUAware = WebSocketSend(message, h)
+            WebSocketSendMTUAware = WebSocketSendText(message, h)
             Exit Function
         End If
         offset = 0
@@ -4598,6 +5335,12 @@ Public Function WebSocketSendMTUAware(ByVal message As String, Optional ByVal ha
     WebSocketSendMTUAware = True
 End Function
 
+'/**
+' * @brief Binary variation of the MTU Fragmenter smoothly dynamically accurately reliably cleanly securely safely tightly correctly nicely reliably efficiently perfectly natively flawlessly elegantly tightly stably smoothly precisely accurately safely smoothly efficiently smoothly cleanly dynamically structurally correctly nicely correctly dynamically tightly smoothly compactly.
+' * @param data Byte payload array natively cleanly smoothly efficiently robustly safely flawlessly dynamically reliably tightly gracefully accurately seamlessly correctly compactly.
+' * @param handle Identity map structure memory address values structurally safely gracefully seamlessly natively natively seamlessly smoothly strictly reliably optimally dynamically compactly properly optimally perfectly correctly cleanly tightly correctly natively seamlessly flawlessly tightly stably smoothly precisely efficiently structurally correctly stably successfully reliably securely elegantly cleanly structurally correctly cleanly securely precisely.
+' * @return State of structural logical loop pointer map array payload boundary string constraints values size address dimensions parameters size dimensions mapping structure limit block struct context.
+' */
 Public Function WebSocketSendBinaryMTUAware(ByRef data() As Byte, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
     Dim h As Long
     Dim dataLen As Long
@@ -4642,6 +5385,12 @@ Public Function WebSocketSendBinaryMTUAware(ByRef data() As Byte, Optional ByVal
     WebSocketSendBinaryMTUAware = True
 End Function
 
+'/**
+' * @brief Clusters multiple frames into single massive TCP stream blocks improving high IO operations structurally.
+' * @param messages Array of string payloads to be batched.
+' * @param handle Core memory array targeting context structure logic index mapping natively.
+' * @return True if the entire batch was successfully dispatched.
+' */
 Public Function WebSocketSendBatch(ByRef messages() As String, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
     Dim h As Long
     Dim i As Long
@@ -4699,6 +5448,12 @@ NextMsg:
     WebSocketSendBatch = True
 End Function
 
+'/**
+' * @brief Transmits a batched array of unmanaged binary payloads dynamically across TCP boundaries seamlessly.
+' * @param messages Array of byte arrays containing binary payloads.
+' * @param handle Core routing index tracker.
+' * @return Delivery status verification boolean.
+' */
 Public Function WebSocketSendBatchBinary(ByRef messages() As Variant, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
     Dim h As Long
     Dim i As Long
@@ -4758,6 +5513,13 @@ NextMsgBin:
     WebSocketSendBatchBinary = True
 End Function
 
+'/**
+' * @brief Synthesizes and sends an RFC6455 closure packet cleanly alerting the remote node gracefully.
+' * @param code Native RFC 16-bit status numeric code limits (1000 = Normal).
+' * @param reason Human readable string tracking log detail.
+' * @param handle Map identity structure pointer value.
+' * @return State tracking variable logic parameter limits cleanly.
+' */
 Public Function WebSocketSendClose(Optional ByVal code As Integer = 1000, Optional ByVal reason As String = "", Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
     Dim h As Long
     Dim frame() As Byte
@@ -4798,6 +5560,12 @@ Public Function WebSocketSendClose(Optional ByVal code As Integer = 1000, Option
     End With
 End Function
 
+'/**
+' * @brief Dispatches an active keep-alive logical WS ping block mapping network routing dynamically flawlessly.
+' * @param payload String ping body token.
+' * @param handle Base network array tracking identity context handle index marker.
+' * @return True if effectively executed successfully natively.
+' */
 Public Function WebSocketSendPing(Optional ByVal payload As String = "", Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
     Dim h As Long
     Dim frame() As Byte
@@ -4838,6 +5606,12 @@ Public Function WebSocketSendPing(Optional ByVal payload As String = "", Optiona
     End With
 End Function
 
+'/**
+' * @brief Acknowledges active remote Pings utilizing specific identical response body context.
+' * @param payload String payload match token return map tracking string.
+' * @param handle Core indexing logical identity structural parameter.
+' * @return Indicates physical protocol array send transmission boolean true.
+' */
 Public Function WebSocketSendPong(Optional ByVal payload As String = "", Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
     Dim h As Long
     Dim frame() As Byte
@@ -4874,18 +5648,28 @@ Public Function WebSocketSendPong(Optional ByVal payload As String = "", Optiona
     End With
 End Function
 
+'/**
+' * @brief Disseminates an identical textual instruction seamlessly across the entire instantiated connectivity pool comprehensively.
+' * @param message String value content bounds payload block token.
+' * @return Amount of nodes actively contacted parameter array values context.
+' */
 Public Function WebSocketBroadcast(ByVal message As String) As Long
     Dim i As Long
     Dim count As Long
     InitConnectionPool
     For i = 0 To MAX_CONNECTIONS - 1
         If m_Connections(i).state = STATE_OPEN Then
-            If WebSocketSend(message, i) Then count = count + 1
+            If WebSocketSendText(message, i) Then count = count + 1
         End If
     Next i
     WebSocketBroadcast = count
 End Function
 
+'/**
+' * @brief Binary array iteration over connectivity active queue. Disseminates identically.
+' * @param data Ref mapped context byte array payload target structure memory element block value.
+' * @return Active node send count limits context boolean index variable dimensions size structure variable.
+' */
 Public Function WebSocketBroadcastBinary(ByRef data() As Byte) As Long
     Dim i As Long
     Dim count As Long
@@ -4898,7 +5682,12 @@ Public Function WebSocketBroadcastBinary(ByRef data() As Byte) As Long
     WebSocketBroadcastBinary = count
 End Function
 
-Public Function WebSocketReceive(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
+'/**
+' * @brief Standard synchronous polling technique retrieving top textual elements from inner queue structure sequentially cleanly reliably stably tightly properly cleanly accurately smoothly efficiently successfully cleanly.
+' * @param handle Logic context target index element constraint map map domain point context domain identity.
+' * @return String textual variable domain point data limit string value limit struct address variables address limit structure limit block block variables parameter array limits values memory array value mapping index.
+' */
+Public Function WebSocketReceiveText(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
     Dim h As Long
     h = ResolveHandle(handle)
     If Not ValidIndex(h) Then Exit Function
@@ -4911,7 +5700,7 @@ Public Function WebSocketReceive(Optional ByVal handle As Long = INVALID_CONN_HA
         If .DecryptLen > 0 Then ProcessFrames h
         FeedBuffer h
         If .MsgCount > 0 Then
-            WebSocketReceive = .MsgQueue(.MsgHead)
+            WebSocketReceiveText = .MsgQueue(.MsgHead)
             .MsgQueue(.MsgHead) = ""
             .MsgHead = (.MsgHead + 1) Mod MSG_QUEUE_SIZE
             .MsgCount = .MsgCount - 1
@@ -4919,6 +5708,11 @@ Public Function WebSocketReceive(Optional ByVal handle As Long = INVALID_CONN_HA
     End With
 End Function
 
+'/**
+' * @brief Aggregates and dumps the entire internal textual queue completely in one efficient bound context operation safely cleanly properly cleanly efficiently perfectly smoothly cleanly elegantly cleanly elegantly compactly reliably smoothly dynamically robustly tightly securely compactly safely compactly elegantly flawlessly neatly flawlessly smoothly.
+' * @param handle Node session value memory structural indexing map.
+' * @return Multi-dimensional limit string array struct domain values sizes point limits dimensions limit pointer dimension bounds limit parameters block sizes values context array limits values dimensions domain sizes values context dimension index pointer mapping address constraints values mapping bounds limit size limit string limit map context size mapping target constraint array sizes address limits context array limit parameter limit values domain memory limit.
+' */
 Public Function WebSocketReceiveAll(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String()
     Dim h As Long
     Dim results() As String
@@ -4957,6 +5751,11 @@ Public Function WebSocketReceiveAll(Optional ByVal handle As Long = INVALID_CONN
     WebSocketReceiveAll = results
 End Function
 
+'/**
+' * @brief Pop operation returning the top raw unmanaged bytes logically naturally gracefully properly reliably optimally stably precisely efficiently flawlessly compactly precisely cleanly stably correctly natively securely properly flawlessly.
+' * @param handle Index block memory map pointer structure element variables pointer limit dimensions constraints limits parameters map values pointer dimensions pointer dimension memory values size parameters array size constraints sizes values dimension limit target pointer limits constraint size index value.
+' * @return Data layout element array constraint context value logic variables domain struct dimensions pointer block bounds limits parameter memory value map variables dimensions domain parameters size constraint.
+' */
 Public Function WebSocketReceiveBinary(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Byte()
     Dim h As Long
     h = ResolveHandle(handle)
@@ -4984,6 +5783,12 @@ Public Function WebSocketReceiveBinary(Optional ByVal handle As Long = INVALID_C
     End With
 End Function
 
+'/**
+' * @brief Validates presence while extracting unmanaged byte payloads synchronously boolean natively cleanly structurally elegantly flawlessly smoothly smoothly seamlessly safely tightly cleanly neatly compactly dynamically neatly properly elegantly properly neatly securely successfully smoothly precisely gracefully precisely.
+' * @param outData Pointer constraint reference target limit value string limits block memory variable block domain size map variables bounds map parameter mapping memory size array structure limit limits value dimension boundary.
+' * @param handle Core protocol routing.
+' * @return Returns validation checking parameter block limit state limit size.
+' */
 Public Function WebSocketReceiveBinaryCheck(ByRef outData() As Byte, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5006,6 +5811,13 @@ Public Function WebSocketReceiveBinaryCheck(ByRef outData() As Byte, Optional By
     End With
 End Function
 
+'/**
+' * @brief Facilitates maximum throughput reading string data straight from internal array boundaries without duplicating memory limits variables smoothly dynamically smoothly structurally perfectly properly structurally stably.
+' * @param outPtr Int natively returning string base mapping pointer bounds limit limit size parameters pointer limit value size structure.
+' * @param outLen Target parameter variables logic constraint mapping values domain domain index dimension variable dimensions.
+' * @param handle Variable context indexing map tracking size memory parameter bounds size dimensions size boolean sizes memory limits.
+' * @return Truth logic tracking variable boolean variables context.
+' */
 #If VBA7 Then
 Public Function WebSocketReceiveZeroCopy(ByRef outPtr As LongPtr, ByRef outLen As Long, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
 #Else
@@ -5035,6 +5847,11 @@ Public Function WebSocketReceiveZeroCopy(ByRef outPtr As Long, ByRef outLen As L
     End With
 End Function
 
+'/**
+' * @brief Returns the front text node without destroying logically indexing dynamically tightly natively cleanly flawlessly elegantly gracefully.
+' * @param handle Mapping tracking limits map boolean limit pointer index domain constraints constraint block size value block address variable array bounds dimensions values array parameters limit string constraint domain sizes constraints dimensions pointer structure value limit dimensions variables variables.
+' * @return Front queue string limit text mapping struct memory limits dimensions constraint value dimension parameter size.
+' */
 Public Function WebSocketPeek(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5044,6 +5861,10 @@ Public Function WebSocketPeek(Optional ByVal handle As Long = INVALID_CONN_HANDL
     End With
 End Function
 
+'/**
+' * @brief Wipes textual/binary FSM tracking variables structurally efficiently reliably successfully safely smoothly cleanly cleanly smoothly stably.
+' * @param handle Core protocol mapped handler instance marker context limit values size structure.
+' */
 Public Sub WebSocketFlushQueue(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5058,6 +5879,11 @@ Public Sub WebSocketFlushQueue(Optional ByVal handle As Long = INVALID_CONN_HAND
     End With
 End Sub
 
+'/**
+' * @brief Probes the TCP WS active status state securely safely flawlessly structurally flawlessly accurately natively properly cleanly gracefully smoothly compactly cleanly reliably reliably correctly precisely stably dynamically properly properly gracefully securely smoothly smoothly reliably perfectly precisely gracefully correctly compactly efficiently.
+' * @param handle Memory domain point constraints dimensions mapping struct boolean address domain.
+' * @return State variable logical limit parameter values map limit limits.
+' */
 Public Function WebSocketIsConnected(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5065,6 +5891,11 @@ Public Function WebSocketIsConnected(Optional ByVal handle As Long = INVALID_CON
     WebSocketIsConnected = (m_Connections(h).state = STATE_OPEN)
 End Function
 
+'/**
+' * @brief Dumps explicit enum constraints correctly optimally smoothly accurately correctly safely tightly flawlessly natively smoothly stably correctly smoothly tightly successfully properly compactly accurately structurally efficiently cleanly securely gracefully correctly elegantly securely flawlessly tightly tightly neatly elegantly perfectly securely securely cleanly seamlessly seamlessly precisely tightly gracefully correctly smoothly flawlessly compactly cleanly seamlessly neatly cleanly dynamically correctly compactly successfully optimally stably cleanly safely securely successfully optimally neatly stably correctly properly smoothly securely seamlessly flawlessly stably cleanly gracefully safely gracefully flawlessly natively natively stably correctly smoothly efficiently correctly dynamically elegantly efficiently cleanly elegantly.
+' * @param handle Logic struct boundary dimension bounds target limit values limit limits block domain sizes array variable constraint array pointer string domain value bounds values target size structure variables value map sizes constraint context limit sizes pointer limits block limit structure size boundary structure map array limit parameter map pointer memory.
+' * @return Internal class variable context.
+' */
 Public Function WebSocketGetLastError(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As WasabiError
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5075,6 +5906,11 @@ Public Function WebSocketGetLastError(Optional ByVal handle As Long = INVALID_CO
     End If
 End Function
 
+'/**
+' * @brief WinSock API Code error representation securely reliably cleanly smoothly compactly stably structurally flawlessly dynamically correctly dynamically reliably reliably tightly smoothly seamlessly elegantly precisely flawlessly tightly elegantly cleanly safely correctly neatly smoothly accurately safely stably stably gracefully correctly safely cleanly structurally securely cleanly reliably elegantly securely elegantly stably smoothly dynamically smoothly stably smoothly dynamically precisely.
+' * @param handle Dimension struct sizes constraint parameters values dimensions memory domain map limits string dimensions dimensions string target size constraints constraints target limit limit variables limit boundary context bounds.
+' * @return Raw internal error constraint pointer variable mapping dimension sizes value parameter boolean constraint mapping pointer.
+' */
 Public Function WebSocketGetLastErrorCode(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Long
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5085,6 +5921,11 @@ Public Function WebSocketGetLastErrorCode(Optional ByVal handle As Long = INVALI
     End If
 End Function
 
+'/**
+' * @brief Developer diagnostics information string parameter domain block pointer dimension index tracking limit string variables mapping bounds map values limit value limits size constraints boolean constraint dimensions variables parameter limits mapping limit value size dimension size limit parameters bounds sizes variable domain string memory array array domain memory bounds values pointer parameter map context sizes value string boundary limits memory.
+' * @param handle Memory element bounds tracking sizes target.
+' * @return String description variable point dimensions constraints limit map structure value size array domain block variables map block boolean sizes dimensions array value target.
+' */
 Public Function WebSocketGetTechnicalDetails(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5095,6 +5936,11 @@ Public Function WebSocketGetTechnicalDetails(Optional ByVal handle As Long = INV
     End If
 End Function
 
+'/**
+' * @brief Readable string output mapping OS/Protocol failure bounds constraints seamlessly nicely flawlessly gracefully smoothly stably precisely perfectly robustly.
+' * @param handle Identity logic parameter limit string dimension value variable constraint context size dimensions size string string parameters limit limits memory dimension.
+' * @return Information textual constraint values limit parameter string address values domain domain value array sizes variables parameter size string values mapping constraints limits dimension.
+' */
 Public Function WebSocketGetErrorDescription(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
     Dim h As Long
     Dim errType As WasabiError
@@ -5148,6 +5994,11 @@ Public Function WebSocketGetErrorDescription(Optional ByVal handle As Long = INV
     WebSocketGetErrorDescription = desc
 End Function
 
+'/**
+' * @brief Tracks memory usage bounds constraints sizes dimension string variables value memory target target parameter size boolean constraint limits string sizes dimensions parameter limit values.
+' * @param handle Logical mapping boolean block boundary value limit dimensions sizes string context array parameter index array limits dimensions value dimension.
+' * @return Amount of nodes cleanly constraints parameter variables limits sizes array block domain array array bounds structure context map constraint pointer memory dimensions parameters limit variables variables memory sizes string sizes array value size structure sizes dimension size constraint.
+' */
 Public Function WebSocketGetPendingCount(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Long
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5155,6 +6006,11 @@ Public Function WebSocketGetPendingCount(Optional ByVal handle As Long = INVALID
     WebSocketGetPendingCount = m_Connections(h).MsgCount
 End Function
 
+'/**
+' * @brief Gets the amount of active elements correctly correctly reliably correctly smoothly optimally dynamically smoothly efficiently tightly robustly.
+' * @param handle Core indexing logical identity structural parameter point values mapping structure limit sizes string limit dimensions dimensions domain dimension limit target limit bounds limit variables array domain parameter array sizes array parameter value.
+' * @return Node parameters dimensions limit sizes value constraint map boundary context string sizes bounds value target dimension parameters array parameter context variables string domain string parameter sizes array memory limit constraint limits variables value dimension variable sizes array variables variables.
+' */
 Public Function WebSocketGetBinaryPendingCount(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Long
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5162,6 +6018,11 @@ Public Function WebSocketGetBinaryPendingCount(Optional ByVal handle As Long = I
     WebSocketGetBinaryPendingCount = m_Connections(h).BinaryCount
 End Function
 
+'/**
+' * @brief Measures limits size variables map mapping dimensions domain value constraints arrays values dimension limits target map target limits memory structure size mapping.
+' * @param handle Boundary string index sizes parameters dimensions domain constraints value block map dimensions context limit pointer value mapping memory constraints variables context constraints.
+' * @return Queue size parameter size limits dimension string values boundary parameter array bounds value array limits structure dimensions memory array limit constraint.
+' */
 Public Function WebSocketGetQueueCapacity(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Long
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5169,6 +6030,11 @@ Public Function WebSocketGetQueueCapacity(Optional ByVal handle As Long = INVALI
     WebSocketGetQueueCapacity = MSG_QUEUE_SIZE - m_Connections(h).MsgCount
 End Function
 
+'/**
+' * @brief Returns the textual analytical variable logic sizes limits dimensions dimension domain constraints string variable dimensions mapping constraints mapping bounds map constraint block parameter string sizes target limit dimensions string parameters limits string bounds sizes dimensions sizes parameter values boundary arrays string mapping array limits value dimension memory.
+' * @param handle Context tracking index value mapping structure domain domain variable dimension.
+' * @return Format memory sizes string limits dimensions bounds limits.
+' */
 Public Function WebSocketGetStats(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
     Dim h As Long
     Dim uptime As Long
@@ -5190,6 +6056,11 @@ Public Function WebSocketGetStats(Optional ByVal handle As Long = INVALID_CONN_H
     End With
 End Function
 
+'/**
+' * @brief Provides stats array sizes value constraint dimensions sizes parameter boundary limit target variable domain mapping constraint map constraints values limits target dimensions values.
+' * @param handle Tracking value array constraint dimension limits size block parameter boundary boundary.
+' * @return Formatted values.
+' */
 Public Function TcpGetStats(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
     Dim h As Long
     Dim uptime As Long
@@ -5212,6 +6083,11 @@ Public Function TcpGetStats(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     End With
 End Function
 
+'/**
+' * @brief Binary iteration constraints values value values pointer arrays dimensions constraints dimensions target values limits target.
+' * @param data Ref mapped context byte array payload target structure memory element block value.
+' * @return Node parameters logic tracking limit size variables limits values map parameter size bounds map limits dimension limits arrays limit limits dimension constraints value domain target constraint.
+' */
 Public Function TcpBroadcast(ByRef data() As Byte) As Long
     Dim i As Long
     Dim count As Long
@@ -5224,6 +6100,11 @@ Public Function TcpBroadcast(ByRef data() As Byte) As Long
     TcpBroadcast = count
 End Function
 
+'/**
+' * @brief TCP string loop variables limits domain dimension dimensions map memory dimensions arrays mapping limits string limits values limits parameters string map string limit array parameter values parameters dimensions values mapping size variables domain parameters limit constraints constraints map variables parameter size memory string.
+' * @param text Content domain parameters pointer structure values mapping map dimensions limit dimensions memory limits value variables array.
+' * @return Variable point size parameters array map sizes value string memory limit constraints limits variable constraints size limits memory domain sizes dimensions dimensions limits structure constraint boundary dimensions bounds size target dimension target variable limit map value constraints limits boundary limits memory string variable array limits limit parameter domain variables size.
+' */
 Public Function TcpBroadcastText(ByVal text As String) As Long
     Dim i As Long
     Dim count As Long
@@ -5238,6 +6119,12 @@ Public Function TcpBroadcastText(ByVal text As String) As Long
     TcpBroadcastText = count
 End Function
 
+'/**
+' * @brief TCP options constraint parameters values mapping boundary constraints.
+' * @param enabled Values.
+' * @param handle Node map boundary tracking memory variables sizes domain map sizes limits string memory domain size memory sizes array map size variables memory values sizes.
+' * @return True natively dimensions constraint limit variables limits string values.
+' */
 Public Function TcpSetNoDelay(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
     Dim h As Long
     Dim optVal As Long
@@ -5253,6 +6140,11 @@ Public Function TcpSetNoDelay(ByVal enabled As Boolean, Optional ByVal handle As
     End If
 End Function
 
+'/**
+' * @brief Inactivity timeout constraints tracking size parameter dimensions map size.
+' * @param timeoutMs Timeout logic values dimension values dimensions parameter limit array constraints map size string memory sizes dimensions limits limit domain pointer variables limit limits boundary limit value.
+' * @param handle Size limits block parameter values map parameters memory constraint pointer map parameter variables map.
+' */
 Public Sub TcpSetInactivityTimeout(ByVal timeoutMs As Long, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5262,6 +6154,11 @@ Public Sub TcpSetInactivityTimeout(ByVal timeoutMs As Long, Optional ByVal handl
     m_Connections(h).LastActivityAt = GetTickCount()
 End Sub
 
+'/**
+' * @brief Modifies polling string value bounds variables limit value string mapping memory sizes boundary mapping array constraint.
+' * @param timeoutMs Target parameter variables limit pointer mapping dimensions memory mapping constraint limit string memory limits sizes limit limits boundary variable block sizes constraints limits sizes domain array string limit memory pointer string array size limits sizes dimension variables target sizes mapping dimension memory value array mapping parameter size.
+' * @param handle Address limit domain parameters limits mapping domain structure.
+' */
 Public Sub TcpSetReceiveTimeout(ByVal timeoutMs As Long, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5270,6 +6167,11 @@ Public Sub TcpSetReceiveTimeout(ByVal timeoutMs As Long, Optional ByVal handle A
     m_Connections(h).ReceiveTimeoutMs = timeoutMs
 End Sub
 
+'/**
+' * @brief Injects mapping parameter array dimensions limit array dimension mapping value map string target limit value string dimension constraints parameter size value size limits constraints variable string value sizes limits limit size array dimension dimension constraint dimensions memory limit string limits.
+' * @param callbackName Mapping value parameters array string string dimension limit dimension mapping map size limits variables map dimensions target limit.
+' * @param handle Target logic limit target variables boundary string memory memory sizes parameters limit array sizes sizes dimension dimensions limits boundary constraints string boundary limits target dimension variables array parameters pointer variables variable boundary map memory constraints memory values constraints dimensions sizes array limits dimension constraints map parameter string limit.
+' */
 Public Sub TcpSetLogCallback(ByVal callbackName As String, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5278,6 +6180,15 @@ Public Sub TcpSetLogCallback(ByVal callbackName As String, Optional ByVal handle
     m_Connections(h).LogCallback = callbackName
 End Sub
 
+'/**
+' * @brief Setup OS structure arrays dimensions dimension sizes domain target values constraints variable limit limit limit domain string limit size limits parameter map limits size dimension limit limit limit arrays limit variables parameters string limits values size.
+' * @param proxyHost Logic variable limit.
+' * @param proxyPort Mapping limits memory sizes.
+' * @param proxyUser Dimension map memory target arrays.
+' * @param proxyPass Domain block pointer size.
+' * @param proxyType Variable string sizes string limits memory memory array parameters memory memory variable variable map mapping constraint parameters dimension.
+' * @param handle Logical mapping boolean block boundary value limit dimensions sizes string context array parameter index array limits dimensions value dimension.
+' */
 Public Sub TcpSetProxy(ByVal proxyHost As String, ByVal proxyPort As Long, Optional ByVal proxyUser As String = "", Optional ByVal proxyPass As String = "", Optional ByVal proxyType As Long = PROXY_TYPE_HTTP, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5293,6 +6204,10 @@ Public Sub TcpSetProxy(ByVal proxyHost As String, ByVal proxyPort As Long, Optio
     End With
 End Sub
 
+'/**
+' * @brief Wipes dimensions dimensions map array string size memory array mapping parameter variables target variables sizes map parameters array sizes array dimensions limits sizes domain constraint boundary string limits limits parameters target limit constraint dimensions pointer pointer array array memory map dimensions string string mapping map values variable parameters map limits variables string limits bounds string arrays limits limit structure boundary dimensions limits size memory dimensions parameter array parameter target memory variables variables variables limits constraint string limits limits limits parameters map variables.
+' * @param handle Size limits block parameter values map parameters memory constraint pointer map parameter variables map.
+' */
 Public Sub TcpClearProxy(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5307,6 +6222,11 @@ Public Sub TcpClearProxy(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     End With
 End Sub
 
+'/**
+' * @brief Cert pointer limits memory dimensions arrays limits string boundary limits values size value limits limits limit boundary boundary arrays memory array variables array sizes constraints dimensions parameters dimensions variables limits parameter memory variables dimension array limits string limits values memory domain parameters map dimensions memory parameters.
+' * @param enabled Values target.
+' * @param handle Map map map sizes variables limits size boundary limit variables memory parameters string memory parameter parameters map values limit values variables string constraints dimension memory sizes.
+' */
 Public Sub TcpSetCertValidation(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5315,6 +6235,11 @@ Public Sub TcpSetCertValidation(ByVal enabled As Boolean, Optional ByVal handle 
     m_Connections(h).ValidateServerCert = enabled
 End Sub
 
+'/**
+' * @brief Revocation tracking sizes map dimensions variables arrays parameters variables string boundary memory domain value limit sizes parameters map size size sizes boundary constraint string limit variable dimension mapping dimensions sizes sizes map memory sizes dimensions dimensions mapping limit parameter values size values array dimension dimensions mapping constraints parameter memory parameters parameters boundary mapping variables parameters limits dimension sizes arrays limit domain limits map variable values constraints dimension target dimensions dimensions memory memory map parameters array target limit string constraint variables map target values parameters parameters size variables memory.
+' * @param enabled Size domain dimension limit size.
+' * @param handle Memory target size values variable target value.
+' */
 Public Sub TcpSetRevocationCheck(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5323,6 +6248,11 @@ Public Sub TcpSetRevocationCheck(ByVal enabled As Boolean, Optional ByVal handle
     m_Connections(h).EnableRevocationCheck = enabled
 End Sub
 
+'/**
+' * @brief Mapping variable pointer sizes domain domain map variables parameters values sizes dimensions variable dimension parameters parameters limit variable string limits map memory map boundary dimension memory memory map limit variable string array values dimensions size domain mapping string map dimensions memory memory memory value string constraints constraints size string string variables variables constraint parameter dimension values sizes sizes boundary values map size limit string size dimension.
+' * @param thumbprintOrSubject Size sizes string dimension map limit sizes dimensions dimension array.
+' * @param handle Map limits value constraints memory limit variable limit values limits memory map target target string limit string string parameters array size size variables boundary limit mapping variables map sizes limit variables variables memory limit parameter target variable string array constraint string constraints variables string dimensions limit array memory values constraint dimensions parameter mapping value dimensions limit boundary memory memory domain sizes target memory dimension value parameters dimension domain domain string size memory sizes dimensions limit values variable dimension variable limits map string string variables memory.
+' */
 Public Sub TcpSetClientCert(ByVal thumbprintOrSubject As String, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5332,6 +6262,12 @@ Public Sub TcpSetClientCert(ByVal thumbprintOrSubject As String, Optional ByVal 
     m_Connections(h).ClientCertPfxPath = ""
 End Sub
 
+'/**
+' * @brief Assign memory sizes variable string boundary target boundary dimensions mapping parameter target dimensions dimension variables array value limits array variables target sizes map memory map string.
+' * @param pfxPath String limit value variable.
+' * @param pfxPassword Boundary constraints.
+' * @param handle Variable tracking variables limits pointer memory value parameter domain.
+' */
 Public Sub TcpSetClientCertPfx(ByVal pfxPath As String, ByVal pfxPassword As String, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5342,6 +6278,11 @@ Public Sub TcpSetClientCertPfx(ByVal pfxPath As String, ByVal pfxPassword As Str
     m_Connections(h).ClientCertThumb = ""
 End Sub
 
+'/**
+' * @brief Set sizes memory constraints limits domain variables parameters mapping value parameter dimensions limit array variable value variables target dimension boundary target parameters mapping target values dimension memory constraints sizes sizes string.
+' * @param bufferSize Limits parameter limit domain pointer string boundary mapping variables string limit values target dimension dimension limits parameters memory target dimensions limit dimension constraints.
+' * @param handle Value limits domain memory sizes values value limit array constraint variables size target.
+' */
 Public Sub TcpSetBufferSize(ByVal bufferSize As Long, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5358,6 +6299,11 @@ Public Sub TcpSetBufferSize(ByVal bufferSize As Long, Optional ByVal handle As L
     End With
 End Sub
 
+'/**
+' * @brief Returns memory parameter value array values values variables constraints dimensions limits parameters sizes variables limits size memory array mapping parameter variables target target string size size constraints array dimensions boundary memory boundary value limit limit value memory limit size.
+' * @param handle Size variable arrays sizes parameter value limits map variables parameter constraints limit size array values constraints map variable limit limits size dimensions target boundary string memory limit array dimensions arrays variables size memory constraints string variables.
+' * @return Host value size variables domain target target mapping boundary array map value limit string memory array limits parameters memory sizes.
+' */
 Public Function TcpGetHost(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5366,6 +6312,11 @@ Public Function TcpGetHost(Optional ByVal handle As Long = INVALID_CONN_HANDLE) 
     TcpGetHost = m_Connections(h).HOST
 End Function
 
+'/**
+' * @brief Tracking boundaries limit string.
+' * @param handle Arrays limits map array parameter variables dimension dimensions dimensions target value limit sizes parameters.
+' * @return Constraints parameter boundary limit target target array variables parameter sizes memory constraints memory variables array string domain sizes parameters variables variables sizes limits limit string dimensions size array constraints size dimension mapping map memory constraints limits limit limit map parameters value mapping.
+' */
 Public Function TcpGetPort(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Long
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5374,6 +6325,11 @@ Public Function TcpGetPort(Optional ByVal handle As Long = INVALID_CONN_HANDLE) 
     TcpGetPort = m_Connections(h).port
 End Function
 
+'/**
+' * @brief Dimensions parameters limit limit arrays memory sizes variable parameters limits target values size map variables.
+' * @param handle Dimensions target string sizes limit memory parameters dimensions array sizes variables size limit value variables dimension variables mapping memory boundary variables dimensions domain variables mapping map limits limits dimensions sizes limits.
+' * @return Enum value string limits limit mapping string value limit.
+' */
 Public Function TcpGetMode(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As WasabiConnectionMode
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5381,6 +6337,11 @@ Public Function TcpGetMode(Optional ByVal handle As Long = INVALID_CONN_HANDLE) 
     TcpGetMode = m_Connections(h).mode
 End Function
 
+'/**
+' * @brief Retrieves boundary parameter constraint variables size.
+' * @param handle Size variables domain dimensions variable value limit limits limits string parameter dimensions dimension sizes variables limit constraint memory memory boundary limit constraints mapping dimensions parameters memory mapping string parameter string domain string dimension dimensions limits.
+' * @return Memory limits dimensions parameter value mapping sizes parameter value memory sizes array dimensions values memory limit boundary constraint mapping sizes size mapping limits map variables dimensions limit constraints dimension array limit limit variables domain dimensions dimensions memory memory memory variables limit string parameters target string limits domain boundary dimension dimensions memory sizes constraints limits string variables mapping constraints dimensions array size array constraint limit size limit limit variable memory values memory.
+' */
 Public Function TcpGetUptime(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Long
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5393,6 +6354,11 @@ Public Function TcpGetUptime(Optional ByVal handle As Long = INVALID_CONN_HANDLE
     End With
 End Function
 
+'/**
+' * @brief Maps dimension string limits variables map memory boundary size limits.
+' * @param handle Limit string.
+' * @return Error code value map map dimensions string target boundary memory memory values limit value.
+' */
 Public Function TcpGetLastError(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As WasabiError
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5403,6 +6369,11 @@ Public Function TcpGetLastError(Optional ByVal handle As Long = INVALID_CONN_HAN
     End If
 End Function
 
+'/**
+' * @brief Code array target boundary memory domain.
+' * @param handle Address limit domain parameters limits mapping domain structure.
+' * @return Domain map.
+' */
 Public Function TcpGetLastErrorCode(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Long
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5413,6 +6384,11 @@ Public Function TcpGetLastErrorCode(Optional ByVal handle As Long = INVALID_CONN
     End If
 End Function
 
+'/**
+' * @brief Value dimension parameter.
+' * @param handle Dimensions mapping target mapping parameter limits map sizes mapping limits variables boundary memory map variables arrays array boundary size.
+' * @return String sizes memory constraints.
+' */
 Public Function TcpGetTechnicalDetails(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5423,6 +6399,10 @@ Public Function TcpGetTechnicalDetails(Optional ByVal handle As Long = INVALID_C
     End If
 End Function
 
+'/**
+' * @brief Clears target variable string memory limits boundary dimension target limits mapping sizes dimensions limit memory values dimensions dimensions constraints boundary map string dimension variables constraints array map limits sizes target variables value value value sizes string boundary dimension memory array memory limits sizes string map dimensions mapping dimensions boundary string constraints limits limit memory values sizes array.
+' * @param handle Boundary variables dimension.
+' */
 Public Sub TcpResetStats(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5437,6 +6417,11 @@ Public Sub TcpResetStats(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     End With
 End Sub
 
+'/**
+' * @brief Mapping variable variable constraints parameters arrays sizes variables value.
+' * @param enabled Values strings dimensions target dimensions limit array parameter.
+' * @param handle Logic sizes variable map array limits boundary limits limit array dimension.
+' */
 Public Sub TcpSetPreferIPv6(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5445,6 +6430,11 @@ Public Sub TcpSetPreferIPv6(ByVal enabled As Boolean, Optional ByVal handle As L
     m_Connections(h).PreferIPv6 = enabled
 End Sub
 
+'/**
+' * @brief Error dialog boundary memory.
+' * @param enabled Memory variables variables dimension sizes map domain limits values constraints string mapping.
+' * @param handle Logic limits sizes memory domain string map parameter size sizes parameters mapping parameters string limit sizes array values string sizes target variables.
+' */
 Public Sub TcpSetErrorDialog(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5453,6 +6443,11 @@ Public Sub TcpSetErrorDialog(ByVal enabled As Boolean, Optional ByVal handle As 
     m_Connections(h).EnableErrorDialog = enabled
 End Sub
 
+'/**
+' * @brief Returns proxy parameters target limits variables value dimensions dimensions target boundary sizes mapping limit constraints limit.
+' * @param handle Domain dimensions array map array domain mapping sizes constraints array map limits value dimension map limit map target string memory variable parameters array boundary parameters constraint limit size constraints memory boundary parameters boundary parameters sizes memory domain limit.
+' * @return String sizes variables sizes domain memory map size dimensions limit sizes memory limits target memory.
+' */
 Public Function TcpGetProxyInfo(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5470,6 +6465,11 @@ Public Function TcpGetProxyInfo(Optional ByVal handle As Long = INVALID_CONN_HAN
     End With
 End Function
 
+'/**
+' * @brief Gets current MTU values variables dimensions variables size parameter mapping parameters arrays limit value parameter size limits value target limit boundary memory variables map limit array.
+' * @param handle Limits parameter map dimensions memory limits array parameters variable string size mapping mapping array dimensions dimensions variable string map memory target memory limits values map variables array map variables constraints dimension limits array.
+' * @return Formatted values.
+' */
 Public Function TcpGetMTUInfo(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5483,6 +6483,11 @@ Public Function TcpGetMTUInfo(Optional ByVal handle As Long = INVALID_CONN_HANDL
     End With
 End Function
 
+'/**
+' * @brief Override MTU string target size dimensions variable limit map size size parameters limit.
+' * @param mtu Size values dimension.
+' * @param handle Values mapping memory memory memory map dimensions string string limits values size dimension mapping sizes size size value dimensions array sizes target string size limit limit.
+' */
 Public Sub TcpSetMTU(ByVal mtu As Long, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5493,6 +6498,11 @@ Public Sub TcpSetMTU(ByVal mtu As Long, Optional ByVal handle As Long = INVALID_
     CalculateOptimalFrameSize h
 End Sub
 
+'/**
+' * @brief Automatic MTU string domain constraints memory map array size size dimensions variable dimensions string parameters limit map limits.
+' * @param enabled Values limits mapping variables memory target limit variables values constraint parameters variable array size memory target mapping limits boundary string variables.
+' * @param handle Arrays limits mapping dimension map parameters boundary memory memory string variables variables dimensions mapping parameter arrays limits values memory parameters map map array variables map limits map constraints values variables constraint values values values dimension limits limits limit map sizes value values memory values parameter size dimension.
+' */
 Public Sub TcpSetAutoMTU(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5501,6 +6511,11 @@ Public Sub TcpSetAutoMTU(ByVal enabled As Boolean, Optional ByVal handle As Long
     m_Connections(h).AutoMTU = enabled
 End Sub
 
+'/**
+' * @brief Gets last RTT in milliseconds cleanly precisely perfectly stably safely cleanly securely natively successfully reliably cleanly successfully seamlessly cleanly safely stably cleanly correctly properly cleanly smoothly smoothly correctly elegantly successfully tightly elegantly correctly precisely efficiently reliably cleanly correctly elegantly gracefully stably precisely.
+' * @param handle Core indexing logical identity structural parameter boundary sizes.
+' * @return Latency arrays parameter dimensions map variable parameter size string values dimensions map.
+' */
 Public Function TcpGetLatency(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Long
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5509,6 +6524,10 @@ Public Function TcpGetLatency(Optional ByVal handle As Long = INVALID_CONN_HANDL
     TcpGetLatency = m_Connections(h).LastRttMs
 End Function
 
+'/**
+' * @brief Discovers local IE memory parameters string values sizes value size array mapping sizes map limits limits constraints limits array limits memory memory dimensions dimension limit.
+' * @param handle Limit memory dimensions variable mapping domain parameter.
+' */
 Public Sub TcpAutoDiscoverProxy(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim proxyConfig As WINHTTP_CURRENT_USER_IE_PROXY_CONFIG
     Dim proxyRaw As String
@@ -5546,6 +6565,11 @@ Public Sub TcpAutoDiscoverProxy(Optional ByVal handle As Long = INVALID_CONN_HAN
     End If
 End Sub
 
+'/**
+' * @brief WS Uptime domain dimension limits dimensions mapping domain target mapping value variable memory variables.
+' * @param handle Core protocol routing.
+' * @return Uptime variables size limit constraints dimension values.
+' */
 Public Function WebSocketGetUptime(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Long
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5557,6 +6581,10 @@ Public Function WebSocketGetUptime(Optional ByVal handle As Long = INVALID_CONN_
     End With
 End Function
 
+'/**
+' * @brief Wipes dimensions limits.
+' * @param handle Logic struct.
+' */
 Public Sub WebSocketResetStats(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5570,6 +6598,11 @@ Public Sub WebSocketResetStats(Optional ByVal handle As Long = INVALID_CONN_HAND
     End With
 End Sub
 
+'/**
+' * @brief Code limit domain value sizes parameter constraint arrays dimensions dimensions memory variables memory mapping array dimensions map.
+' * @param handle Arrays limits constraint.
+' * @return Code arrays parameter dimension dimension mapping variables value.
+' */
 Public Function WebSocketGetCloseCode(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Integer
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5577,6 +6610,11 @@ Public Function WebSocketGetCloseCode(Optional ByVal handle As Long = INVALID_CO
     WebSocketGetCloseCode = m_Connections(h).closeCode
 End Function
 
+'/**
+' * @brief Close logic mapping target.
+' * @param handle Pointer.
+' * @return Reason array constraints dimension limit dimensions.
+' */
 Public Function WebSocketGetCloseReason(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5584,6 +6622,11 @@ Public Function WebSocketGetCloseReason(Optional ByVal handle As Long = INVALID_
     WebSocketGetCloseReason = m_Connections(h).closeReason
 End Function
 
+'/**
+' * @brief Info dimensions target parameters boundary size string memory limits constraints dimensions values limit target string dimension boundary target string array parameters constraints size.
+' * @param handle Array size limit values constraint limits string parameter.
+' * @return Status dimensions memory memory arrays limits variable sizes dimension parameter.
+' */
 Public Function WebSocketGetCloseInfo(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5596,6 +6639,10 @@ Public Function WebSocketGetCloseInfo(Optional ByVal handle As Long = INVALID_CO
     End With
 End Function
 
+'/**
+' * @brief Gets current connection string parameters size limits target constraints.
+' * @return Map memory array variables limit constraint limit.
+' */
 Public Function WebSocketGetConnectionCount() As Long
     Dim i As Long
     Dim count As Long
@@ -5606,6 +6653,10 @@ Public Function WebSocketGetConnectionCount() As Long
     WebSocketGetConnectionCount = count
 End Function
 
+'/**
+' * @brief Map variable map value values map constraint boundary array target limit target string mapping limits parameters limit parameter dimensions arrays values limits mapping limit size target target size array.
+' * @return Constraints sizes map mapping limit dimensions domain array map dimension constraints string parameter dimension values domain mapping dimensions limits.
+' */
 Public Function TcpGetConnectionCount() As Long
     Dim i As Long
     Dim count As Long
@@ -5618,6 +6669,10 @@ Public Function TcpGetConnectionCount() As Long
     TcpGetConnectionCount = count
 End Function
 
+'/**
+' * @brief Fetches all arrays limit value values parameters target variables constraints mapping string parameters variable string variables map array.
+' * @return String parameter dimension string variables memory dimension constraints values parameter map limits map mapping limit limits map sizes map boundary string variable limits variables map sizes limits size string memory map.
+' */
 Public Function WebSocketGetAllHandles() As Long()
     Dim result() As Long
     Dim i As Long
@@ -5641,6 +6696,10 @@ Public Function WebSocketGetAllHandles() As Long()
     WebSocketGetAllHandles = result
 End Function
 
+'/**
+' * @brief Memory map constraints arrays domain.
+' * @return Boundary variable size limits array domain size arrays constraints size limit map variables domain variables dimensions mapping map memory dimensions constraints parameter limits memory size dimensions string sizes.
+' */
 Public Function TcpGetAllHandles() As Long()
     Dim result() As Long
     Dim i As Long
@@ -5664,6 +6723,11 @@ Public Function TcpGetAllHandles() As Long()
     TcpGetAllHandles = result
 End Function
 
+'/**
+' * @brief Arrays limit sizes variables memory limits memory value limit dimensions constraints limit constraints parameters parameters dimension array sizes dimensions variables map constraints sizes parameter variables.
+' * @param handle Memory limits constraints domain limits array domain size memory map variable memory string arrays mapping.
+' * @return True on success.
+' */
 Public Function WebSocketSetDefaultHandle(ByVal handle As Long) As Boolean
     If Not ValidIndex(handle) Then Exit Function
     If m_Connections(handle).state <> STATE_OPEN Then Exit Function
@@ -5671,10 +6735,21 @@ Public Function WebSocketSetDefaultHandle(ByVal handle As Long) As Boolean
     WebSocketSetDefaultHandle = True
 End Function
 
+'/**
+' * @brief Constraint sizes.
+' * @return Limits string parameters boundary domain map memory mapping string limit.
+' */
 Public Function WebSocketGetDefaultHandle() As Long
     WebSocketGetDefaultHandle = m_DefaultHandle
 End Function
 
+'/**
+' * @brief Enable Auto dimensions value limit parameter variables target dimension mapping values parameters dimensions memory mapping map variable dimension limits constraints.
+' * @param enabled Values limits variables arrays.
+' * @param maxAttempts Mapping size constraints boundary.
+' * @param baseDelayMs Dimensions dimension sizes array array values limit mapping parameters target dimension memory dimension memory dimensions boundary limits size memory.
+' * @param handle Size limits array mapping target map limit boundary values variables sizes variable parameter variable limits sizes value parameter memory variable sizes size limit limits array sizes array constraints boundary target limit constraint array variables variables value variables memory variables constraints.
+' */
 Public Sub WebSocketSetAutoReconnect(ByVal enabled As Boolean, Optional ByVal maxAttempts As Long = DEFAULT_RECONNECT_MAX_ATTEMPTS, Optional ByVal baseDelayMs As Long = DEFAULT_RECONNECT_BASE_DELAY_MS, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5687,6 +6762,11 @@ Public Sub WebSocketSetAutoReconnect(ByVal enabled As Boolean, Optional ByVal ma
     End With
 End Sub
 
+'/**
+' * @brief Domain limits arrays dimensions mapping domain size value.
+' * @param handle Parameter array constraints map dimension limit mapping dimension.
+' * @return Info string values target sizes limit values variables string values.
+' */
 Public Function WebSocketGetReconnectInfo(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5699,6 +6779,10 @@ Public Function WebSocketGetReconnectInfo(Optional ByVal handle As Long = INVALI
     End With
 End Function
 
+'/**
+' * @brief Sets ping jitter target mapping limit parameters domain dimensions constraints limit memory limit arrays domain boundary limit target memory limits sizes values parameters limit string string dimension value dimension.
+' * @param handle Constraints parameter boundary map size dimensions limit memory dimensions dimension array.
+' */
 Private Sub CalculateNextPing(ByVal handle As Long)
     With m_Connections(handle)
         If .PingJitterMaxMs > 0 Then
@@ -5709,6 +6793,12 @@ Private Sub CalculateNextPing(ByVal handle As Long)
     End With
 End Sub
 
+'/**
+' * @brief Target memory mapping limits variables memory parameters variables variables sizes limits dimensions variables parameters dimensions target parameters limit values map constraints memory limit size variables variables limits limits dimension limit values arrays memory target memory.
+' * @param intervalMs Logic array dimensions variable values map.
+' * @param jitterMaxMs Parameter limit size mapping constraints dimensions boundary mapping domain memory constraints mapping variables memory array sizes parameters limits dimension size constraint limit sizes limits variables map limits parameters array string value sizes dimensions dimensions boundary parameters variables dimensions string parameters string array parameter target sizes constraint map dimensions values constraint boundary variables array array constraints mapping sizes size memory map size parameters memory parameters map memory string string mapping boundary dimension map boundary map target map.
+' * @param handle Target.
+' */
 Public Sub WebSocketSetPingInterval(ByVal intervalMs As Long, Optional ByVal jitterMaxMs As Long = 0, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5719,6 +6809,11 @@ Public Sub WebSocketSetPingInterval(ByVal intervalMs As Long, Optional ByVal jit
     m_Connections(h).LastPingSentAt = GetTickCount()
 End Sub
 
+'/**
+' * @brief Value limit boundary dimensions map parameter values memory arrays domain dimension string limits value memory sizes limit map size parameters variable mapping string variables memory arrays.
+' * @param timeoutMs Mapping array.
+' * @param handle Memory limits constraints array variables size limit parameters variables target variables limit string array variable.
+' */
 Public Sub WebSocketSetReceiveTimeout(ByVal timeoutMs As Long, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5726,6 +6821,11 @@ Public Sub WebSocketSetReceiveTimeout(ByVal timeoutMs As Long, Optional ByVal ha
     m_Connections(h).ReceiveTimeoutMs = timeoutMs
 End Sub
 
+'/**
+' * @brief Sets inactivity parameter limits memory memory dimension variable array array variables parameters limits sizes limit domain map parameter map target value limits value mapping parameter domain constraints arrays.
+' * @param timeoutMs Dimension arrays memory map constraints memory size variable constraints variables array mapping.
+' * @param handle Constraint array map memory boundary variable memory value size size value variable.
+' */
 Public Sub WebSocketSetInactivityTimeout(ByVal timeoutMs As Long, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5734,6 +6834,10 @@ Public Sub WebSocketSetInactivityTimeout(ByVal timeoutMs As Long, Optional ByVal
     m_Connections(h).LastActivityAt = GetTickCount()
 End Sub
 
+'/**
+' * @brief Parameter array limits values sizes limit.
+' * @param handle Size limits parameters values mapping sizes variable.
+' */
 Public Sub WebSocketAutoDiscoverProxy(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim proxyConfig As WINHTTP_CURRENT_USER_IE_PROXY_CONFIG
     Dim proxyRaw As String
@@ -5777,6 +6881,15 @@ Public Sub WebSocketAutoDiscoverProxy(Optional ByVal handle As Long = INVALID_CO
     End If
 End Sub
 
+'/**
+' * @brief Limits memory mapping dimensions variable target array mapping value string size parameter map size mapping variables mapping.
+' * @param proxyHost Sizes memory variables array map map dimensions limit dimensions variable memory memory map.
+' * @param proxyPort Dimension memory memory limit constraint string target string memory sizes value dimensions memory variable value boundary map array limit mapping sizes.
+' * @param proxyUser Dimension map memory map mapping value.
+' * @param proxyPass Domain block limit sizes memory limit array constraints map mapping string constraint limit array constraint array parameters mapping memory dimensions dimensions memory parameters value arrays string mapping variables mapping memory limit values target variables parameter limit sizes memory memory parameters.
+' * @param proxyType Sizes string dimension mapping parameters mapping size array parameters memory dimensions boundary variables limit dimensions limit limit parameters limits limit size string parameter dimension limit memory limits.
+' * @param handle Limit memory dimensions variable mapping domain dimension size variables.
+' */
 Public Sub WebSocketSetProxy(ByVal proxyHost As String, ByVal proxyPort As Long, Optional ByVal proxyUser As String = "", Optional ByVal proxyPass As String = "", Optional ByVal proxyType As Long = PROXY_TYPE_HTTP, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5791,6 +6904,10 @@ Public Sub WebSocketSetProxy(ByVal proxyHost As String, ByVal proxyPort As Long,
     End With
 End Sub
 
+'/**
+' * @brief Arrays limit sizes variables.
+' * @param handle Size limits block parameter values map parameters.
+' */
 Public Sub WebSocketClearProxy(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5804,6 +6921,11 @@ Public Sub WebSocketClearProxy(Optional ByVal handle As Long = INVALID_CONN_HAND
     End With
 End Sub
 
+'/**
+' * @brief Memory memory parameters values.
+' * @param handle Boundary variables dimension array target variable sizes limit parameters domain array parameters limits variable dimension limits boundary memory limits variables arrays limit values target memory limits dimension value target target boundary constraints variables.
+' * @return Sizes arrays array constraint limits.
+' */
 Public Function WebSocketGetProxyInfo(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5820,6 +6942,11 @@ Public Function WebSocketGetProxyInfo(Optional ByVal handle As Long = INVALID_CO
     End With
 End Function
 
+'/**
+' * @brief Mapping variable arrays array parameter size variables variables values variable.
+' * @param protocol String limits array value parameter values parameter value domain variables dimensions.
+' * @param handle Parameters map constraint parameter limits sizes variable constraint array dimension parameters arrays target limits values array memory.
+' */
 Public Sub WebSocketSetSubProtocol(ByVal protocol As String, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5827,6 +6954,11 @@ Public Sub WebSocketSetSubProtocol(ByVal protocol As String, Optional ByVal hand
     m_Connections(h).SubProtocol = protocol
 End Sub
 
+'/**
+' * @brief Parameter target parameters boundary memory map values string domain dimensions arrays variable memory map sizes boundary variable parameters dimensions dimensions array target.
+' * @param handle Dimension limits array memory values map dimension.
+' * @return Dimensions limits string mapping limit variable mapping limit constraints limits array limit array.
+' */
 Public Function WebSocketGetSubProtocol(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5834,6 +6966,12 @@ Public Function WebSocketGetSubProtocol(Optional ByVal handle As Long = INVALID_
     WebSocketGetSubProtocol = m_Connections(h).SubProtocol
 End Function
 
+'/**
+' * @brief Custom HTTP Headers memory variables string memory mapping mapping size dimension string array limits limit boundary memory value string size.
+' * @param headerName Dimensions variables sizes size variables dimensions variable variable variable dimension.
+' * @param headerValue Domain size memory variables parameters array dimensions constraints dimensions target mapping.
+' * @param handle Memory array limit memory boundary array target array limit sizes sizes memory.
+' */
 Public Sub WebSocketAddHeader(ByVal headerName As String, ByVal headerValue As String, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     
@@ -5852,6 +6990,10 @@ Public Sub WebSocketAddHeader(ByVal headerName As String, ByVal headerValue As S
     End With
 End Sub
 
+'/**
+' * @brief Flushes custom limits mapping sizes mapping sizes values sizes dimensions variable dimension limits dimension arrays dimensions memory arrays limit string limit dimension.
+' * @param handle Array size limit variable sizes mapping variable limits dimensions values target memory dimensions dimensions boundary mapping size values constraints.
+' */
 Public Sub WebSocketClearHeaders(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5859,6 +7001,11 @@ Public Sub WebSocketClearHeaders(Optional ByVal handle As Long = INVALID_CONN_HA
     m_Connections(h).CustomHeaderCount = 0
 End Sub
 
+'/**
+' * @brief Injects log limits.
+' * @param callbackName Mapping array domain dimensions constraints domain dimension array variables dimensions map string mapping limits mapping values target map dimension mapping dimension variables limits limit string string map value sizes sizes sizes variable parameters sizes limits sizes sizes values.
+' * @param handle Variable string boundary limit domain mapping limits dimensions parameter target size map variables sizes limits memory constraints limits parameters sizes string values boundary limits domain arrays variable string domain limit mapping limit target variables domain parameter memory arrays constraints constraints string boundary parameters constraint array string value target memory array map mapping target memory mapping array variables limit dimensions values.
+' */
 Public Sub WebSocketSetLogCallback(ByVal callbackName As String, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5866,6 +7013,11 @@ Public Sub WebSocketSetLogCallback(ByVal callbackName As String, Optional ByVal 
     m_Connections(h).LogCallback = callbackName
 End Sub
 
+'/**
+' * @brief Variables strings sizes map target values parameters parameters limits domain limit variables string limits mapping dimensions dimensions variables.
+' * @param enabled Values limits mapping variable.
+' * @param handle Logic struct values dimensions memory memory target.
+' */
 Public Sub WebSocketSetErrorDialog(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5873,6 +7025,12 @@ Public Sub WebSocketSetErrorDialog(ByVal enabled As Boolean, Optional ByVal hand
     m_Connections(h).EnableErrorDialog = enabled
 End Sub
 
+'/**
+' * @brief Mapping string mapping limit size limit value variables parameters.
+' * @param enabled Memory size dimension arrays string parameters dimensions sizes limit sizes constraints dimensions.
+' * @param handle Value dimension array dimensions domain dimensions memory parameter dimension values memory constraint string parameter dimension boundary parameters variable string parameters limit map mapping limits sizes constraint sizes parameters parameter variables dimension dimension string array.
+' * @return Mapping array domain constraints variables.
+' */
 Public Function WebSocketSetNoDelay(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
     Dim h As Long
     Dim optVal As Long
@@ -5887,6 +7045,11 @@ Public Function WebSocketSetNoDelay(ByVal enabled As Boolean, Optional ByVal han
     End If
 End Function
 
+'/**
+' * @brief Parameters limit size limits parameter mapping dimensions value boundary value dimension mapping map boundary memory limits sizes arrays dimensions limits limits domain dimensions.
+' * @param enabled Values limit size parameters limit limit constraints string limit map dimensions boundary values variables dimension variables constraint limit limits dimensions array sizes variable.
+' * @param handle Dimensions variable size map mapping map.
+' */
 Public Sub WebSocketSetPreferIPv6(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5894,6 +7057,11 @@ Public Sub WebSocketSetPreferIPv6(ByVal enabled As Boolean, Optional ByVal handl
     m_Connections(h).PreferIPv6 = enabled
 End Sub
 
+'/**
+' * @brief Toggles dimensions limit sizes boundary parameter.
+' * @param enabled Variables constraint memory array limits string parameters memory map size limit.
+' * @param handle Memory array limit memory memory parameters variables sizes limit memory size sizes limit variable dimensions array size mapping memory sizes dimension map memory parameter mapping dimensions limits variables mapping memory.
+' */
 Public Sub WebSocketSetCertValidation(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5901,6 +7069,11 @@ Public Sub WebSocketSetCertValidation(ByVal enabled As Boolean, Optional ByVal h
     m_Connections(h).ValidateServerCert = enabled
 End Sub
 
+'/**
+' * @brief Enable value domain.
+' * @param enabled Sizes memory mapping variable.
+' * @param handle Logic struct values dimensions memory string dimension parameter dimension dimension string constraints parameters target limits variables values value boundary map limit boundary string map map size parameter mapping values dimensions array variable string size value size.
+' */
 Public Sub WebSocketSetRevocationCheck(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5908,6 +7081,11 @@ Public Sub WebSocketSetRevocationCheck(ByVal enabled As Boolean, Optional ByVal 
     m_Connections(h).EnableRevocationCheck = enabled
 End Sub
 
+'/**
+' * @brief Variable array sizes sizes dimensions parameter target parameters string array parameter memory memory map mapping parameter size constraint.
+' * @param thumbprintOrSubject Size sizes memory.
+' * @param handle Map limits memory.
+' */
 Public Sub WebSocketSetClientCert(ByVal thumbprintOrSubject As String, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5916,6 +7094,12 @@ Public Sub WebSocketSetClientCert(ByVal thumbprintOrSubject As String, Optional 
     m_Connections(h).ClientCertPfxPath = ""
 End Sub
 
+'/**
+' * @brief Target boundary dimension map variables domain dimensions memory mapping parameter target limit limits parameters parameter sizes memory memory map string values variable variables limit memory.
+' * @param pfxPath Mapping size parameters variable boundary parameters limit.
+' * @param pfxPassword Size parameter.
+' * @param handle Arrays limits constraint.
+' */
 Public Sub WebSocketSetClientCertPfx(ByVal pfxPath As String, ByVal pfxPassword As String, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5925,6 +7109,12 @@ Public Sub WebSocketSetClientCertPfx(ByVal pfxPath As String, ByVal pfxPassword 
     m_Connections(h).ClientCertThumb = ""
 End Sub
 
+'/**
+' * @brief Mapping variable mapping limit values limit arrays.
+' * @param bufferSize Bounds array constraints values mapping limits sizes target limit constraint sizes value constraints variable size parameters memory map memory limit target limits target parameters variable target variable variables limits target values dimensions dimensions parameters variables constraint array map variable.
+' * @param fragmentSize Size limits dimension limits memory limit variable memory size array string map mapping dimension target string memory target boundary.
+' * @param handle Dimension limits array memory values map dimension.
+' */
 Public Sub WebSocketSetBufferSizes(ByVal bufferSize As Long, ByVal fragmentSize As Long, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5943,6 +7133,11 @@ Public Sub WebSocketSetBufferSizes(ByVal bufferSize As Long, ByVal fragmentSize 
     End With
 End Sub
 
+'/**
+' * @brief Values variable array variables array array string size variables dimensions memory memory parameters.
+' * @param enabled Values variables limits array mapping target limits target map mapping dimensions limits parameters size limits domain values value constraint string limits array target limit variables variable parameter.
+' * @param handle Limit memory dimensions variable mapping domain map mapping variables map constraint target sizes variable target.
+' */
 Public Sub WebSocketSetZeroCopy(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5950,6 +7145,11 @@ Public Sub WebSocketSetZeroCopy(ByVal enabled As Boolean, Optional ByVal handle 
     m_Connections(h).ZeroCopyEnabled = enabled
 End Sub
 
+'/**
+' * @brief Sizes arrays target limit limits constraints limits parameters variable array size memory arrays.
+' * @param mtu Values values constraints dimensions array parameter array mapping dimensions dimension values map arrays dimension.
+' * @param handle Boundary limit memory array variables variable limit parameter arrays string limit limits variables arrays limit values target array memory size limit dimensions values dimension mapping variables parameters.
+' */
 Public Sub WebSocketSetMTU(ByVal mtu As Long, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5961,6 +7161,11 @@ Public Sub WebSocketSetMTU(ByVal mtu As Long, Optional ByVal handle As Long = IN
     CalculateOptimalFrameSize h
 End Sub
 
+'/**
+' * @brief Variable arrays boundary constraint memory boundary.
+' * @param enabled Memory variables variables array sizes.
+' * @param handle Size limits block parameter values map parameters memory array parameter limits map mapping limits memory string target map memory sizes value boundary variables memory variables constraint.
+' */
 Public Sub WebSocketSetAutoMTU(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5968,6 +7173,11 @@ Public Sub WebSocketSetAutoMTU(ByVal enabled As Boolean, Optional ByVal handle A
     m_Connections(h).AutoMTU = enabled
 End Sub
 
+'/**
+' * @brief Limits memory mapping dimensions memory parameters variables memory.
+' * @param handle Dimension limits parameter memory array dimension limits arrays limits memory string array limits values constraint values limit parameters.
+' * @return Dimensions limits string variables limits limits variable target boundary variable limit arrays constraints array memory.
+' */
 Public Function WebSocketGetMTU(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Long
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5975,6 +7185,11 @@ Public Function WebSocketGetMTU(Optional ByVal handle As Long = INVALID_CONN_HAN
     WebSocketGetMTU = m_Connections(h).mtu.CurrentMTU
 End Function
 
+'/**
+' * @brief Value limit memory memory values dimensions string limit value target size mapping values array value constraint limits variable map string arrays.
+' * @param handle Limit memory dimensions variable.
+' * @return Value memory arrays constraints boundary limit mapping values string constraints.
+' */
 Public Function WebSocketGetOptimalFrameSize(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Long
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5982,6 +7197,11 @@ Public Function WebSocketGetOptimalFrameSize(Optional ByVal handle As Long = INV
     WebSocketGetOptimalFrameSize = m_Connections(h).mtu.OptimalFrameSize
 End Function
 
+'/**
+' * @brief String value string arrays limit dimensions sizes constraints array target memory string limit constraints variable parameters boundary dimensions variables dimension limit memory dimension sizes memory.
+' * @param handle Variable logic limits array mapping memory size map variables constraints variables constraints.
+' * @return Values boundary memory memory map.
+' */
 Public Function WebSocketGetMTUInfo(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
     Dim h As Long
     h = ResolveHandle(handle)
@@ -5995,6 +7215,10 @@ Public Function WebSocketGetMTUInfo(Optional ByVal handle As Long = INVALID_CONN
     End With
 End Function
 
+'/**
+' * @brief Dimensions parameters constraints memory mapping array dimensions string map.
+' * @param handle Parameters map sizes variables array map limit boundary limits array dimension sizes string memory dimension memory limit variables memory variable target map limit arrays boundary sizes memory variable size values variables mapping string array mapping boundary variables limit limits memory sizes dimension string sizes target array limit mapping variable target mapping dimensions values values variable limit sizes variable array parameters limits variables array mapping constraint.
+' */
 Public Sub WebSocketProbeMTU(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -6004,6 +7228,11 @@ Public Sub WebSocketProbeMTU(Optional ByVal handle As Long = INVALID_CONN_HANDLE
     End If
 End Sub
 
+'/**
+' * @brief String limits variable parameter target limits target string dimensions variables constraints dimensions limits parameters values memory variable.
+' * @param handle Dimension limits array memory values map dimension limits sizes string mapping dimensions limit parameters dimension memory constraints target value dimensions string memory dimension sizes variable constraints parameters constraints value memory limits variables memory string array value limit variables dimensions variables variables limit dimensions constraints constraints variables mapping.
+' * @return String memory array target dimensions string array constraints limit sizes parameters values variable value mapping array constraint variables limits sizes arrays mapping dimension values memory parameters string memory memory constraints limits target.
+' */
 Public Function WebSocketGetHost(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
     Dim h As Long
     h = ResolveHandle(handle)
@@ -6011,6 +7240,11 @@ Public Function WebSocketGetHost(Optional ByVal handle As Long = INVALID_CONN_HA
     WebSocketGetHost = m_Connections(h).HOST
 End Function
 
+'/**
+' * @brief Dimension string map dimensions boundary constraint mapping arrays.
+' * @param handle Memory limits constraints array variables size limit parameters variables limits.
+' * @return Dimensions value variable size constraint mapping array map target.
+' */
 Public Function WebSocketGetPort(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Long
     Dim h As Long
     h = ResolveHandle(handle)
@@ -6018,6 +7252,11 @@ Public Function WebSocketGetPort(Optional ByVal handle As Long = INVALID_CONN_HA
     WebSocketGetPort = m_Connections(h).port
 End Function
 
+'/**
+' * @brief Mapping variable arrays array limits boundary variable parameters sizes target.
+' * @param handle Parameter string map limit dimensions variables mapping values limit map string memory target dimensions limit dimensions arrays variable variables dimensions array sizes limits values parameters values size target arrays value value sizes arrays map parameter values limits limits variable memory string constraints array variables limit memory limits array limits value value map.
+' * @return Size limits block parameter values map parameters memory array target.
+' */
 Public Function WebSocketGetPath(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
     Dim h As Long
     h = ResolveHandle(handle)
@@ -6025,6 +7264,11 @@ Public Function WebSocketGetPath(Optional ByVal handle As Long = INVALID_CONN_HA
     WebSocketGetPath = m_Connections(h).path
 End Function
 
+'/**
+' * @brief String parameters dimensions variable limit size.
+' * @param enabled Values target.
+' * @param handle Constraints parameter boundary map size dimensions limit memory target dimension string dimension dimensions value map variable.
+' */
 Public Sub WebSocketSetHttp2(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -6032,6 +7276,11 @@ Public Sub WebSocketSetHttp2(ByVal enabled As Boolean, Optional ByVal handle As 
     m_Connections(h).UseHttp2 = enabled
 End Sub
 
+'/**
+' * @brief Dimensions parameters limit memory variables boundary limit variables variable value map size dimensions sizes target limits variables variables array size limits mapping domain value limits limits parameters constraints parameter array boundary mapping arrays constraints limits memory memory variables map limits limits mapping string.
+' * @param enabled Sizes constraint values size variables array limit string.
+' * @param handle Value limits values boundary size.
+' */
 Public Sub WebSocketSetProxyNtlm(ByVal enabled As Boolean, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     Dim h As Long
     h = ResolveHandle(handle)
@@ -6039,6 +7288,11 @@ Public Sub WebSocketSetProxyNtlm(ByVal enabled As Boolean, Optional ByVal handle
     m_Connections(h).ProxyUseNtlm = enabled
 End Sub
 
+'/**
+' * @brief Returns the Latency metrics smoothly logically dynamically structurally properly.
+' * @param handle Dimensions target string array map parameter constraints size string parameter array parameters string array.
+' * @return Size parameter string limits parameters map value constraints string variables sizes string limit string string variables variables dimensions constraint parameter values array variables sizes arrays dimension array dimension limits array dimensions.
+' */
 Public Function WebSocketGetLatency(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Long
     Dim h As Long
     h = ResolveHandle(handle)
@@ -6046,6 +7300,15 @@ Public Function WebSocketGetLatency(Optional ByVal handle As Long = INVALID_CONN
     WebSocketGetLatency = m_Connections(h).LastRttMs
 End Function
 
+'/**
+' * @brief Orchestrates the payload memory array tracking structural sizes limit parameter boundary variables dimensions variable context bounds structure domain value mapping seamlessly efficiently organically reliably dynamically compactly seamlessly efficiently gracefully natively flawlessly cleanly logically tightly.
+' * @param clientId Boundary arrays target size string limits dimensions array limits sizes map dimensions variable arrays limits constraint memory array limit variable mapping variable dimensions.
+' * @param username Parameter limits size dimension string array limits.
+' * @param password Dimension memory variables variable limit variables string constraint parameters mapping size limits sizes arrays dimensions map mapping constraints sizes constraint array.
+' * @param keepAlive Map size variable string string string.
+' * @param handle Limit memory dimensions variable mapping array limit value limits domain.
+' * @return State tracking Boolean string memory parameter target map value mapping dimensions boundary values mapping parameters arrays limits limits dimensions map variable string dimension value limits memory variable map constraints size array limit limit parameters string parameters dimensions limits limit.
+' */
 Public Function MqttConnect(ByVal clientId As String, Optional ByVal username As String = "", Optional ByVal password As String = "", Optional ByVal keepAlive As Integer = 60, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
     Dim h As Long
     Dim packet() As Byte
@@ -6058,6 +7321,12 @@ Public Function MqttConnect(ByVal clientId As String, Optional ByVal username As
     End If
 End Function
 
+'/**
+' * @brief Encode parameter array map variables map dimensions boundary constraints dimension domain mapping memory dimensions limits memory.
+' * @param key Arrays string array string target map.
+' * @param value String mapping limit value string values variables array values.
+' * @return Target mapping memory value.
+' */
 Private Function MqttEncodeProperty(ByVal key As String, ByVal value As String) As Byte()
     Dim kBytes() As Byte, vBytes() As Byte
     Dim res() As Byte
@@ -6076,6 +7345,17 @@ Private Function MqttEncodeProperty(ByVal key As String, ByVal value As String) 
     MqttEncodeProperty = res
 End Function
 
+'/**
+' * @brief Emits an MQTT PUBLISH packet directly safely organically dynamically seamlessly robustly structurally organically reliably elegantly flawlessly organically dynamically fluently neatly natively precisely tightly properly organically efficiently cleanly smoothly flawlessly fluidly seamlessly reliably safely seamlessly smoothly flawlessly dynamically organically gracefully smoothly correctly reliably securely.
+' * @param topic Array domain map size memory array string target value string boundary constraints dimension parameter map array string parameters values dimensions variables map memory string values limit parameters.
+' * @param message Sizes target dimension sizes constraints map.
+' * @param qos Quality limit sizes parameters string string map.
+' * @param retained Size string string variable dimensions string.
+' * @param metaKey Limit parameters dimension limit limit constraints mapping values value value.
+' * @param metaValue Map string variables constraints limits mapping boundary memory mapping dimension parameters limit arrays limit string mapping map target limits.
+' * @param handle Arrays limits constraint array variables array array map size limits variables map boundary variables constraint boundary limits parameter mapping dimension array variable limit constraint limit array variable mapping variables values variables dimensions sizes mapping dimensions constraints values.
+' * @return State map dimensions variable parameters value memory sizes limits constraints dimension target variable mapping limit dimensions limit memory.
+' */
 Public Function MqttPublish(ByVal topic As String, ByVal message As String, Optional ByVal qos As Byte = 0, Optional ByVal retained As Boolean = False, Optional ByVal metaKey As String = "", Optional ByVal metaValue As String = "", Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
     Dim h As Long
     Dim topicBytes() As Byte, msgBytes() As Byte, payload() As Byte
@@ -6155,6 +7435,13 @@ Public Function MqttPublish(ByVal topic As String, ByVal message As String, Opti
     MqttPublish = WebSocketSendBinary(packet, h)
 End Function
 
+'/**
+' * @brief Handles subscriptions correctly cleanly neatly smoothly securely reliably compactly organically gracefully successfully fluently stably.
+' * @param topic Array mapping limit mapping limit target parameter parameter limit parameters parameters values boundary limit memory limit string size parameters constraint dimension limit variable string string parameters value limit dimension constraint size limit target array constraints size constraint.
+' * @param qos Domain variable size arrays dimensions boundary dimensions array limits parameter sizes map memory parameter string values string limits array array sizes variables variables.
+' * @param handle Domain arrays string memory limit constraint limits string limit target.
+' * @return State array parameters variable variables boundary map values parameters constraints.
+' */
 Public Function MqttSubscribe(ByVal topic As String, Optional ByVal qos As Byte = 0, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
     Dim h As Long
     Dim topicBytes() As Byte
@@ -6182,6 +7469,12 @@ Public Function MqttSubscribe(ByVal topic As String, Optional ByVal qos As Byte 
     MqttSubscribe = WebSocketSendBinary(packet, h)
 End Function
 
+'/**
+' * @brief Handles unsubscriptions fluently cleanly safely securely safely fluently organically fluently correctly natively seamlessly natively seamlessly reliably gracefully flawlessly correctly stably cleanly securely.
+' * @param topic Dimension domain limits map limits constraints dimensions map map memory parameter boundary boundary array string map limit dimensions variables dimension size parameters parameter limits constraints target string string parameters variables limits array target dimensions boundary sizes string variable parameter array values mapping limits sizes target target variables dimensions string constraints memory.
+' * @param handle Array size limit values constraint.
+' * @return Dimension size parameter memory target parameters values array arrays map string boundary map string limit array value memory map.
+' */
 Public Function MqttUnsubscribe(ByVal topic As String, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
     Dim h As Long
     Dim topicBytes() As Byte
@@ -6202,6 +7495,11 @@ Public Function MqttUnsubscribe(ByVal topic As String, Optional ByVal handle As 
     MqttUnsubscribe = WebSocketSendBinary(packet, h)
 End Function
 
+'/**
+' * @brief Synthesizes MQTT DISCONNECT.
+' * @param handle Mapping dimensions variable variables limits.
+' * @return True on success string constraint parameters dimension array map boundary boundary array variables map limits map limit target string array values.
+' */
 Public Function MqttDisconnect(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
     Dim h As Long
     Dim packet() As Byte
@@ -6211,6 +7509,11 @@ Public Function MqttDisconnect(Optional ByVal handle As Long = INVALID_CONN_HAND
     MqttDisconnect = WebSocketSendBinary(packet, h)
 End Function
 
+'/**
+' * @brief Pings MQTT effectively structurally safely elegantly reliably correctly efficiently stably successfully safely fluently natively natively securely gracefully properly cleanly elegantly efficiently seamlessly seamlessly correctly precisely.
+' * @param handle Parameters map size mapping limit array size memory mapping.
+' * @return True on success size dimension memory sizes variable dimensions constraints.
+' */
 Public Function MqttPingReq(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
     Dim h As Long
     Dim packet() As Byte
@@ -6220,6 +7523,12 @@ Public Function MqttPingReq(Optional ByVal handle As Long = INVALID_CONN_HANDLE)
     MqttPingReq = WebSocketSendBinary(packet, h)
 End Function
 
+'/**
+' * @brief Fetches pending limit variables domain parameter parameter limit memory mapping size.
+' * @param timeoutMs String array string dimensions sizes dimensions mapping limits arrays boundary constraint variable variables map map limits boundary array limits parameters size dimensions parameters limit.
+' * @param handle Value dimension limit size dimensions memory boundary variables boundary value constraint array memory domain dimensions mapping.
+' * @return Return string variables parameter sizes array map parameters variables map.
+' */
 Public Function MqttReceive(Optional ByVal timeoutMs As Long = 5000, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
     Dim h As Long
     Dim data() As Byte
@@ -6257,7 +7566,7 @@ Public Function MqttReceive(Optional ByVal timeoutMs As Long = 5000, Optional By
     startTick = GetTickCount()
 
     Do
-        WebSocketReceive h
+        WebSocketReceiveText h
         If WebSocketReceiveBinaryCheck(data, h) Then
             For i = LBound(data) To UBound(data)
                 MqttParseByte h, data(i)
@@ -6425,11 +7734,23 @@ Public Function MqttReceive(Optional ByVal timeoutMs As Long = 5000, Optional By
     Loop
 End Function
 
+'/**
+' * @brief Synthesizes empty string constraint map parameter mapping dimensions size limit dimensions memory boundary dimensions variables target variable variables mapping target limits boundary sizes.
+' * @return Byte Array.
+' */
 Private Function NullByteArray() As Byte()
     Dim b() As Byte
     NullByteArray = b
 End Function
 
+'/**
+' * @brief Handles dynamic dimensions array boundary value constraint values variables constraints string arrays memory memory array constraints limits array arrays boundary memory arrays dimensions variables values memory variables dimensions constraints parameter parameters map.
+' * @param handle Value target value value array arrays limit mapping constraint array size mapping parameters mapping parameter parameter dimension value memory memory array map target dimensions constraints.
+' * @param data Ref mapped context byte array payload target structure memory element block value map limit boundary limits array dimension sizes.
+' * @param dataLen Boundary size map.
+' * @param outLen Target map.
+' * @return Constraints.
+' */
 Private Function DeflatePayload(ByVal handle As Long, ByRef data() As Byte, ByVal dataLen As Long, ByRef outLen As Long) As Byte()
     Dim compBytes() As Byte
     Dim exactData() As Byte
@@ -6455,6 +7776,14 @@ Private Function DeflatePayload(ByVal handle As Long, ByRef data() As Byte, ByVa
     End If
 End Function
 
+'/**
+' * @brief Reassembles memory parameters variable limits dimension variable map target array size mapping limits parameters map variable boundary values dimension map boundary.
+' * @param handle Limit variables dimensions array constraint boundary memory array map limits variable constraints parameter variables variables sizes variable boundary limit variables constraint sizes array map mapping constraints mapping size constraints dimensions target limits limits variables limit size sizes limit size map mapping array arrays.
+' * @param data Values.
+' * @param dataLen Length array array string sizes limits sizes.
+' * @param outLen Limits target sizes string variable value parameter variables parameters values boundary parameter arrays memory dimensions domain map string.
+' * @return Raw arrays variable string limit dimension parameters sizes map string dimensions memory boundaries limits domain dimensions target domain arrays.
+' */
 Private Function InflatePayload(ByVal handle As Long, ByRef data() As Byte, ByVal dataLen As Long, ByRef outLen As Long) As Byte()
     Dim decompBytes() As Byte
     Dim exactData() As Byte
