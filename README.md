@@ -71,6 +71,21 @@
   </sub>
 </p>
 
+<h3 align="center">Born in r/vba</h3>
+
+<p align="center">
+  <sub>
+    Wasabi was first announced and grew alongside the amazing community at <b>r/vba</b> <br/>
+    after years of research and development.
+  </sub>
+</p>
+
+<p align="center">
+  <a href="https://www.reddit.com/r/vba/">
+    <img src="https://img.shields.io/badge/Join_the_community_on_r/vba-FF4500?style=for-the-badge&logo=reddit&logoColor=white" alt="r/vba community" />
+  </a>
+</p>
+
 > [!NOTE]
 > **Supported Applications**
 >
