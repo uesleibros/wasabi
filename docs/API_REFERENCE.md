@@ -207,7 +207,7 @@ Every handle operates in one of three modes, represented by the `WasabiConnectio
 
 WebSocket and TCP handles share the same pool, the same proxy infrastructure, the same TLS stack, and the same MTU discovery engine. The mode is set automatically by the connect function used and cannot be changed after connection.
 
-WebSocket-specific functions (`WebSocketSendText`, `WebSocketReceiveText`, MQTT, etc.) will silently exit if called on a TCP handle. TCP-specific functions (`TcpSend`, `TcpReceive`, etc.) will silently exit if called on a WebSocket handle.
+WebSocket-specific functions (`WebSocketSendText`, `WebSocketReceiveText`, MQTT, etc.) will silently exit if called on a TCP handle. TCP-specific functions (`TcpSendBinary`, `TcpReceiveBinary`, etc.) will silently exit if called on a WebSocket handle.
 
 ### Extensions: Plug-in Architecture
 
@@ -448,10 +448,10 @@ If WebSocketSendBinary(payload, h) Then
 End If
 ```
 
-### WebSocketBroadcast
+### WebSocketBroadcastText
 
 ```vb
-Public Function WebSocketBroadcast(ByVal message As String) As Long
+Public Function WebSocketBroadcastText(ByVal message As String) As Long
 ```
 
 Sends the same text message to every active connection in the pool. Returns the count of connections that received the message successfully.
@@ -480,10 +480,10 @@ Public Function WebSocketSendBatchBinary(ByRef messages() As Variant, Optional B
 
 Sends multiple binary payloads in a single TCP write. Each element of the `messages` array must be a `Byte()` array.
 
-### WebSocketSendMTUAware
+### WebSocketSendTextMTUAware
 
 ```vb
-Public Function WebSocketSendMTUAware(ByVal message As String, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
+Public Function WebSocketSendTextMTUAware(ByVal message As String, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
 ```
 
 Sends a text message using WebSocket fragmentation automatically tuned to the connection's current MTU. If the message fits in one frame, it behaves identically to `WebSocketSendText`. Otherwise, the message is split into fragments sized to `OptimalFrameSize` and sent as a sequence of continuation frames.
@@ -494,7 +494,7 @@ Sends a text message using WebSocket fragmentation automatically tuned to the co
 Public Function WebSocketSendBinaryMTUAware(ByRef data() As Byte, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
 ```
 
-Sends a binary payload using WebSocket fragmentation tuned to the current MTU. Behaves identically to `WebSocketSendMTUAware` but uses opcode `0x02` with continuation fragments.
+Sends a binary payload using WebSocket fragmentation tuned to the current MTU. Behaves identically to `WebSocketSendTextMTUAware` but uses opcode `0x02` with continuation fragments.
 
 ## Receiving Data
 
@@ -678,10 +678,10 @@ AutoReconnect=1|Attempts=2|MaxAttempts=10|BaseDelayMs=2000
 
 ## Buffer and Performance Configuration
 
-### WebSocketSetBufferSizes
+### WebSocketSetBufferSize
 
 ```vb
-Public Sub WebSocketSetBufferSizes(ByVal bufferSize As Long, ByVal fragmentSize As Long, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
+Public Sub WebSocketSetBufferSize(ByVal bufferSize As Long, ByVal fragmentSize As Long, Optional ByVal handle As Long = INVALID_CONN_HANDLE)
 ```
 
 Overrides the default sizes for the receive buffer and the fragment reassembly buffer. Both default to 256 KB (262144 bytes). Valid range is 8192 to 16777216 bytes for each parameter. Must be called before connecting.
@@ -907,13 +907,13 @@ Public Function WebSocketGetTechnicalDetails(Optional ByVal handle As Long = INV
 
 Returns a detailed technical description of the most recent error, including function names, parameter values, and raw codes.
 
-### WebSocketGetErrorDescription
+### WasabiGetErrorDescription
 
 ```vb
-Public Function WebSocketGetErrorDescription(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
+Public Function WasabiGetErrorDescription(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
 ```
 
-Returns a single human-readable string combining the error category, system code, and technical details. Useful for user-facing diagnostics without exposing raw system internals.
+Returns a single human-readable string combining the error category, system code, and technical details. Useful for user-facing diagnostics without exposing raw system internals. Covers TCP, WebSocket, and MQTT error contexts.
 
 ### WebSocketGetStats
 
@@ -1223,10 +1223,10 @@ Returns an array of all currently active TCP handle indices.
 
 ### Sending Data
 
-#### TcpSend
+#### TcpSendBinary
 
 ```vb
-Public Function TcpSend(ByRef data() As Byte, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
+Public Function TcpSendBinary(ByRef data() As Byte, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
 ```
 
 Sends a raw byte array. Uses `TLSSend` internally when the handle is in `MODE_TCP_TLS`, otherwise writes directly via `send`.
@@ -1237,12 +1237,12 @@ Sends a raw byte array. Uses `TLSSend` internally when the handle is in `MODE_TC
 Public Function TcpSendText(ByVal text As String, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
 ```
 
-Encodes the string to UTF-8 and sends it via `TcpSend`.
+Encodes the string to UTF-8 and sends it via `TcpSendBinary`.
 
-#### TcpBroadcast
+#### TcpBroadcastBinary
 
 ```vb
-Public Function TcpBroadcast(ByRef data() As Byte) As Long
+Public Function TcpBroadcastBinary(ByRef data() As Byte) As Long
 ```
 
 Sends a byte array to all active TCP handles. Returns the count of successful sends.
@@ -1257,10 +1257,10 @@ Encodes text to UTF-8 and sends it to all active TCP handles.
 
 ### Receiving Data
 
-#### TcpReceive
+#### TcpReceiveBinary
 
 ```vb
-Public Function TcpReceive(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Byte()
+Public Function TcpReceiveBinary(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Byte()
 ```
 
 Reads all currently available bytes from the receive buffer and returns them as a byte array. Returns an empty array if nothing is available. Each call drives internal maintenance including inactivity timeout checking and MTU probing.
@@ -1271,7 +1271,7 @@ Reads all currently available bytes from the receive buffer and returns them as 
 Public Function TcpReceiveText(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As String
 ```
 
-Calls `TcpReceive` and decodes the result from UTF-8 to a VBA native string.
+Calls `TcpReceiveBinary` and decodes the result from UTF-8 to a VBA native string.
 
 #### TcpReceiveUntil
 
@@ -1622,10 +1622,10 @@ Public Function MqttDisconnect(Optional ByVal handle As Long = INVALID_CONN_HAND
 
 Sends an MQTT DISCONNECT packet to cleanly close the MQTT session without closing the underlying WebSocket.
 
-### MqttPingReq
+### MqttSendPing
 
 ```vb
-Public Function MqttPingReq(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
+Public Function MqttSendPing(Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
 ```
 
 Sends an MQTT PINGREQ keep-alive packet.
@@ -1907,4 +1907,4 @@ End Sub
 > TCP handles do not support WebSocket-specific features such as message queuing, ping scheduling, MQTT, `permessage-deflate`, offline queueing, or protocol handlers. These features are exclusive to `MODE_WEBSOCKET` handles.
 
 > [!NOTE]
-> `TcpReceive` and `TcpReceiveText` return all bytes currently available in the buffer in a single call. TCP is a stream protocol with no message boundaries. Use `TcpReceiveUntil` when your protocol uses delimiters, or implement framing logic in your application layer.
+> `TcpReceiveBinary` and `TcpReceiveText` return all bytes currently available in the buffer in a single call. TCP is a stream protocol with no message boundaries. Use `TcpReceiveUntil` when your protocol uses delimiters, or implement framing logic in your application layer.
