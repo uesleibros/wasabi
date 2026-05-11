@@ -46,11 +46,17 @@
   <a href="https://github.com/DecimalTurn">
     <img src="https://github.com/DecimalTurn.png?size=90" width="90" alt="DecimalTurn" />
   </a> <br/>
+  <a href="https://github.com/fafalone">
+    <img src="https://github.com/fafalone.png?size=90" width="90" alt="fafalone" />
+  </a>
   <a href="https://github.com/ws-garcia">
-    <img src="https://github.com/ws-garcia.png?size=90" width="90" alt="sancarn" />
+    <img src="https://github.com/ws-garcia.png?size=90" width="90" alt="ws-garcia" />
   </a>
   <a href="https://github.com/sancarn">
     <img src="https://github.com/sancarn.png?size=90" width="90" alt="sancarn" />
+  </a>
+  <a href="https://www.reddit.com/user/fanpages/">
+    <img src="https://i.redd.it/snoovatar/avatars/abdaa371-0fba-47fb-8ecb-fb954f489440-headshot.png" width="90" alt="fanpages" />
   </a>
 </p>
 
@@ -662,6 +668,12 @@ Special thanks to the developers and projects that helped inspire, inform, or di
 - ![](resources/svg/anchor.svg) [Subclassing and Hooking with Machine Code Thunks (vbAccelerator)](https://github.com/tannerhelland/vbAccelerator-Archive/blob/master/VB/Code/Libraries/Subclassing_and_Hooking_with_Machine_Code_Thunks/article.html): The original article by Paul Caton that introduced machine code thunks as a mechanism for class-level callbacks in VB6, long before the modern subclassing libraries existed. The conceptual foundation of everything that came after
 - ![](resources/svg/reddit.svg) [fanpages](https://www.reddit.com/user/fanpages/): Helped with bug fixes and ideas for testing the library before it went into production
 - ![](resources/svg/reddit.svg) [fafalone](https://www.reddit.com/user/fafalone/): Offered support and bug fixes for the code, as well as improvements for compatibility between architectures
+
+### Special Thanks
+
+- <img src="https://github.com/DanielC49.png" width="18" /> [**Daniel**](https://github.com/DanielC49): A huge thank you for pioneering online multiplayer in PowerPoint with the creation of [MPGame](https://www.youtube.com/watch?v=E1_Jof8H6DI). Although his original project relied on raw TCP connections, his brilliant implementation and architectural approach provided a crucial foundation and massive inspiration that helped shape the development and networking improvements of Wasabi.
+- <img src="https://github.com/gabbdev.png" width="18" /> [**Gabriel Mota**](https://github.com/gabbdev): For his encouragement and for helping me deeply understand the Socket.IO architecture. His projects bringing online capabilities to PowerPoint using external DLLs, specifically by writing his own `GSocketIO.dll` and implementing `zlib` were incredibly helpful and provided valuable technical insights for this project.
+- <img src="https://github.com/erereck.png" width="18" /> [**erereck**](https://github.com/erereck): For being the ultimate beta tester of Wasabi. He rigorously tested every single version of the module, reported critical bugs, and pushed the architecture to its limits by building incredible systems, such as a game fully integrated with Discord. His relentless testing and wild contraptions were absolutely essential, sparking many of the ideas and improvements implemented throughout the project's development.
 
 > [!NOTE]
 > We are honored that several developers from the VBA/VB6 networking community have recognized and starred this repository. Their work helped shape the ecosystem that made Wasabi possible.
