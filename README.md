@@ -295,7 +295,7 @@ End If
 ```
 
 > [!NOTE]
-> Compression is fully opt-in and algorithm-agnostic. If no handler is registered, the connection proceeds normally without compression. The `permessage-deflate` reference implementation lives in [`extensions/ExtWasabiZlib.cls`](extensions/ExtWasabiZlib.cls); the required `zlib1.dll` binaries are in [`libs/`](libs/). Full setup instructions are in [`docs/DEFLATE.md`](docs/DEFLATE.md).
+> Compression is fully opt-in and algorithm-agnostic. If no handler is registered, the connection proceeds normally without compression. The `permessage-deflate` reference implementation lives in [`extensions/zlib/ExtWasabiZlib.cls`](extensions/zlib/ExtWasabiZlib.cls); the required `zlib1.dll` binaries are in [`libs/`](libs/). Full setup instructions are in [`docs/DEFLATE.md`](docs/DEFLATE.md).
 
 ### Using the Middleware Pipeline
 
@@ -423,7 +423,7 @@ Wasabi is built on strict separation of concerns across four layers.
 
 **Middleware Layer.** Registered via `WasabiUseMiddleware`. Intercepts every byte flowing inbound and outbound. Multiple middleware objects are chained in registration order. Ideal for logging, encryption, HMAC signing, or metrics collection without touching application code.
 
-**Compression Layer.** Registered via `WasabiUseCompression`. Any class implementing `Deflate` and `Inflate` methods can be plugged in. The core module has no dependency on any compression library and only calls this interface if a handler is registered. The reference implementation is [`extensions/ExtWasabiZlib.cls`](extensions/ExtWasabiZlib.cls).
+**Compression Layer.** Registered via `WasabiUseCompression`. Any class implementing `Deflate` and `Inflate` methods can be plugged in. The core module has no dependency on any compression library and only calls this interface if a handler is registered. The reference implementation is [`extensions/zlib/ExtWasabiZlib.cls`](extensions/zlib/ExtWasabiZlib.cls).
 
 This separation means security patches, protocol additions, and algorithm changes are confined to isolated components, without ever requiring a fork of the main module.
 
@@ -469,7 +469,7 @@ Dim myProto As New MyMqttProtocol
 WasabiUseProtocol myProto, h
 ```
 
-**Compression Handler (`WasabiUseCompression`).** An object implementing `Deflate` and `Inflate`. This slot replaces the built-in compression path, allowing any algorithm such as LZ4, Brotli, or Zstandard to be supplied without modifying the core module. The `permessage-deflate` reference implementation is [`extensions/ExtWasabiZlib.cls`](extensions/ExtWasabiZlib.cls), which depends on the `zlib1.dll` binaries in [`libs/`](libs/).
+**Compression Handler (`WasabiUseCompression`).** An object implementing `Deflate` and `Inflate`. This slot replaces the built-in compression path, allowing any algorithm such as LZ4, Brotli, or Zstandard to be supplied without modifying the core module. The `permessage-deflate` reference implementation is [`extensions/zlib/ExtWasabiZlib.cls`](extensions/zlib/ExtWasabiZlib.cls), which depends on the `zlib1.dll` binaries in [`libs/`](libs/).
 
 ```vb
 Dim lz4 As New MyLZ4Compressor
@@ -578,7 +578,7 @@ Many competing modules depend on `WinHttpWebSocket*` functions introduced in Win
 - [x] **Windows System Proxy Auto-Discovery** (PAC scripts via `winhttp.dll`)
 - [x] MQTT client (3.1.1 with **MQTT 5 extensions**): QoS 1 and **QoS 2 (Exactly Once)**, User Properties (`metaKey`/`metaValue`), Reason Codes, In-Flight queue with Packet ID tracking (PUBREC/PUBREL/PUBCOMP)
 - [x] RTT latency measurement (`GetLatency`)
-- [x] `permessage-deflate` compression (RFC 7692) via pluggable extension ([`extensions/ExtWasabiZlib.cls`](extensions/ExtWasabiZlib.cls))
+- [x] `permessage-deflate` compression (RFC 7692) via pluggable extension ([`extensions/zlib/ExtWasabiZlib.cls`](extensions/zlib/ExtWasabiZlib.cls))
 - [x] Zero-copy receive buffers and MTU-aware frame sizing
 - [x] Send batching (text and binary)
 - [x] Close frame payload parsing (code and reason)
@@ -595,7 +595,7 @@ Many competing modules depend on `WinHttpWebSocket*` functions introduced in Win
 - [x] **Protocol Handler** (`WasabiUseProtocol`) for pluggable application protocol injection
 - [x] **Compression Handler** (`WasabiUseCompression`) for decoupled compression extensions
 - [x] **Core Refactoring**: raw transport decoupled from protocol logic
-- [x] **Modular Compression**: `zlib1.dll` dependency isolated into [`extensions/ExtWasabiZlib.cls`](extensions/ExtWasabiZlib.cls)
+- [x] **Modular Compression**: `zlib1.dll` dependency isolated into [`extensions/zlib/ExtWasabiZlib.cls`](extensions/zlib/ExtWasabiZlib.cls)
 - [x] **Async Event-Driven Mode** (`WasabiUseAsync`): `WSAAsyncSelect`-based socket notifications with a native thunk dispatcher, eliminating polling loops
 
 ### ![](resources/svg/looking.svg) In Progress
