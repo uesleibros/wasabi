@@ -46,6 +46,9 @@
   <a href="https://github.com/DecimalTurn">
     <img src="https://github.com/DecimalTurn.png?size=90" width="90" alt="DecimalTurn" />
   </a> <br/>
+  <a href="https://github.com/ws-garcia">
+    <img src="https://github.com/ws-garcia.png?size=90" width="90" alt="sancarn" />
+  </a>
   <a href="https://github.com/sancarn">
     <img src="https://github.com/sancarn.png?size=90" width="90" alt="sancarn" />
   </a>
