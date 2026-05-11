@@ -79,6 +79,6 @@ No COM registration, no external references, and no build tools are required.
 
 Planned milestones:
 
-- [ ] Stabilise callback signatures for all extension types.
-- [ ] Publish reference implementations (for example, `ExtWasabiZlib.cls` for `permessage-deflate`).
+- [x] Stabilise callback signatures for all extension types.
+- [x] Publish reference implementations (for example, `ExtWasabiZlib.cls` for `permessage-deflate`).
 - [ ] Provide a registration mechanism for default global middleware applied to every new connection.
