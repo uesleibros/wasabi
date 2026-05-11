@@ -137,44 +137,6 @@ Beyond WebSocket, Wasabi ships a full MQTT client with MQTT 5 extensions (User P
 
 ## Repository Layout
 
-```mermaid
-flowchart TD
-    A["wasabi/"]
-
-    A --> B["Wasabi.bas<br/>The single-file module<br/>The only file you need to import"]
-
-    A --> C["benchmark/"]
-    C --> C1["Throughput tests and QPC measurements<br/>UTF-8, Base64, SHA-1, XOR mask<br/>WebSocket frame construction"]
-
-    A --> D["dev/"]
-    D --> D1["asm/"]
-    D1 --> D2["NASM/FASM source for thunks<br/>ws_mask, mem_zero, mem_find, tick_diff<br/>x86 and x64 variants"]
-
-    A --> E["docs/"]
-    E --> E1["API_REFERENCE.md<br/>Complete public API documentation"]
-    E --> E2["DEFLATE.md<br/>Compression setup guide"]
-
-    A --> F["examples/"]
-    F --> F1["Ready-to-run XLSM workbooks<br/>Crypto ticker, MQTT dashboard<br/>Non-blocking UI, batching<br/>Proxy auth, raw TCP"]
-
-    A --> G["extensions/"]
-    G --> G1["Optional plug-in components"]
-    G1 --> G2["ExtWasabiZlib.cls<br/>permessage-deflate implementation"]
-
-    A --> H["libs/"]
-    H --> H1["Prebuilt native binaries"]
-    H1 --> H2["zlib1.dll x86 and x64"]
-
-    A --> I["package/"]
-    I --> I1["Release packaging scripts<br/>and manifests"]
-
-    A --> J["resources/"]
-    J --> J1["Images, SVG icons, badges<br/>Benchmark screenshots<br/>Architecture diagrams"]
-
-    A --> K["tests/"]
-    K --> K1["Integration and regression tests<br/>WebSocket handshake, TLS<br/>MQTT state machine<br/>Proxy auth, async dispatch"]
-```
-
 Every directory except `Wasabi.bas` itself is auxiliary. If you only want to use the library, importing the single `.bas` file is sufficient. The subdirectories exist for contributors, extension authors, and anyone studying the internals.
 
 ## Quick Start
