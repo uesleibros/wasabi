@@ -2,7 +2,7 @@
   <img src="resources/logo.png" width="150" />
 </div>
 
-<h1 align="center">Wasabi — VBA WebSocket & TCP</h1>
+<h1 align="center">Wasabi - VBA WebSocket & TCP</h1>
 
 <p align="center">
   <b>Real-time WebSocket, MQTT, and raw TCP for Microsoft Office. No dependencies, no COM, no installs.</b>
