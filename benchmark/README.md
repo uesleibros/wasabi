@@ -1,48 +1,43 @@
 # Wasabi Benchmark Suite
 
-> [!WARNING]
-> These benchmark tests can only be run within the ![](../resources/svg/ms-excel.svg) **Microsoft Excel** environment.
+> [!NOTE]
+> These benchmarks can run and display results in any ![](../resources/svg/ms-office.svg) **Microsoft Office** program.
 
 > [!NOTE]
-> <img src="../resources/logo.png" width="20" /> **Wasabi Version used:** [v2.3.5-beta](https://github.com/uesleibros/wasabi/releases/tag/v2.3.5-beta)
+> <img src="../resources/logo.png" width="20" /> **Wasabi Version targeted:** [v2.3.7-beta](https://github.com/uesleibros/wasabi/releases/tag/v2.3.7-beta)
 
-This folder contains a self-contained benchmark harness for Wasabi's
-core primitives. It measures raw CPU throughput, independent of network
-latency, using the same native Windows APIs that Wasabi calls internally.
+This directory contains a self contained, high resolution benchmark harness for the core primitives of Wasabi. It measures raw CPU throughput and memory allocation overhead, completely independent of network latency. The framework utilizes the native Windows `QueryPerformanceCounter` API for sub millisecond precision.
 
-## What is tested
+## Evaluated Operations
 
-| Operation        | Description                                                                 |
-|------------------|-----------------------------------------------------------------------------|
-| **SHA‑1** | Cryptographic hash used during the WebSocket handshake (CryptoAPI)          |
-| **Base64Encode** | Encoder used for handshake keys and proxy auth (`CryptBinaryToStringW`)     |
-| **StringToUtf8** | Conversion from VBA String to UTF‑8 bytes (`WideCharToMultiByte`)           |
-| **Utf8ToString** | Conversion from UTF‑8 bytes to VBA String (`MultiByteToWideChar`)           |
-| **BuildWSFrame** | Full WebSocket frame construction, including **`RtlGenRandom`** kernel entropy and **ASM `ws_mask`** execution |
+| Operation Category | Targeted Internal Functions | Description |
+|:---|:---|:---|
+| **Memory Boundaries** | `WasabiMemFind` | Evaluates the speed of internal byte array scanning for HTTP boundaries and payload separators. |
+| **Crypto and Encoding** | `DecodeBase64`, `Base64Encode` | Measures the execution time of the `CryptStringToBinaryW` and `CryptBinaryToStringW` APIs, specifically validating the safe NTLM token decoding throughput. |
+| **String Conversions** | `StringToUtf8`, `Utf8ToString` | Measures the overhead of wide character to UTF-8 byte array transformations. |
+| **WebSocket Framing** | `BuildWSFrame` | Tests allocation overhead, native masking speed, and MTU fragmentation limits when constructing heavy 64KB payload frames. |
 
 ## Prerequisites
 
-1. **Wasabi.bas** must be in the same VBA project.
-2. The 7 public wrapper functions listed at the bottom of
-   `WasabiBenchmark.bas` must be added to `Wasabi.bas`.
+1. The target version of `Wasabi.bas` must be present in the active VBA project.
+2. To allow the benchmark harness to measure internal performance, the targeted internal functions mentioned above must be temporarily exposed by changing their scope from `Private` to `Public` within `Wasabi.bas`.
 
-## How to run
+## Execution Procedure
 
-1. Import `WasabiBenchmark.bas` into your VBA project.
-2. Run `WasabiBenchmark_RunAll` from the Immediate Window or Macro dialog.
+1. Import all `.bas` files from this benchmark folder into your VBA project.
+2. Open the VBA Immediate Window (Ctrl+G).
+3. Execute the suite by typing `Benchmark_Runner.RunAllBenchmarks` and pressing Enter.
 
-## Interpreting the results
+## Interpreting the Telemetry
 
-- **Avg Latency (µs)** – average microseconds per operation.
-- **Throughput (MB/s)** – how many megabytes per second the operation processes.
-- **Ops/s (k)** – thousands of operations per second.
+* **Avg Latency (µs):** The average microseconds consumed per individual operation.
+* **Throughput (MB/s):** The volume of megabytes the operation successfully processes per second.
+* **Ops/s (k):** The total thousands of operations completed per second.
 
-The suite uses `QueryPerformanceCounter` for sub‑millisecond accuracy and
-automatically adapts iteration counts to the payload size.
+The suite dynamically adapts iteration counts based on the payload size to ensure statistically significant timing samples.
 
-## Reference chart
+## Reference Chart
 
 ![Throughput Benchmark](../resources/benchmark-throughput.png)
 
-The chart plots throughput against payload size on a logarithmic scale,
-highlighting the performance difference between operations.
+The chart plots throughput against payload size on a logarithmic scale, highlighting the performance variance between memory scanning, string encoding, and raw framing operations.
