@@ -1,7 +1,7 @@
 Attribute VB_Name = "Wasabi"
 '/**
 ' * ============================================================================
-' * Wasabi v2.3.7-beta
+' * Wasabi v2.3.8-beta
 ' * Copyright (c) 2026 UesleiDev
 ' *
 ' * @description Advanced Networking & WebSockets Module for VBA/VB6.
@@ -1560,7 +1560,7 @@ Private Sub SetError(ByVal errType As WasabiError, ByVal techMsg As String, ByVa
     m_LastErrorCode = errCode
     m_TechnicalDetails = techMsg
     WasabiLog handle, "ERR " & errType & " | " & techMsg
-    If errCode <> 0 Then WasabiLog handle, "SysCode: " & errCode & " (0x" & Hex(errCode) & ")"
+    If errCode <> 0 Then WasabiLog handle, "SysCode: " & errCode & " (0x" & hex(errCode) & ")"
     If ValidIndex(handle) Then
         m_Connections(handle).LastError = errType
         m_Connections(handle).LastErrorCode = errCode
@@ -2914,7 +2914,7 @@ Private Function LoadClientCert(ByVal handle As Long) As Boolean
             pwPtr = IIf(Len(.ClientCertPfxPass) > 0, StrPtr(.ClientCertPfxPass), NULL_PTR)
             outStore = PFXImportCertStore(blob, pwPtr, CRYPT_EXPORTABLE Or PKCS12_ALLOW_OVERWRITE_KEY)
             If outStore = 0 Then
-                SetError ERR_CERT_LOAD_FAILED, "PFXImportCertStore failed: 0x" & Hex(Err.LastDllError), "Failed to import client certificate PFX.", handle, Err.LastDllError
+                SetError ERR_CERT_LOAD_FAILED, "PFXImportCertStore failed: 0x" & hex(Err.LastDllError), "Failed to import client certificate PFX.", handle, Err.LastDllError
                 Exit Function
             End If
             outCtx = CertFindCertificateInStore(outStore, X509_ASN_ENCODING Or PKCS_7_ASN_ENCODING, 0, CERT_FIND_ANY, ByVal NULL_PTR, 0)
@@ -2926,7 +2926,7 @@ Private Function LoadClientCert(ByVal handle As Long) As Boolean
         ElseIf .ClientCertThumb <> "" Then
             outStore = CertOpenStore(CERT_STORE_PROV_SYSTEM, 0, NULL_PTR, CERT_SYSTEM_STORE_CURRENT_USER, StrPtr("MY"))
             If outStore = 0 Then
-                SetError ERR_CERT_LOAD_FAILED, "CertOpenStore (MY) failed: 0x" & Hex(Err.LastDllError), "Cannot open Windows certificate store.", handle, Err.LastDllError
+                SetError ERR_CERT_LOAD_FAILED, "CertOpenStore (MY) failed: 0x" & hex(Err.LastDllError), "Cannot open Windows certificate store.", handle, Err.LastDllError
                 Exit Function
             End If
             outCtx = CertFindCertificateInStore(outStore, X509_ASN_ENCODING Or PKCS_7_ASN_ENCODING, 0, CERT_FIND_SUBJECT_STR_A, ByVal StrPtr(.ClientCertThumb), 0)
@@ -2968,7 +2968,7 @@ Private Function ValidateServerCert(ByVal handle As Long) As Boolean
         pRemoteCert = 0
         result = QueryContextAttributes(.hContext, SECPKG_ATTR_REMOTE_CERT_CONTEXT, pRemoteCert)
         If result <> 0 Or pRemoteCert = 0 Then
-            SetError ERR_CERT_VALIDATE_FAILED, "QueryContextAttributes(REMOTE_CERT) failed: 0x" & Hex(result), "Cannot retrieve server certificate.", handle, result
+            SetError ERR_CERT_VALIDATE_FAILED, "QueryContextAttributes(REMOTE_CERT) failed: 0x" & hex(result), "Cannot retrieve server certificate.", handle, result
             Exit Function
         End If
         chainPara.cbSize = LenB(chainPara)
@@ -2979,7 +2979,7 @@ Private Function ValidateServerCert(ByVal handle As Long) As Boolean
         End If
         result = CertGetCertificateChain(NULL_PTR, pRemoteCert, 0, 0, chainPara, chainFlags, NULL_PTR, pChainCtx)
         If result = 0 Or pChainCtx = 0 Then
-            SetError ERR_CERT_VALIDATE_FAILED, "CertGetCertificateChain failed: 0x" & Hex(Err.LastDllError), "Cannot build certificate chain.", handle
+            SetError ERR_CERT_VALIDATE_FAILED, "CertGetCertificateChain failed: 0x" & hex(Err.LastDllError), "Cannot build certificate chain.", handle
             CertFreeCertificateContext pRemoteCert
             Exit Function
         End If
@@ -2995,11 +2995,11 @@ Private Function ValidateServerCert(ByVal handle As Long) As Boolean
         CertFreeCertificateChain pChainCtx
         CertFreeCertificateContext pRemoteCert
         If result = 0 Then
-             SetError ERR_CERT_VALIDATE_FAILED, "CertVerifyCertificateChainPolicy failed: 0x" & Hex(Err.LastDllError), "Certificate policy check failed.", handle
+             SetError ERR_CERT_VALIDATE_FAILED, "CertVerifyCertificateChainPolicy failed: 0x" & hex(Err.LastDllError), "Certificate policy check failed.", handle
             Exit Function
         End If
         If policyStatus.dwError <> 0 Then
-            SetError ERR_CERT_VALIDATE_FAILED, "Cert validation error 0x" & Hex(policyStatus.dwError) & " chain=" & policyStatus.lChainIndex & " elem=" & policyStatus.lElementIndex, "Server certificate is not trusted (0x" & Hex(policyStatus.dwError) & ").", handle, policyStatus.dwError
+            SetError ERR_CERT_VALIDATE_FAILED, "Cert validation error 0x" & hex(policyStatus.dwError) & " chain=" & policyStatus.lChainIndex & " elem=" & policyStatus.lElementIndex, "Server certificate is not trusted (0x" & hex(policyStatus.dwError) & ").", handle, policyStatus.dwError
             Exit Function
         End If
     End With
@@ -3177,7 +3177,7 @@ Private Function TLSSend(ByVal handle As Long, ByRef data() As Byte) As Boolean
             bufferDesc.pBuffers = VarPtr(buffers(0))
             result = EncryptMessage(.hContext, 0, bufferDesc, 0)
             If result <> 0 Then
-                SetError ERR_TLS_ENCRYPT_FAILED, "EncryptMessage failed: 0x" & Hex(result), "TLS encryption error.", handle, result
+                SetError ERR_TLS_ENCRYPT_FAILED, "EncryptMessage failed: 0x" & hex(result), "TLS encryption error.", handle, result
                 Exit Function
             End If
             toSend = buffers(0).cbBuffer + buffers(1).cbBuffer + buffers(2).cbBuffer
@@ -3242,7 +3242,7 @@ Private Sub TLSDecrypt(ByVal handle As Long)
                 Exit Sub
             End If
             If result <> SEC_E_OK Then
-                SetError ERR_TLS_DECRYPT_FAILED, "DecryptMessage failed: 0x" & Hex(result), "TLS decryption error.", handle, result
+                SetError ERR_TLS_DECRYPT_FAILED, "DecryptMessage failed: 0x" & hex(result), "TLS decryption error.", handle, result
                 Exit Sub
             End If
             For i = 0 To 3
@@ -4352,7 +4352,7 @@ Private Function TcpConnectInternal(ByVal handle As Long, ByVal HOST As String, 
 
             acquireResult = AcquireCredentialsHandle(NULL_PTR, "Microsoft Unified Security Protocol Provider", SECPKG_CRED_OUTBOUND, NULL_PTR, schannelCred, NULL_PTR, NULL_PTR, .hCred, tsExpiry)
             If acquireResult <> 0 Then
-                SetError ERR_TLS_ACQUIRE_CREDS_FAILED, "AcquireCredentialsHandle failed: 0x" & Hex(acquireResult), "TLS initialization failed.", handle, acquireResult
+                SetError ERR_TLS_ACQUIRE_CREDS_FAILED, "AcquireCredentialsHandle failed: 0x" & hex(acquireResult), "TLS initialization failed.", handle, acquireResult
                 GoTo Fail
             End If
 
@@ -4361,7 +4361,7 @@ Private Function TcpConnectInternal(ByVal handle As Long, ByVal HOST As String, 
                 If tlsResult = -1 Then
                     SetError ERR_TLS_HANDSHAKE_TIMEOUT, "TLS handshake timed out with " & HOST, "TLS handshake timed out.", handle
                 Else
-                    SetError ERR_TLS_HANDSHAKE_FAILED, "TLS handshake failed: 0x" & Hex(tlsResult), "TLS handshake failed.", handle, tlsResult
+                    SetError ERR_TLS_HANDSHAKE_FAILED, "TLS handshake failed: 0x" & hex(tlsResult), "TLS handshake failed.", handle, tlsResult
                 End If
                 GoTo Fail
             End If
@@ -6255,7 +6255,7 @@ Public Function WasabiGetErrorDescription(Optional ByVal handle As Long = INVALI
         Case ERR_TLS_RENEGOTIATE: desc = "TLS renegotiation not supported"
         Case Else: desc = "Unknown error (" & errType & ")"
     End Select
-    If errCode <> 0 Then desc = desc & " [0x" & Hex(errCode) & "]"
+    If errCode <> 0 Then desc = desc & " [0x" & hex(errCode) & "]"
     If Len(tech) > 0 Then desc = desc & " - " & tech
     WasabiGetErrorDescription = desc
 End Function
@@ -7702,11 +7702,11 @@ Public Function MqttPublish(ByVal topic As String, ByVal message As String, Opti
 End Function
 
 '/**
-' * @brief Handles subscriptions correctly cleanly neatly smoothly securely reliably compactly organically gracefully successfully fluently stably.
-' * @param topic Array mapping limit mapping limit target parameter parameter limit parameters parameters values boundary limit memory limit string size parameters constraint dimension limit variable string string parameters value limit dimension constraint size limit target array constraints size constraint.
-' * @param qos Domain variable size arrays dimensions boundary dimensions array limits parameter sizes map memory parameter string values string limits array array sizes variables variables.
-' * @param handle Domain arrays string memory limit constraint limits string limit target.
-' * @return State array parameters variable variables boundary map values parameters constraints.
+' * @brief Handles subscriptions properly formatted for MQTT 5.0.
+' * @param topic Target subscription channel string.
+' * @param qos Quality of Service level.
+' * @param handle Target connection handle.
+' * @return State of subscription attempt.
 ' */
 Public Function MqttSubscribe(ByVal topic As String, Optional ByVal qos As Byte = 0, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
     Dim h As Long
@@ -7715,31 +7715,39 @@ Public Function MqttSubscribe(ByVal topic As String, Optional ByVal qos As Byte 
     Dim payloadLen As Long
     Dim packet() As Byte
     Dim packetId As Integer
+    
     h = ResolveHandle(handle)
     If Not ValidIndex(h) Then Exit Function
+    
     With m_Connections(h)
         .MqttNextPacketId = .MqttNextPacketId + 1
         If .MqttNextPacketId < 0 Or .MqttNextPacketId > 65535 Then .MqttNextPacketId = 1
         packetId = .MqttNextPacketId
     End With
+    
     topicBytes = StringToUtf8(topic)
-    payloadLen = 2 + 2 + UBound(topicBytes) + 1 + 1
+    
+    payloadLen = 2 + 1 + 2 + UBound(topicBytes) + 1 + 1
     ReDim payload(0 To payloadLen - 1)
+    
     payload(0) = CByte((packetId \ 256) And &HFF)
     payload(1) = CByte(packetId And &HFF)
-    payload(2) = CByte(((UBound(topicBytes) + 1) \ 256) And &HFF)
-    payload(3) = CByte((UBound(topicBytes) + 1) And &HFF)
-    CopyMemory payload(4), topicBytes(0), UBound(topicBytes) + 1
-    payload(4 + UBound(topicBytes) + 1) = qos
+    payload(2) = 0
+    payload(3) = CByte(((UBound(topicBytes) + 1) \ 256) And &HFF)
+    payload(4) = CByte((UBound(topicBytes) + 1) And &HFF)
+    
+    CopyMemory payload(5), topicBytes(0), UBound(topicBytes) + 1
+    payload(5 + UBound(topicBytes) + 1) = qos
+    
     packet = MqttBuildPacket(MQTT_SUBSCRIBE, 2, payload, payloadLen)
     MqttSubscribe = WebSocketSendBinary(packet, h)
 End Function
 
 '/**
-' * @brief Handles unsubscriptions fluently cleanly safely securely safely fluently organically fluently correctly natively seamlessly natively seamlessly reliably gracefully flawlessly correctly stably cleanly securely.
-' * @param topic Dimension domain limits map limits constraints dimensions map map memory parameter boundary boundary array string map limit dimensions variables dimension size parameters parameter limits constraints target string string parameters variables limits array target dimensions boundary sizes string variable parameter array values mapping limits sizes target target variables dimensions string constraints memory.
-' * @param handle Array size limit values constraint.
-' * @return Dimension size parameter memory target parameters values array arrays map string boundary map string limit array value memory map.
+' * @brief Handles unsubscriptions properly formatted for MQTT 5.0.
+' * @param topic Target channel string to unsubscribe from.
+' * @param handle Target connection handle.
+' * @return State of unsubscription attempt.
 ' */
 Public Function MqttUnsubscribe(ByVal topic As String, Optional ByVal handle As Long = INVALID_CONN_HANDLE) As Boolean
     Dim h As Long
@@ -7747,16 +7755,30 @@ Public Function MqttUnsubscribe(ByVal topic As String, Optional ByVal handle As 
     Dim payload() As Byte
     Dim payloadLen As Long
     Dim packet() As Byte
+    Dim packetId As Integer
+    
     h = ResolveHandle(handle)
     If Not ValidIndex(h) Then Exit Function
+    
+    With m_Connections(h)
+        .MqttNextPacketId = .MqttNextPacketId + 1
+        If .MqttNextPacketId < 0 Or .MqttNextPacketId > 65535 Then .MqttNextPacketId = 1
+        packetId = .MqttNextPacketId
+    End With
+    
     topicBytes = StringToUtf8(topic)
-    payloadLen = 2 + 2 + UBound(topicBytes) + 1
+    
+    payloadLen = 2 + 1 + 2 + UBound(topicBytes) + 1
     ReDim payload(0 To payloadLen - 1)
-    payload(0) = 0
-    payload(1) = 10
-    payload(2) = CByte((Len(topic) \ 256) And &HFF)
-    payload(3) = CByte(Len(topic) And &HFF)
-    CopyMemory payload(4), topicBytes(0), UBound(topicBytes) + 1
+    
+    payload(0) = CByte((packetId \ 256) And &HFF)
+    payload(1) = CByte(packetId And &HFF)
+    payload(2) = 0
+    payload(3) = CByte(((UBound(topicBytes) + 1) \ 256) And &HFF)
+    payload(4) = CByte((UBound(topicBytes) + 1) And &HFF)
+    
+    CopyMemory payload(5), topicBytes(0), UBound(topicBytes) + 1
+    
     packet = MqttBuildPacket(MQTT_UNSUBSCRIBE, 2, payload, payloadLen)
     MqttUnsubscribe = WebSocketSendBinary(packet, h)
 End Function
