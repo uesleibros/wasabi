@@ -11,14 +11,16 @@
 <p align="center">
   <img src="https://img.shields.io/badge/language-VBA-867DB1.svg" alt="Language" />
   <img src="https://img.shields.io/badge/platform-Windows-0078D6.svg" alt="Platform" />
-  <img src="https://img.shields.io/badge/architecture-32%20%26%2064--bit-green.svg" alt="Architecture" />
-  <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" />
-  <img src="https://img.shields.io/badge/dependencies-none-success.svg" alt="Dependencies" />
+  <img src="https://img.shields.io/badge/arch-32%20%26%2064--bit-green.svg" alt="Architecture" />
   <img src="https://img.shields.io/badge/TLS-1.2%20%2F%201.3-brightgreen.svg" alt="TLS" />
   <img src="https://img.shields.io/badge/WebSocket-RFC%206455-orange.svg" alt="WebSocket" />
+  <img src="https://img.shields.io/badge/MQTT-3.1.1%20%2F%205.0-blueviolet.svg" alt="MQTT" />
   <img src="https://img.shields.io/badge/TCP-Native%20Client-blue.svg" alt="TCP" />
-  <img src="https://img.shields.io/badge/Async-Event--Driven-teal.svg" alt="Async" />
-  <img src="https://img.shields.io/github/v/release/uesleibros/wasabi?style=flat" alt="Latest Version" />
+  <img src="https://img.shields.io/badge/Async-WSAAsyncSelect-teal.svg" alt="Async" />
+  <img src="https://img.shields.io/badge/Assembly-x86%20%26%20x64%20Thunks-critical.svg" alt="Assembly" />
+  <img src="https://img.shields.io/badge/dependencies-none-success.svg" alt="Dependencies" />
+  <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" />
+  <img src="https://img.shields.io/github/v/release/uesleibros/wasabi" alt="Latest Version" />
   <img src="https://img.shields.io/github/stars/uesleibros/wasabi?style=flat&color=gold" alt="Stars" />
   <a href="https://github.com/sancarn/awesome-vba">
     <img src="https://awesome.re/mentioned-badge.svg" alt="Awesome VBA" />
@@ -106,6 +108,7 @@
 
 ## Table of Contents
 
+- [The Origin Story](#the-origin-story)
 - [What is Wasabi](#what-is-wasabi)
 - [Repository Layout](#repository-layout)
 - [Quick Start](#quick-start)
@@ -128,6 +131,22 @@
 - [Contributing](#contributing)
 - [Security](#security)
 - [License](#license)
+
+## The Origin Story
+
+Wasabi did not begin as a networking library. It began as a dream.
+
+Years ago, a small community of developers scattered across the internet shared one obsession: building games inside Microsoft PowerPoint using VBA. Not demos. Not slideshow tricks. Real games, with physics, collision detection, animation loops, and increasingly ambitious mechanics, all running inside a presentation runtime that was never designed for any of it. The community gathered first on Amino, then migrated to Discord, but the ambition never changed.
+
+The question that haunted every conversation was always the same: **can we make it multiplayer?**
+
+Real-time multiplayer in PowerPoint. It sounded absurd. At the time, the VBA networking ecosystem was nearly empty. There were no complete WebSocket clients, no MQTT stacks, no async socket primitives that worked cleanly inside a single-threaded Office runtime. Every lead hit a wall. Dependency on WinHttp APIs that only worked on Windows 8 and above. COM components that required installation. DLLs that needed to be registered. None of it was self-contained, and none of it was robust enough to build games on top of.
+
+So we studied. For years, across hundreds of hours of research into Windows socket internals, VBA runtime behavior, machine code thunks, Schannel TLS, and low-level memory management, we accumulated knowledge that did not exist anywhere in one place. We read 2am forum threads on VBForums. We dissected VB6 projects from the early 2000s. We reverse-engineered how the VBA interpreter handles byte arrays to find the exact point where a native ASM thunk could bypass it entirely.
+
+**Wasabi is the crystallization of all of that.** It is not just a library. It is the answer to a question a PowerPoint game community spent years trying to solve. Every design decision, from the single `.bas` file format to the assembly-powered masking engine to the async dispatch model, exists because we built this for a real use case and refused to compromise.
+
+The multiplayer dream is no longer a dream.
 
 ## What is Wasabi
 
@@ -295,7 +314,7 @@ End If
 ```
 
 > [!NOTE]
-> Compression is fully opt-in and algorithm-agnostic. If no handler is registered, the connection proceeds normally without compression. The `permessage-deflate` reference implementation lives in [`extensions/zlib/ExtWasabiZlib.cls`](extensions/zlib/ExtWasabiZlib.cls); the required `zlib1.dll` binaries are in [`libs/`](libs/). Full setup instructions are in [`docs/DEFLATE.md`](docs/DEFLATE.md).
+> Compression is fully opt-in and algorithm-agnostic. If no handler is registered, the connection proceeds normally without compression. The `permessage-deflate` reference implementation lives in [`extensions/zlib/ExtWasabiZlib.cls`](extensions/zlib/ExtWasabiZlib.cls).
 
 ### Using the Middleware Pipeline
 
