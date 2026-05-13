@@ -130,8 +130,8 @@
 - [Stargazers over time](#stargazers-over-time)
 - [Contributing](#contributing)
 - [Security](#security)
-- [License](#license)
 - [Sponsor Wasabi](#sponsor-wasabi)
+- [License](#license)
 
 ## The Origin Story
 
@@ -729,10 +729,6 @@ Bug reports, feature requests, and pull requests are welcome. See [CONTRIBUTING.
 
 Do **not** report vulnerabilities through public issues. See [SECURITY.md](SECURITY.md) and use GitHub Private Vulnerability Reporting.
 
-## License
-
-**MIT**, free for personal and commercial use. See [LICENSE](LICENSE).
-
 ## Sponsor Wasabi
 
 If Wasabi helped your project, research, or production workflow, consider supporting ongoing development and long-term maintenance through GitHub Sponsors.
@@ -742,3 +738,7 @@ If Wasabi helped your project, research, or production workflow, consider suppor
     <img src="https://img.shields.io/badge/GitHub-Sponsor-ff69b4?logo=githubsponsors&logoColor=white">
   </a>
 </p>
+
+## License
+
+**MIT**, free for personal and commercial use. See [LICENSE](LICENSE).
