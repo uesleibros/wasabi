@@ -131,6 +131,7 @@
 - [Contributing](#contributing)
 - [Security](#security)
 - [License](#license)
+- [Sponsor Wasabi](#sponsor-wasabi)
 
 ## The Origin Story
 
@@ -731,3 +732,13 @@ Do **not** report vulnerabilities through public issues. See [SECURITY.md](SECUR
 ## License
 
 **MIT**, free for personal and commercial use. See [LICENSE](LICENSE).
+
+## Sponsor Wasabi
+
+If Wasabi helped your project, research, or production workflow, consider supporting ongoing development and long-term maintenance through GitHub Sponsors.
+
+<p>
+  <a href="https://github.com/sponsors/uesleibros">
+    <img src="https://img.shields.io/badge/GitHub-Sponsor-ff69b4?logo=githubsponsors&logoColor=white">
+  </a>
+</p>
