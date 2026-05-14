@@ -125,6 +125,7 @@
 - [Compatibility](#compatibility)
 - [Use Cases](#use-cases)
 - [Roadmap](#roadmap)
+- [Contributors](#contributors)
 - [Community & Acknowledgements](#community--acknowledgements)
 - [Research](#research)
 - [Stargazers over time](#stargazers-over-time)
@@ -621,6 +622,16 @@ Many competing modules depend on `WinHttpWebSocket*` functions introduced in Win
 ### ![](resources/svg/looking.svg) In Progress
 
 Nothing currently in progress. Have an idea? [Open an issue](../../issues) or a [pull request](../../pulls).
+
+## Contributors
+
+Wasabi is the result of years of experimentation, testing, bug reports, architectural discussions, and contributions from developers across the VBA/VB6 ecosystem. Whether through direct code contributions, deep technical research, stress testing, or foundational projects that inspired parts of the engine, every contributor helped shape what Wasabi became.
+
+<p align="center">
+  <a href="https://github.com/uesleibros/wasabi/graphs/contributors">
+    <img src="https://contrib.rocks/image?repo=uesleibros/wasabi" />
+  </a>
+</p>
 
 ## Community & Acknowledgements
 
