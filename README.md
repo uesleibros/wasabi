@@ -627,12 +627,6 @@ Nothing currently in progress. Have an idea? [Open an issue](../../issues) or a 
 
 Wasabi is the result of years of experimentation, testing, bug reports, architectural discussions, and contributions from developers across the VBA/VB6 ecosystem. Whether through direct code contributions, deep technical research, stress testing, or foundational projects that inspired parts of the engine, every contributor helped shape what Wasabi became.
 
-<p align="center">
-  <a href="https://github.com/uesleibros/wasabi/graphs/contributors">
-    <img src="https://contrib.rocks/image?repo=uesleibros/wasabi" />
-  </a>
-</p>
-
 ## Community & Acknowledgements
 
 Wasabi builds on years of experimentation and deep research into the internals of the VBA/VB6 low-level networking ecosystem. Every entry below represents a piece of the puzzle: a thread read at 2am, a gist bookmarked and studied line by line, a repository that answered a question nobody else was asking.
