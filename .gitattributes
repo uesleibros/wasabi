@@ -1,0 +1,3 @@
+*.bas  -text
+*.cls  -text
+*.frm  -text
